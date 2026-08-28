@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      Domain has ZERO package references by design.
+      No EF Core, no ASP.NET Core, no Infrastructure/API references.
+      Per Architecture Review: Domain must not depend on persistence
+      or web framework concerns.
+    -->
+  </PropertyGroup>
+
+</Project>
