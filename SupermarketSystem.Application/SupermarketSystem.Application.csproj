@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!--
+      Only reference here: Microsoft.EntityFrameworkCore, for the DbSet<T>
+      type used in IApplicationDbContext. This is a deliberate, narrow
+      exception — Application depends on EF Core's *abstractions* (DbSet/
+      SaveChangesAsync shape) to define its own persistence contract, not
+      on any specific provider (no SqlServer package here). Infrastructure
+      implements the contract; Application never touches DbContext directly.
+      Update the version to match whatever `dotnet restore` resolves as the
+      latest stable EF Core 10.x package.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SupermarketSystem.Domain\SupermarketSystem.Domain.csproj" />
+  </ItemGroup>
+
+</Project>
