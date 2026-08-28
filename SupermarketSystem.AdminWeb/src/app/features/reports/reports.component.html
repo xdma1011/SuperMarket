@@ -1,0 +1,237 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">التقارير</span>
+    <h1>مركز التقارير</h1>
+    <span class="subtitle">15 تقريرًا — مبيعات، مخزون، موردين، وأداء.</span>
+  </div>
+</div>
+
+<div class="reports-layout">
+  <nav class="reports-nav">
+    <button type="button" class="nav-item" [class.active]="activeReportId() === 'sales-summary'" (click)="selectReport('sales-summary')">
+      ملخّص المبيعات
+    </button>
+    <button type="button" class="nav-item" [class.active]="activeReportId() === 'capital-value'" (click)="selectReport('capital-value')">
+      رأس المال الحالي
+    </button>
+    <button type="button" class="nav-item" [class.active]="activeReportId() === 'supplier-debts'" (click)="selectReport('supplier-debts')">
+      ديون الموردين
+    </button>
+    <div class="nav-divider"></div>
+    @for (r of standardReports; track r.id) {
+      <button type="button" class="nav-item" [class.active]="activeReportId() === r.id" (click)="selectReport(r.id)">
+        {{ r.title }}
+      </button>
+    }
+  </nav>
+
+  <div class="reports-content">
+    @if (errorMessage()) {
+      <div class="alert-banner">{{ errorMessage() }}</div>
+    }
+
+    @if (!isSpecial() && activeConfig?.requiresBranch) {
+      <div class="date-filter">
+        <label>
+          <span>الفرع</span>
+          <select [(ngModel)]="selectedBranchId" (ngModelChange)="onBranchChanged()">
+            @for (b of branches(); track b.id) {
+              <option [value]="b.id">{{ b.name }}</option>
+            }
+          </select>
+        </label>
+      </div>
+    }
+
+    @if (!isSpecial() && activeConfig?.requiresDateRange) {
+      <div class="date-filter">
+        <label>
+          <span>من</span>
+          <input type="date" [(ngModel)]="fromDate" (ngModelChange)="onDateRangeChanged()" />
+        </label>
+        <label>
+          <span>إلى</span>
+          <input type="date" [(ngModel)]="toDate" (ngModelChange)="onDateRangeChanged()" />
+        </label>
+      </div>
+    }
+
+    @if (activeReportId() === 'sales-summary') {
+      <div class="date-filter">
+        <label>
+          <span>من</span>
+          <input type="date" [(ngModel)]="fromDate" (ngModelChange)="onDateRangeChanged()" />
+        </label>
+        <label>
+          <span>إلى</span>
+          <input type="date" [(ngModel)]="toDate" (ngModelChange)="onDateRangeChanged()" />
+        </label>
+      </div>
+
+      @if (salesSummary(); as s) {
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <span class="kpi-label">عدد الفواتير</span>
+            <span class="kpi-value">{{ s.period.invoiceCount }}</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">إجمالي المبيعات</span>
+            <span class="kpi-value">{{ s.period.totalSales | number: '1.2-2' }}</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">إجمالي الخصومات</span>
+            <span class="kpi-value">{{ s.period.totalDiscounts | number: '1.2-2' }}</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">إجمالي المرتجعات</span>
+            <span class="kpi-value">{{ s.period.totalReturnedAmount | number: '1.2-2' }}</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">صافي الإيراد</span>
+            <span class="kpi-value">{{ s.period.netRevenue | number: '1.2-2' }}</span>
+            @if (s.netRevenueChangePercent !== null) {
+              <span class="kpi-trend" [class.up]="s.netRevenueChangePercent! >= 0" [class.down]="s.netRevenueChangePercent! < 0">
+                {{ s.netRevenueChangePercent! >= 0 ? '▲' : '▼' }} {{ s.netRevenueChangePercent | number: '1.1-1' }}%
+              </span>
+            }
+          </div>
+        </div>
+      }
+    } @else if (activeReportId() === 'capital-value') {
+      @if (capitalValue(); as c) {
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <span class="kpi-label">إجمالي قيمة رأس المال</span>
+            <span class="kpi-value">{{ c.totalCapitalValue | number: '1.2-2' }}</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">أصناف مستثناة (بلا تاريخ تكلفة)</span>
+            <span class="kpi-value">{{ c.productsExcludedNoCostHistory }}</span>
+          </div>
+        </div>
+
+        <section class="table-panel">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>المنتج</th>
+                  <th>الكمية المتوفرة</th>
+                  <th>متوسط التكلفة المرجّح</th>
+                  <th>القيمة الإجمالية</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of c.items.items; track item.productId) {
+                  <tr>
+                    <td>{{ item.productName }}</td>
+                    <td class="mono">{{ item.quantityOnHand | number }}</td>
+                    <td class="mono">{{ item.weightedAverageCost | number: '1.2-2' }}</td>
+                    <td class="mono">{{ item.totalValue | number: '1.2-2' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+
+          @if (c.items.totalCount > 0) {
+            <app-pagination
+              [pageNumber]="pageNumber()"
+              [pageSize]="pageSize()"
+              [totalCount]="c.items.totalCount"
+              (changed)="onPageChanged($event)"
+            ></app-pagination>
+          }
+        </section>
+      }
+    } @else if (activeReportId() === 'supplier-debts') {
+      @if (supplierDebts(); as d) {
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <span class="kpi-label">إجمالي الديون على كل الموردين</span>
+            <span class="kpi-value">{{ d.grandTotalDebt | number: '1.2-2' }}</span>
+          </div>
+        </div>
+
+        <section class="table-panel">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>المورد</th>
+                  <th>إجمالي الفواتير</th>
+                  <th>المدفوع</th>
+                  <th>المتبقي (الدين)</th>
+                  <th>فواتير غير مسدَّدة</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (s of d.suppliers; track s.supplierId) {
+                  <tr>
+                    <td>{{ s.supplierName }}</td>
+                    <td class="mono">{{ s.totalInvoiced | number: '1.2-2' }}</td>
+                    <td class="mono">{{ s.totalPaid | number: '1.2-2' }}</td>
+                    <td class="mono debt-cell">{{ s.remainingDebt | number: '1.2-2' }}</td>
+                    <td class="mono">{{ s.unpaidInvoiceCount }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+
+            @if (d.suppliers.length === 0) {
+              <div class="no-results">
+                <span class="no-results-title">لا يوجد ديون حاليًا</span>
+                <span class="no-results-sub">كل الموردين مسدَّدون بالكامل.</span>
+              </div>
+            }
+          </div>
+        </section>
+      }
+    } @else {
+      <section class="table-panel">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                @for (col of activeConfig?.columns; track col.key) {
+                  <th>{{ col.label }}</th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of rows(); track $index) {
+                <tr>
+                  @for (col of activeConfig?.columns; track col.key) {
+                    <td class="mono">{{ formatCell(row[col.key], col) }}</td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+
+          @if (!loading() && rows().length === 0) {
+            <div class="no-results">
+              <span class="no-results-title">لا توجد بيانات</span>
+              <span class="no-results-sub">جرّب توسيع نطاق التاريخ لو كان التقرير محدودًا بفترة.</span>
+            </div>
+          }
+
+          @if (loading()) {
+            <div class="no-results">
+              <span class="no-results-sub">جارٍ التحميل…</span>
+            </div>
+          }
+        </div>
+
+        @if (totalCount() > 0) {
+          <app-pagination
+            [pageNumber]="pageNumber()"
+            [pageSize]="pageSize()"
+            [totalCount]="totalCount()"
+            (changed)="onPageChanged($event)"
+          ></app-pagination>
+        }
+      </section>
+    }
+  </div>
+</div>

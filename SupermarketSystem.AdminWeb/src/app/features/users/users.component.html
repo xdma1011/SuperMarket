@@ -1,0 +1,146 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">الإدارة / المستخدمين</span>
+    <h1>المستخدمون والأدوار</h1>
+    <span class="subtitle">كل مستخدم مربوط بدور واحد يحدد صلاحياته، وفرع افتراضي يشتغل عليه.</span>
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn-primary" (click)="openCreateForm()">مستخدم جديد</button>
+  </div>
+</div>
+
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<section class="table-panel">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>الاسم الكامل</th>
+          <th>اسم المستخدم</th>
+          <th>الدور</th>
+          <th>الفرع الافتراضي</th>
+          <th>الحالة</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (u of users(); track u.userId) {
+          <tr>
+            <td>{{ u.fullName }}</td>
+            <td class="mono">{{ u.username }}</td>
+            <td>{{ u.roleNames.join('، ') || '—' }}</td>
+            <td>{{ u.defaultBranchName || '—' }}</td>
+            <td>
+              <span class="status-chip" [class.inactive]="!u.isActive">
+                {{ u.isActive ? 'فعّال' : 'معطَّل' }}
+              </span>
+            </td>
+            <td>
+              <button type="button" class="link-btn" (click)="openEditForm(u)">تعديل</button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (!loading() && users().length === 0) {
+      <div class="no-results">
+        <span class="no-results-title">لا يوجد مستخدمون بعد</span>
+        <span class="no-results-sub">ابدأ بإضافة أول مستخدم عبر الزر أعلاه.</span>
+      </div>
+    }
+
+    @if (loading()) {
+      <div class="no-results">
+        <span class="no-results-sub">جارٍ التحميل…</span>
+      </div>
+    }
+  </div>
+
+  @if (totalCount() > 0) {
+    <app-pagination
+      [pageNumber]="pageNumber()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (changed)="onPageChanged($event)"
+    ></app-pagination>
+  }
+</section>
+
+@if (formOpen()) {
+  <div class="modal-backdrop" (click)="closeForm()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div class="modal-title-group">
+          <h2>{{ isEditMode() ? 'تعديل مستخدم' : 'مستخدم جديد' }}</h2>
+          <span class="modal-hint">{{ isEditMode() ? 'التعديل يبطل كاش صلاحياته فورًا.' : 'يُنشأ فورًا بدور وفرع محددين.' }}</span>
+        </div>
+        <button type="button" class="icon-btn" (click)="closeForm()" aria-label="إغلاق">×</button>
+      </div>
+
+      @if (formError()) {
+        <p class="form-error">{{ formError() }}</p>
+      }
+
+      <div class="modal-fields">
+        <label class="field">
+          <span>الاسم الكامل</span>
+          <input type="text" [(ngModel)]="fullName" placeholder="مثلاً: أحمد سالم" />
+        </label>
+
+        @if (!isEditMode()) {
+          <label class="field">
+            <span>اسم المستخدم</span>
+            <input type="text" [(ngModel)]="username" placeholder="ahmad" />
+          </label>
+        }
+
+        <label class="field">
+          <span>البريد الإلكتروني {{ isEditMode() ? '' : '(اختياري)' }}</span>
+          <input type="text" [(ngModel)]="email" placeholder="ahmad@example.com" />
+        </label>
+
+        @if (!isEditMode()) {
+          <label class="field">
+            <span>كلمة السر</span>
+            <input type="password" [(ngModel)]="password" placeholder="••••" />
+          </label>
+        }
+
+        <label class="field" style="grid-column: span 2">
+          <span>الدور</span>
+          <select [(ngModel)]="selectedRoleId">
+            @for (r of roles(); track r.id) {
+              <option [value]="r.id">{{ r.name }}</option>
+            }
+          </select>
+        </label>
+        <label class="field" style="grid-column: span 2">
+          <span>الفرع</span>
+          <select [(ngModel)]="selectedBranchId">
+            @for (b of branches(); track b.id) {
+              <option [value]="b.id">{{ b.name }}</option>
+            }
+          </select>
+        </label>
+
+        @if (isEditMode()) {
+          <label class="field checkbox-field" style="grid-column: span 2">
+            <input type="checkbox" [(ngModel)]="isActive" />
+            <span>حساب فعّال</span>
+          </label>
+        }
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" [disabled]="submitting()" (click)="submit()">
+          {{ submitting() ? 'جارٍ الحفظ…' : (isEditMode() ? 'حفظ التعديلات' : 'إنشاء المستخدم') }}
+        </button>
+        <button type="button" class="btn-ghost" (click)="closeForm()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+}

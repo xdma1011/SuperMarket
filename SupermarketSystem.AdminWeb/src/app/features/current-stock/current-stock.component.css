@@ -1,0 +1,166 @@
+:host { display: flex; flex-direction: column; }
+
+.table-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.table-title { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.result-count { font-size: 11.5px; color: var(--ink-2); }
+.toolbar-spacer { flex: 1; }
+
+.table-search {
+  height: 33px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-2);
+  font-size: 12px;
+  color: var(--ink);
+  outline: 0;
+  min-width: 200px;
+  transition: border-color .2s ease;
+}
+.table-search:focus { border-color: var(--accent); }
+
+.filter-chip {
+  height: 33px;
+  padding: 0 12px;
+  border-radius: 9px;
+  font-size: 11.5px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-2);
+  transition: all .2s ease;
+}
+.filter-chip:hover { border-color: var(--accent); }
+.filter-chip.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.table-scroll { overflow-x: auto; }
+
+table { width: 100%; border-collapse: collapse; }
+
+thead tr { background: var(--surface-2); }
+
+th {
+  text-align: right;
+  white-space: nowrap;
+  padding: 12px 18px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  user-select: none;
+  transition: color .2s ease;
+}
+th.sortable { cursor: pointer; }
+th.sortable:hover { color: var(--accent); }
+
+tbody tr { transition: background .18s ease; }
+tbody tr:hover { background: var(--surface-2); }
+
+td {
+  padding: 14px 18px;
+  border-top: 1px solid var(--line);
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+td.mono { font-variant-numeric: tabular-nums; }
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.status-chip.green { background: var(--green-soft); color: var(--green); }
+.status-chip.accent { background: var(--accent-soft); color: var(--accent); }
+.status-chip.red { background: var(--red-soft); color: var(--red); }
+
+.alert-banner {
+  background: var(--red-soft); color: var(--red); border: 1px solid var(--red);
+  border-radius: 10px; padding: 10px 14px; font-size: 12.5px; margin-bottom: 14px;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.kpi-card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  padding: 16px; display: flex; flex-direction: column; gap: 7px; box-shadow: var(--shadow);
+}
+.kpi-label { font-size: 11px; color: var(--ink-2); }
+.kpi-value { font-size: 20px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+.no-results {
+  padding: 52px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.no-results-title { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.no-results-sub { font-size: 12px; color: var(--ink-2); }
+
+.table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
+.pager { display: flex; gap: 7px; }
+.pager-btn {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: transparent;
+  font-size: 11.5px;
+  color: var(--ink-2);
+  transition: border-color .2s ease;
+}
+.pager-btn:hover { border-color: var(--accent); }
+
+.branch-filter {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-2);
+  font-size: 12px;
+  color: var(--ink);
+  font-family: inherit;
+}
+
+.qty-cell { font-weight: 600; }
+.qty-cell.negative { color: var(--red); }

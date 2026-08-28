@@ -1,0 +1,62 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">النظام / الجلسات</span>
+    <h1>الجلسات النشطة</h1>
+    <span class="subtitle">راقب IP والجهاز لكل جلسة — أوقف أي جلسة تبدو غريبة فورًا.</span>
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn-outline" (click)="load()">تحديث</button>
+  </div>
+</div>
+
+@if (actionMessage()) {
+  <div class="alert-banner success">{{ actionMessage() }}</div>
+}
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<section class="table-panel">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>المستخدم</th>
+          <th>نوع التطبيق</th>
+          <th>عنوان IP</th>
+          <th>الجهاز</th>
+          <th>بدأت</th>
+          <th>تنتهي</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (s of sessions(); track s.sessionId) {
+          <tr>
+            <td>{{ s.username }}</td>
+            <td>{{ s.appType === 'Admin' ? 'إدارة' : 'كاشير' }}</td>
+            <td class="mono">{{ s.ipAddress || '—' }}</td>
+            <td class="device-cell" [title]="s.deviceInfo || ''">{{ s.deviceInfo || '—' }}</td>
+            <td class="mono">{{ s.createdAtUtc | date: 'yyyy-MM-dd HH:mm' }}</td>
+            <td class="mono">{{ s.expiresAtUtc | date: 'yyyy-MM-dd HH:mm' }}</td>
+            <td>
+              <button type="button" class="link-btn danger" (click)="revoke(s)">إيقاف الجلسة</button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (!loading() && sessions().length === 0) {
+      <div class="no-results">
+        <span class="no-results-title">لا توجد جلسات نشطة</span>
+      </div>
+    }
+
+    @if (loading()) {
+      <div class="no-results">
+        <span class="no-results-sub">جارٍ التحميل…</span>
+      </div>
+    }
+  </div>
+</section>

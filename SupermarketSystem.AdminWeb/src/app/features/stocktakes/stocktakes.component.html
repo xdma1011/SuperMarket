@@ -1,0 +1,101 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">المخزون / الجرد</span>
+    <h1>عمليات الجرد</h1>
+    <span class="subtitle">جرد دوري لمطابقة المخزون المسجَّل مع الفعلي.</span>
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn-primary" (click)="openCreateForm()">جرد جديد</button>
+  </div>
+</div>
+
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<section class="table-panel">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>رقم الجرد</th>
+          <th>الفرع</th>
+          <th>الحالة</th>
+          <th>عدد الأصناف</th>
+          <th>تاريخ الإنشاء</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (s of stocktakes(); track s.stocktakeId) {
+          <tr class="clickable-row" (click)="openStocktake(s.stocktakeId)">
+            <td class="mono">{{ s.stocktakeNumber }}</td>
+            <td>{{ s.branchName }}</td>
+            <td>
+              <span class="status-chip" [class]="statusTone(s.statusCode)">{{ s.statusTitle }}</span>
+            </td>
+            <td class="mono">{{ s.itemCount }}</td>
+            <td class="mono">{{ s.createdAtUtc | date: 'yyyy-MM-dd HH:mm' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (!loading() && stocktakes().length === 0) {
+      <div class="no-results">
+        <span class="no-results-title">لا توجد عمليات جرد بعد</span>
+        <span class="no-results-sub">ابدأ أول جرد عبر الزر أعلاه.</span>
+      </div>
+    }
+
+    @if (loading()) {
+      <div class="no-results">
+        <span class="no-results-sub">جارٍ التحميل…</span>
+      </div>
+    }
+  </div>
+
+  @if (totalCount() > 0) {
+    <app-pagination
+      [pageNumber]="pageNumber()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (changed)="onPageChanged($event)"
+    ></app-pagination>
+  }
+</section>
+
+@if (formOpen()) {
+  <div class="modal-backdrop" (click)="closeForm()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div class="modal-title-group">
+          <h2>جرد جديد</h2>
+          <span class="modal-hint">يشمل كل أصناف الفرع المختار، ويبدأ جاهزًا للعدّ فورًا.</span>
+        </div>
+        <button type="button" class="icon-btn" (click)="closeForm()" aria-label="إغلاق">×</button>
+      </div>
+
+      @if (formError()) {
+        <p class="form-error">{{ formError() }}</p>
+      }
+
+      <div class="modal-fields">
+        <label class="field" style="grid-column: span 2">
+          <span>الفرع</span>
+          <select [(ngModel)]="selectedBranchId">
+            @for (b of branches(); track b.id) {
+              <option [value]="b.id">{{ b.name }}</option>
+            }
+          </select>
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" [disabled]="submitting()" (click)="submitCreate()">
+          {{ submitting() ? 'جارٍ الإنشاء…' : 'إنشاء الجرد' }}
+        </button>
+        <button type="button" class="btn-ghost" (click)="closeForm()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+}

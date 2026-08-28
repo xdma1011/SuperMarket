@@ -1,0 +1,105 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">
+      <button type="button" class="link-back" (click)="backToList()">الجرد</button>
+      / {{ stocktake()?.stocktakeNumber || '...' }}
+    </span>
+    <h1>{{ stocktake()?.stocktakeNumber || 'جارٍ التحميل...' }}</h1>
+    @if (stocktake(); as s) {
+      <span class="subtitle">
+        @if (s.status === STATUS_IN_PROGRESS || s.status === STATUS_DRAFT) {
+          عدّ {{ countedItemsCount }} من {{ totalItemsCount }} صنف
+        } @else if (s.status === STATUS_COMPLETED) {
+          مكتمل - بانتظار الاعتماد
+        } @else if (s.status === STATUS_APPROVED) {
+          معتمَد بتاريخ {{ s.approvedAtUtc | date: 'yyyy-MM-dd HH:mm' }}
+        }
+      </span>
+    }
+  </div>
+
+  @if (stocktake(); as s) {
+    <div class="head-actions">
+      @if (s.status === STATUS_IN_PROGRESS || s.status === STATUS_DRAFT) {
+        <button type="button" class="btn-primary" [disabled]="completing() || countedItemsCount < totalItemsCount" (click)="completeStocktake()">
+          {{ completing() ? 'جارٍ الإكمال…' : 'إكمال العدّ' }}
+        </button>
+      }
+      @if (s.status === STATUS_COMPLETED && permissions.has('Stocktake.Approve')) {
+        <button type="button" class="btn-primary" [disabled]="approving()" (click)="approveStocktake()">
+          {{ approving() ? 'جارٍ الاعتماد…' : 'اعتماد الجرد' }}
+        </button>
+      }
+    </div>
+  }
+</div>
+
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+@if (stocktake(); as s) {
+  @if (s.status === STATUS_COMPLETED) {
+    <div class="info-banner">
+      كل الفروقات هون للمراجعة قبل الاعتماد. الاعتماد بيطبّق التصحيحات على المخزون الفعلي فورًا — لا رجوع بعده.
+    </div>
+  }
+  @if (s.status === STATUS_APPROVED) {
+    <div class="info-banner success">
+      هذا الجرد معتمَد نهائيًا. كل التصحيحات انطبقت على المخزون الفعلي.
+    </div>
+  }
+
+  <section class="table-panel">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>الصنف</th>
+            <th>المتوقَّع</th>
+            <th>المعدود</th>
+            @if (s.status !== STATUS_IN_PROGRESS && s.status !== STATUS_DRAFT) {
+              <th>الفرق</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of s.items; track item.stocktakeItemId) {
+            <tr>
+              <td>{{ item.productName }}</td>
+              <td class="mono">{{ item.expectedQuantity | number }}</td>
+              <td class="mono">
+                @if (canCount()) {
+                  <input
+                    type="number"
+                    class="count-input"
+                    [ngModel]="item.countedQuantity"
+                    (ngModelChange)="saveCount(item, $event)"
+                    [disabled]="savingItemId() === item.stocktakeItemId"
+                    min="0"
+                    placeholder="—"
+                  />
+                } @else {
+                  {{ item.countedQuantity ?? '—' }}
+                }
+              </td>
+              @if (s.status !== STATUS_IN_PROGRESS && s.status !== STATUS_DRAFT) {
+                <td class="mono" [class]="varianceClass(item.variance)">
+                  {{ item.variance !== null ? (item.variance > 0 ? '+' : '') + item.variance : '—' }}
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+} @else if (!loading()) {
+  <div class="no-results">
+    <span class="no-results-title">تعذّر إيجاد هذا الجرد</span>
+  </div>
+} @else {
+  <div class="no-results">
+    <span class="no-results-sub">جارٍ التحميل…</span>
+  </div>
+}

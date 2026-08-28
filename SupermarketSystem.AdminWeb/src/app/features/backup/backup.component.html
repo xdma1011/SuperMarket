@@ -1,0 +1,86 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">النظام / النسخ الاحتياطي</span>
+    <h1>النسخ الاحتياطية</h1>
+    <span class="subtitle">نسخ SQL Server أصلية — يوميًا تلقائيًا، أو يدويًا الآن.</span>
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn-outline" [disabled]="downloadingDirectly()" (click)="createAndDownload()">
+      {{ downloadingDirectly() ? 'جارٍ الإنشاء والتنزيل…' : 'إنشاء وتنزيل مباشرة' }}
+    </button>
+    @if (!hasFreshBackupToday) {
+      <button type="button" class="btn-primary" [disabled]="triggering()" (click)="triggerBackup()">
+        {{ triggering() ? 'جارٍ الإنشاء…' : 'إنشاء نسخة الآن' }}
+      </button>
+    } @else {
+      <span class="fresh-backup-hint">✓ توجد نسخة ناجحة اليوم بالفعل</span>
+    }
+  </div>
+</div>
+
+<div class="stats-row">
+  <div class="stat-chip">
+    <span class="stat-label">عدد النسخ الناجحة</span>
+    <span class="stat-value">{{ stats().totalCount }}</span>
+  </div>
+  <div class="stat-chip">
+    <span class="stat-label">المساحة الإجمالية المستخدمة</span>
+    <span class="stat-value">{{ formatSize(stats().totalSizeBytes) }}</span>
+  </div>
+</div>
+
+@if (actionMessage()) {
+  <div class="alert-banner success">{{ actionMessage() }}</div>
+}
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<section class="table-panel">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>اسم الملف</th>
+          <th>الحجم</th>
+          <th>التاريخ</th>
+          <th>الحالة</th>
+          <th>إجراءات</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (b of backups(); track b.id) {
+          <tr>
+            <td class="mono">{{ b.fileName }}</td>
+            <td class="mono">{{ formatSize(b.fileSizeBytes) }}</td>
+            <td class="mono">{{ b.createdAtUtc | date: 'yyyy-MM-dd HH:mm' }}</td>
+            <td>
+              <span class="status-chip" [class.inactive]="b.statusCode !== 1">
+                {{ b.statusTitle }}
+              </span>
+            </td>
+            <td>
+              @if (b.statusCode === 1) {
+                <button type="button" class="link-btn" (click)="download(b)">تنزيل</button>
+                <button type="button" class="link-btn danger" (click)="deleteBackup(b)">حذف</button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (!loading() && backups().length === 0) {
+      <div class="no-results">
+        <span class="no-results-title">لا توجد نسخ احتياطية بعد</span>
+        <span class="no-results-sub">اضغط "إنشاء نسخة الآن" لأول نسخة.</span>
+      </div>
+    }
+
+    @if (loading()) {
+      <div class="no-results">
+        <span class="no-results-sub">جارٍ التحميل…</span>
+      </div>
+    }
+  </div>
+</section>

@@ -1,0 +1,100 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">العمليات / المبيعات</span>
+    <h1>المبيعات والفواتير</h1>
+    <span class="subtitle">كل فواتير البيع مع حالتها ومجموع المرتجعات عليها.</span>
+  </div>
+</div>
+
+@if (summary(); as s) {
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <span class="kpi-label">إجمالي المبيعات (آخر 30 يوم)</span>
+      <span class="kpi-value">{{ s.totalSales | number: '1.2-2' }}</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-label">عدد الفواتير</span>
+      <span class="kpi-value">{{ s.invoiceCount }}</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-label">إجمالي المرتجعات</span>
+      <span class="kpi-value">{{ s.totalReturnedAmount | number: '1.2-2' }}</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-label">صافي الإيراد</span>
+      <span class="kpi-value">{{ s.netRevenue | number: '1.2-2' }}</span>
+    </div>
+  </div>
+}
+
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<section class="table-panel">
+  <div class="table-toolbar">
+    <span class="table-title">الفواتير</span>
+    <span class="result-count">{{ totalCount() }} سجل</span>
+
+    <div class="toolbar-spacer"></div>
+
+    <input
+      type="text"
+      class="table-search"
+      [ngModel]="searchQuery()"
+      (ngModelChange)="onSearchChange($event)"
+      placeholder="بحث برقم الفاتورة…"
+    />
+  </div>
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>رقم الفاتورة</th>
+          <th>الإجمالي</th>
+          <th>المرتجَع</th>
+          <th>الحالة</th>
+          <th>التاريخ</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of invoices(); track row.id) {
+          <tr>
+            <td class="mono">{{ row.invoiceNumber }}</td>
+            <td class="mono">{{ row.totalAmount | number: '1.2-2' }}</td>
+            <td class="mono">{{ row.totalReturnedAmount | number: '1.2-2' }}</td>
+            <td>
+              <span class="status-chip" [class]="statusTone(row.statusCode)">
+                {{ row.statusTitle }}
+              </span>
+            </td>
+            <td class="mono">{{ row.createdAtUtc | date: 'yyyy-MM-dd HH:mm' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (!loading() && invoices().length === 0) {
+      <div class="no-results">
+        <span class="no-results-title">لا توجد فواتير بعد</span>
+        <span class="no-results-sub">أول عملية بيع تسجّلها (من تطبيق الكاشير لاحقًا، أو Swagger الآن) بتظهر هون فورًا.</span>
+      </div>
+    }
+
+    @if (loading()) {
+      <div class="no-results">
+        <span class="no-results-sub">جارٍ التحميل…</span>
+      </div>
+    }
+  </div>
+
+  @if (totalCount() > 0) {
+    <app-pagination
+      [pageNumber]="pageNumber()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (changed)="onPageChanged($event)"
+    ></app-pagination>
+  }
+</section>

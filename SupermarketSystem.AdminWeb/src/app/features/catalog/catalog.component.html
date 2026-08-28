@@ -1,0 +1,293 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">الكتالوج</span>
+    <h1>المنتجات والتصنيفات</h1>
+    <span class="subtitle">كل منتج مربوط بتصنيف ووحدة أساسية واحدة على الأقل.</span>
+  </div>
+  <div class="head-actions">
+    @if (activeTab() === 'products') {
+      <button type="button" class="btn-outline" (click)="openScanner('newProduct')">📷 مسح باركود</button>
+      <button type="button" class="btn-primary" (click)="openCreateProductForm()">منتج جديد</button>
+    } @else {
+      <button type="button" class="btn-primary" (click)="openCreateCategoryForm()">تصنيف جديد</button>
+    }
+  </div>
+</div>
+
+<div class="tabs">
+  <button type="button" class="tab" [class.active]="activeTab() === 'products'" (click)="setTab('products')">المنتجات</button>
+  <button type="button" class="tab" [class.active]="activeTab() === 'categories'" (click)="setTab('categories')">التصنيفات</button>
+</div>
+
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+@if (activeTab() === 'products') {
+  <section class="table-panel">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>اسم المنتج</th>
+            <th>التصنيف</th>
+            <th>سعر البيع المقترح</th>
+            <th>تتبّع دفعات</th>
+            <th>مدة الصلاحية المتوقَّعة</th>
+            <th>ضيافة</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (p of products(); track p.id) {
+            <tr>
+              <td>{{ p.name }}</td>
+              <td>{{ categoryNameOf(p.categoryId) }}</td>
+              <td class="mono">{{ p.suggestedRetailPrice ?? '—' }}</td>
+              <td>{{ p.isBatchTracked ? 'نعم' : 'لا' }}</td>
+              <td class="mono">{{ p.expectedShelfLifeDays ? (p.expectedShelfLifeDays + ' يوم') : '—' }}</td>
+              <td>
+                <button
+                  type="button"
+                  class="toggle-chip"
+                  [class.active]="p.isComplimentaryAllowed"
+                  (click)="toggleComplimentaryAllowed(p)"
+                >
+                  {{ p.isComplimentaryAllowed ? 'مفعَّلة' : 'معطَّلة' }}
+                </button>
+              </td>
+              <td>
+                <button type="button" class="link-btn" (click)="openEditProductForm(p)">تعديل</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (!loading() && products().length === 0) {
+        <div class="no-results">
+          <span class="no-results-title">لا توجد منتجات بعد</span>
+          <span class="no-results-sub">أضف أول منتج عبر الزر أعلاه (يحتاج تصنيفًا موجودًا أولًا).</span>
+        </div>
+      }
+    </div>
+
+    @if (productsTotalCount() > 0) {
+      <app-pagination
+        [pageNumber]="productsPageNumber()"
+        [pageSize]="productsPageSize()"
+        [totalCount]="productsTotalCount()"
+        (changed)="onProductsPageChanged($event)"
+      ></app-pagination>
+    }
+  </section>
+} @else {
+  <section class="table-panel">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>اسم التصنيف</th>
+            <th>تصنيف أب</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (c of categories(); track c.id) {
+            <tr>
+              <td>{{ c.name }}</td>
+              <td>{{ c.parentCategoryId ? categoryNameOf(c.parentCategoryId) : '—' }}</td>
+              <td>
+                <button type="button" class="link-btn" (click)="openEditCategoryForm(c)">تعديل</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (!loading() && categories().length === 0) {
+        <div class="no-results">
+          <span class="no-results-title">لا توجد تصنيفات بعد</span>
+          <span class="no-results-sub">أنشئ أول تصنيف قبل إضافة أي منتج.</span>
+        </div>
+      }
+    </div>
+  </section>
+}
+
+@if (productFormOpen()) {
+  <div class="modal-backdrop" (click)="closeProductForm()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div class="modal-title-group">
+          <h2>{{ isEditingProduct() ? 'تعديل منتج' : 'منتج جديد' }}</h2>
+          <span class="modal-hint">وحدة أساسية واحدة تُنشأ تلقائيًا بمعامل تحويل 1.</span>
+        </div>
+        <button type="button" class="icon-btn" (click)="closeProductForm()" aria-label="إغلاق">×</button>
+      </div>
+
+      @if (formError()) {
+        <p class="form-error">{{ formError() }}</p>
+      }
+
+      <div class="modal-fields">
+        <label class="field" style="grid-column: span 2">
+          <span>اسم المنتج</span>
+          <input type="text" [(ngModel)]="productName" placeholder="مثلاً: حليب طويل الأمد 1ل" />
+        </label>
+        <label class="field">
+          <span>التصنيف</span>
+          <select [(ngModel)]="productCategoryId">
+            @for (c of categories(); track c.id) {
+              <option [value]="c.id">{{ c.name }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span>سعر البيع المقترح (اختياري)</span>
+          <input type="number" [(ngModel)]="productPrice" placeholder="0.00" />
+        </label>
+        <label class="field">
+          <span>مدة الصلاحية المتوقَّعة بالأيام (اختياري)</span>
+          <input type="number" [(ngModel)]="productExpectedShelfLifeDays" placeholder="مثلاً: 180" min="1" />
+        </label>
+        @if (!isEditingProduct()) {
+          <label class="field">
+            <span>الوحدة الأساسية</span>
+            <input type="text" [(ngModel)]="baseUnitName" placeholder="حبة / كرتونة / كيلو" />
+          </label>
+          <label class="field">
+            <span>باركود الوحدة الأساسية (اختياري)</span>
+            <input type="text" [(ngModel)]="baseUnitBarcode" placeholder="امسحه بالقارئ أو اكتبه يدويًا" />
+          </label>
+          <label class="field checkbox-field">
+            <input type="checkbox" [(ngModel)]="productIsBatchTracked" />
+            <span>يتتبّع دفعات (تواريخ صلاحية)</span>
+          </label>
+        }
+      </div>
+
+      @if (isEditingProduct()) {
+        <div class="units-section">
+          <div class="units-header">
+            <span>الوحدات</span>
+            <button type="button" class="icon-add-btn" (click)="openAddUnitForm()" title="إضافة وحدة جديدة" aria-label="إضافة وحدة جديدة">+</button>
+          </div>
+
+          <div class="units-list">
+            @for (u of productUnits(); track u.id) {
+              <div class="unit-row">
+                <span class="unit-name">{{ u.unitName }}</span>
+                @if (u.isBaseUnit) {
+                  <span class="unit-base-chip">أساسية</span>
+                } @else {
+                  <span class="unit-factor mono">= {{ u.conversionFactorToBase }} من الوحدة الأساسية</span>
+                }
+              </div>
+            }
+          </div>
+
+          @if (addUnitFormOpen()) {
+            <div class="add-unit-form">
+              @if (addUnitError()) {
+                <p class="form-error">{{ addUnitError() }}</p>
+              }
+              <div class="add-unit-fields">
+                <label class="field">
+                  <span>اسم الوحدة</span>
+                  <input type="text" [(ngModel)]="newUnitName" placeholder="طرد / كرتونة" />
+                </label>
+                <label class="field">
+                  <span>كم حبة بالوحدة</span>
+                  <input type="number" [(ngModel)]="newUnitConversionFactor" placeholder="24" min="0.01" />
+                </label>
+                <label class="field barcode-field">
+                  <span>باركود الوحدة (اختياري)</span>
+                  <div class="barcode-input-row">
+                    <input type="text" [(ngModel)]="newUnitBarcode" placeholder="امسحه أو اكتبه يدويًا" />
+                    <button type="button" class="scan-icon-btn" (click)="openScanner('addUnit')" title="مسح بالكاميرا" aria-label="مسح بالكاميرا">📷</button>
+                  </div>
+                </label>
+              </div>
+              <div class="add-unit-actions">
+                <button type="button" class="btn-primary small" [disabled]="addUnitSubmitting()" (click)="submitNewUnit()">
+                  {{ addUnitSubmitting() ? 'جارٍ الإضافة…' : 'إضافة الوحدة' }}
+                </button>
+                <button type="button" class="btn-ghost small" (click)="closeAddUnitForm()">إلغاء</button>
+              </div>
+            </div>
+          }
+        </div>
+      }
+
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" [disabled]="submitting() || categories().length === 0" (click)="submitProduct()">
+          {{ submitting() ? 'جارٍ الحفظ…' : (isEditingProduct() ? 'حفظ التعديلات' : 'إنشاء المنتج') }}
+        </button>
+        <button type="button" class="btn-ghost" (click)="closeProductForm()">إلغاء</button>
+      </div>
+
+      @if (categories().length === 0) {
+        <p class="form-error">لازم تنشئ تصنيف واحد على الأقل قبل إضافة منتج.</p>
+      }
+    </div>
+  </div>
+}
+
+@if (categoryFormOpen()) {
+  <div class="modal-backdrop" (click)="closeCategoryForm()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div class="modal-title-group">
+          <h2>{{ isEditingCategory() ? 'تعديل تصنيف' : 'تصنيف جديد' }}</h2>
+        </div>
+        <button type="button" class="icon-btn" (click)="closeCategoryForm()" aria-label="إغلاق">×</button>
+      </div>
+
+      @if (formError()) {
+        <p class="form-error">{{ formError() }}</p>
+      }
+
+      <div class="modal-fields">
+        <label class="field" style="grid-column: span 2">
+          <span>اسم التصنيف</span>
+          <input type="text" [(ngModel)]="categoryName" placeholder="مثلاً: منتجات الألبان" />
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" [disabled]="submitting()" (click)="submitCategory()">
+          {{ submitting() ? 'جارٍ الحفظ…' : (isEditingCategory() ? 'حفظ التعديلات' : 'إنشاء التصنيف') }}
+        </button>
+        <button type="button" class="btn-ghost" (click)="closeCategoryForm()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (scannerOpen()) {
+  <app-barcode-scanner
+    (scanned)="onBarcodeScanned($event)"
+    (closed)="closeScanner()"
+  ></app-barcode-scanner>
+}
+
+@if (scanFoundProduct(); as found) {
+  <div class="modal-backdrop" (click)="closeFoundProductNotice()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div class="modal-title-group">
+          <h2>هذا الباركود مسجَّل أصلًا</h2>
+          <span class="modal-hint">لا داعي لإضافته من جديد.</span>
+        </div>
+        <button type="button" class="icon-btn" (click)="closeFoundProductNotice()" aria-label="إغلاق">×</button>
+      </div>
+      <p style="margin: 0; font-size: 13px; color: var(--ink);">
+        <strong>{{ found.productName }}</strong> — تصنيف: {{ found.categoryName }}
+      </p>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" (click)="closeFoundProductNotice()">إغلاق</button>
+      </div>
+    </div>
+  </div>
+}

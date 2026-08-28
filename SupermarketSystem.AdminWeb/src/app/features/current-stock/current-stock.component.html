@@ -1,0 +1,82 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">المخزون / المخزون الحالي</span>
+    <h1>المخزون الحالي</h1>
+    <span class="subtitle">كم عندك من كل صنف الآن، بكل فرع.</span>
+  </div>
+</div>
+
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<section class="table-panel">
+  <div class="table-toolbar">
+    <span class="table-title">الأصناف</span>
+    <span class="result-count">{{ totalCount() }} سجل</span>
+
+    <div class="toolbar-spacer"></div>
+
+    <select class="branch-filter" [(ngModel)]="selectedBranchId" (ngModelChange)="onBranchFilterChange()">
+      <option value="">كل الفروع</option>
+      @for (b of branches(); track b.id) {
+        <option [value]="b.id">{{ b.name }}</option>
+      }
+    </select>
+
+    <input
+      type="text"
+      class="table-search"
+      [ngModel]="searchQuery()"
+      (ngModelChange)="onSearchChange($event)"
+      placeholder="بحث باسم الصنف…"
+    />
+  </div>
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>الصنف</th>
+          <th>التصنيف</th>
+          <th>الفرع</th>
+          <th>الكمية المتوفرة</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of items(); track row.productId + row.branchId) {
+          <tr>
+            <td>{{ row.productName }}</td>
+            <td>{{ row.categoryName }}</td>
+            <td>{{ row.branchName }}</td>
+            <td class="mono qty-cell" [class.negative]="row.quantityOnHand < 0">
+              {{ row.quantityOnHand | number }} {{ row.baseUnitName }}
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (!loading() && items().length === 0) {
+      <div class="no-results">
+        <span class="no-results-title">لا توجد بيانات مخزون بعد</span>
+        <span class="no-results-sub">أول عملية شراء لأي صنف بتظهر هون فورًا.</span>
+      </div>
+    }
+
+    @if (loading()) {
+      <div class="no-results">
+        <span class="no-results-sub">جارٍ التحميل…</span>
+      </div>
+    }
+  </div>
+
+  @if (totalCount() > 0) {
+    <app-pagination
+      [pageNumber]="pageNumber()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (changed)="onPageChanged($event)"
+    ></app-pagination>
+  }
+</section>

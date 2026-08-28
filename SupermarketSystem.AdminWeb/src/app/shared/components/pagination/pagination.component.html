@@ -1,0 +1,23 @@
+<div class="pagination-bar">
+  <div class="page-size">
+    <span>عرض</span>
+    <select [ngModel]="pageSize" (ngModelChange)="onPageSizeChange($event)">
+      @for (size of pageSizeOptions; track size) {
+        <option [value]="size">{{ size }}</option>
+      }
+    </select>
+    <span>لكل صفحة</span>
+  </div>
+
+  <span class="range-text">
+    {{ fromRecord }}–{{ toRecord }} من {{ totalCount }}
+  </span>
+
+  <div class="pager">
+    <button type="button" class="pager-btn" [disabled]="!canGoPrev" (click)="goTo(1)">الأولى</button>
+    <button type="button" class="pager-btn" [disabled]="!canGoPrev" (click)="goTo(pageNumber - 1)">السابق</button>
+    <span class="page-indicator">صفحة {{ pageNumber }} من {{ totalPages }}</span>
+    <button type="button" class="pager-btn" [disabled]="!canGoNext" (click)="goTo(pageNumber + 1)">التالي</button>
+    <button type="button" class="pager-btn" [disabled]="!canGoNext" (click)="goTo(totalPages)">الأخيرة</button>
+  </div>
+</div>

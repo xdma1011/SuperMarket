@@ -1,0 +1,42 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">النظام / الإشعارات</span>
+    <h1>الإشعارات</h1>
+    <span class="subtitle">تنبيهات النظام (مخزون سالب، فرق تقفيل، مراجعات مطلوبة).</span>
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn-outline" (click)="load()">تحديث</button>
+  </div>
+</div>
+
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<div class="notif-list">
+  @for (n of notifications(); track n.id) {
+    <div class="notif-card" [class.unread]="n.status !== 3">
+      <div class="notif-dot" [class.unread]="n.status !== 3"></div>
+      <div class="notif-body">
+        <div class="notif-title-row">
+          <span class="notif-title">{{ n.title }}</span>
+          <span class="notif-time">{{ n.createdAtUtc | date: 'yyyy-MM-dd HH:mm' }}</span>
+        </div>
+        <p class="notif-message">{{ n.message }}</p>
+      </div>
+    </div>
+  }
+
+  @if (!loading() && notifications().length === 0) {
+    <div class="no-results">
+      <span class="no-results-title">لا توجد إشعارات حاليًا</span>
+      <span class="no-results-sub">كل التنبيهات بتظهر هون فور حدوثها.</span>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="no-results">
+      <span class="no-results-sub">جارٍ التحميل…</span>
+    </div>
+  }
+</div>

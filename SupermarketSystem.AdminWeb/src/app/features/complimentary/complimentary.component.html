@@ -1,0 +1,59 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">المخزون / الضيافة</span>
+    <h1>ضيافة واستهلاك داخلي</h1>
+    <span class="subtitle">بضاعة تخرج من المخزون بلا أي قيد مالي كإيراد — للضيوف أو الاستهلاك اليومي بالمحل.</span>
+  </div>
+</div>
+
+@if (successMessage()) {
+  <div class="alert-banner success">{{ successMessage() }}</div>
+}
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<section class="form-panel">
+  <div class="form-fields">
+    <label class="field">
+      <span>المنتج</span>
+      <select [(ngModel)]="selectedProductId" (ngModelChange)="onProductChange()">
+        @for (p of products(); track p.id) {
+          <option [value]="p.id">{{ p.name }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="field">
+      <span>الفرع</span>
+      <select [(ngModel)]="selectedBranchId">
+        @for (b of branches(); track b.id) {
+          <option [value]="b.id">{{ b.name }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="field">
+      <span>الوحدة</span>
+      <select [(ngModel)]="selectedUnitId" [disabled]="loadingUnits() || units().length === 0">
+        @for (u of units(); track u.id) {
+          <option [value]="u.id">{{ u.unitName }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="field">
+      <span>الكمية</span>
+      <input type="number" [(ngModel)]="quantity" min="0.01" step="1" placeholder="1" />
+    </label>
+
+    <label class="field" style="grid-column: span 2">
+      <span>السبب / لمين (اختياري)</span>
+      <input type="text" [(ngModel)]="reason" placeholder="مثلاً: ضيافة لقريب، أو استهلاك يومي بالمحل" />
+    </label>
+  </div>
+
+  <button type="button" class="btn-primary" [disabled]="submitting() || loading()" (click)="submit()">
+    {{ submitting() ? 'جارٍ التسجيل…' : 'تسجيل الضيافة' }}
+  </button>
+</section>

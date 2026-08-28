@@ -1,0 +1,27 @@
+@if (open) {
+  <div class="modal-backdrop" (click)="close()">
+    <div class="modal-card" (click)="stopPropagation($event)">
+      <div class="modal-head">
+        <div class="modal-title-group">
+          <h2>{{ title }}</h2>
+          <span class="modal-hint">{{ hint }}</span>
+        </div>
+        <button type="button" class="icon-btn" (click)="close()" aria-label="إغلاق">×</button>
+      </div>
+
+      <div class="modal-fields">
+        @for (f of fields; track f.label) {
+          <label class="field" [style.gridColumn]="'span ' + (f.span ?? 1)">
+            <span>{{ f.label }}</span>
+            <input type="text" [placeholder]="f.placeholder" />
+          </label>
+        }
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" (click)="save()">{{ saveLabel }}</button>
+        <button type="button" class="btn-ghost" (click)="close()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+}

@@ -1,0 +1,51 @@
+<main class="login-screen">
+  <form class="login-card" (ngSubmit)="onSubmit()" novalidate>
+    <div class="brand">
+      <span class="brand-mark">سوبر ماركت</span>
+      <h1>الدخول إلى الإدارة</h1>
+    </div>
+
+    <label class="field">
+      <span>اسم المستخدم</span>
+      <input
+        type="text"
+        name="username"
+        [(ngModel)]="username"
+        autocomplete="username"
+        [disabled]="isSubmitting()"
+        autofocus
+      />
+    </label>
+
+    <label class="field">
+      <span>كلمة السر</span>
+      <input
+        type="password"
+        name="password"
+        [(ngModel)]="password"
+        autocomplete="current-password"
+        [disabled]="isSubmitting()"
+      />
+    </label>
+
+    @if (branches().length > 0) {
+      <label class="field">
+        <span>الفرع (اختياري — يُختار تلقائيًا لو لم تحدده)</span>
+        <select name="branch" [(ngModel)]="selectedBranchId" [disabled]="isSubmitting()">
+          <option value="">— افتراضي —</option>
+          @for (b of branches(); track b.id) {
+            <option [value]="b.id">{{ b.name }}</option>
+          }
+        </select>
+      </label>
+    }
+
+    @if (errorMessage()) {
+      <p class="error" role="alert">{{ errorMessage() }}</p>
+    }
+
+    <button type="submit" [disabled]="isSubmitting()">
+      {{ isSubmitting() ? 'جارٍ الدخول...' : 'دخول' }}
+    </button>
+  </form>
+</main>

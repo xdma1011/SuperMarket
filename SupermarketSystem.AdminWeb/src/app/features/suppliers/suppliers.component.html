@@ -1,0 +1,115 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">المشتريات / الموردين</span>
+    <h1>الموردون</h1>
+    <span class="subtitle">قائمة الموردين المسجَّلين وبيانات التواصل معهم.</span>
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn-primary" (click)="openCreateForm()">مورد جديد</button>
+  </div>
+</div>
+
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<section class="table-panel">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>الاسم</th>
+          <th>جهة الاتصال</th>
+          <th>الهاتف</th>
+          <th>البريد الإلكتروني</th>
+          <th>الحالة</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (s of suppliers(); track s.id) {
+          <tr>
+            <td>{{ s.name }}</td>
+            <td>{{ s.contactName || '—' }}</td>
+            <td class="mono">{{ s.phone || '—' }}</td>
+            <td>{{ s.email || '—' }}</td>
+            <td>
+              <span class="status-chip" [class.inactive]="!s.isActive">
+                {{ s.isActive ? 'فعّال' : 'معطَّل' }}
+              </span>
+            </td>
+            <td>
+              <button type="button" class="link-btn" (click)="openEditForm(s)">تعديل</button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (!loading() && suppliers().length === 0) {
+      <div class="no-results">
+        <span class="no-results-title">لا يوجد موردون بعد</span>
+        <span class="no-results-sub">ابدأ بإضافة أول مورد عبر الزر أعلاه.</span>
+      </div>
+    }
+
+    @if (loading()) {
+      <div class="no-results">
+        <span class="no-results-sub">جارٍ التحميل…</span>
+      </div>
+    }
+  </div>
+
+  @if (totalCount() > 0) {
+    <app-pagination
+      [pageNumber]="pageNumber()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (changed)="onPageChanged($event)"
+    ></app-pagination>
+  }
+</section>
+
+@if (formOpen()) {
+  <div class="modal-backdrop" (click)="closeForm()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div class="modal-title-group">
+          <h2>{{ isEditMode() ? 'تعديل مورد' : 'مورد جديد' }}</h2>
+          <span class="modal-hint">الاسم مطلوب، باقي الحقول اختيارية.</span>
+        </div>
+        <button type="button" class="icon-btn" (click)="closeForm()" aria-label="إغلاق">×</button>
+      </div>
+
+      @if (formError()) {
+        <p class="form-error">{{ formError() }}</p>
+      }
+
+      <div class="modal-fields">
+        <label class="field" style="grid-column: span 2">
+          <span>اسم المورد</span>
+          <input type="text" [(ngModel)]="name" placeholder="مثلاً: شركة النور للتوزيع" />
+        </label>
+        <label class="field">
+          <span>جهة الاتصال</span>
+          <input type="text" [(ngModel)]="contactName" placeholder="اسم الشخص المسؤول" />
+        </label>
+        <label class="field">
+          <span>الهاتف</span>
+          <input type="text" [(ngModel)]="phone" placeholder="07xxxxxxxx" />
+        </label>
+        <label class="field" style="grid-column: span 2">
+          <span>البريد الإلكتروني</span>
+          <input type="text" [(ngModel)]="email" placeholder="supplier@example.com" />
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" [disabled]="submitting()" (click)="submit()">
+          {{ submitting() ? 'جارٍ الحفظ…' : (isEditMode() ? 'حفظ التعديلات' : 'إنشاء المورد') }}
+        </button>
+        <button type="button" class="btn-ghost" (click)="closeForm()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+}

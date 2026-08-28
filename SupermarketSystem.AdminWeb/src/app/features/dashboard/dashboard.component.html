@@ -1,0 +1,97 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">نظرة عامة</span>
+    <h1>لوحة التحكم</h1>
+    <span class="subtitle">ملخّص حقيقي لآخر 30 يوم — يتحدّث فورًا مع كل عملية جديدة.</span>
+  </div>
+</div>
+
+@if (isBackupStale) {
+  <div class="backup-warning-banner">
+    ⚠️ آخر نسخة احتياطية ناجحة كانت بتاريخ {{ lastBackupAtUtc() | date: 'yyyy-MM-dd HH:mm' }} — أكتر من 24 ساعة.
+    <a routerLink="/backup">راجع صفحة النسخ الاحتياطي</a>
+  </div>
+}
+
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <span class="kpi-label">مبيعات آخر 30 يوم</span>
+    <span class="kpi-value">{{ (summary()?.totalSales ?? 0) | number: '1.2-2' }}</span>
+  </div>
+  <div class="kpi-card">
+    <span class="kpi-label">عدد الفواتير</span>
+    <span class="kpi-value">{{ summary()?.invoiceCount ?? 0 }}</span>
+  </div>
+  <div class="kpi-card">
+    <span class="kpi-label">متوسط الفاتورة</span>
+    <span class="kpi-value">{{ averageInvoice | number: '1.2-2' }}</span>
+  </div>
+  <div class="kpi-card">
+    <span class="kpi-label">صافي الإيراد</span>
+    <span class="kpi-value">{{ (summary()?.netRevenue ?? 0) | number: '1.2-2' }}</span>
+  </div>
+</div>
+
+<div class="split-grid">
+  <section class="panel">
+    <div class="panel-head-simple">
+      <h2>آخر الفواتير</h2>
+      <span class="panel-sub">أحدث 5 عمليات بيع</span>
+    </div>
+
+    @if (recentInvoices().length > 0) {
+      <div class="invoice-list">
+        @for (inv of recentInvoices(); track inv.id) {
+          <div class="invoice-row">
+            <span class="invoice-number mono">{{ inv.invoiceNumber }}</span>
+            <span class="invoice-status">{{ inv.statusTitle }}</span>
+            <span class="invoice-total mono">{{ inv.totalAmount | number: '1.2-2' }}</span>
+            <span class="invoice-date mono">{{ inv.createdAtUtc | date: 'MM-dd HH:mm' }}</span>
+          </div>
+        }
+      </div>
+    } @else if (!loading()) {
+      <div class="empty-hint">لا توجد فواتير بعد — أول عملية بيع بتظهر هون فورًا.</div>
+    }
+  </section>
+
+  <section class="panel">
+    <div class="panel-head-simple row">
+      <h2>تحتاج انتباهك</h2>
+      <span class="alert-count">{{ totalAlerts }} تنبيهات</span>
+    </div>
+
+    <div class="alert-list">
+      @if (negativeStockCount() > 0) {
+        <div class="alert-row">
+          <span class="alert-dot" style="background: var(--red)"></span>
+          <div class="alert-text">
+            <span class="alert-title">{{ negativeStockCount() }} صنف بمخزون سالب</span>
+            <span class="alert-detail">راجع تقرير "المخزون السالب" بصفحة التقارير.</span>
+          </div>
+        </div>
+      }
+      @if (reorderNeededCount() > 0) {
+        <div class="alert-row">
+          <span class="alert-dot" style="background: var(--accent)"></span>
+          <div class="alert-text">
+            <span class="alert-title">{{ reorderNeededCount() }} صنف يحتاج إعادة طلب</span>
+            <span class="alert-detail">وصل الحد الأدنى المسموح به.</span>
+          </div>
+        </div>
+      }
+      @if (pendingReviewsCount() > 0) {
+        <div class="alert-row">
+          <span class="alert-dot" style="background: var(--accent)"></span>
+          <div class="alert-text">
+            <span class="alert-title">{{ pendingReviewsCount() }} مراجعة بانتظارك</span>
+            <span class="alert-detail">إرجاعات وضيافة تحتاج تأكيدك.</span>
+          </div>
+        </div>
+      }
+      @if (totalAlerts === 0 && !loading()) {
+        <div class="empty-hint">لا يوجد شي يحتاج انتباهك حاليًا 🎉</div>
+      }
+    </div>
+  </section>
+</div>

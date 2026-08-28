@@ -1,0 +1,118 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">العمليات / الإرجاعات</span>
+    <h1>إرجاع من زبون</h1>
+    <span class="subtitle">دوّر عن الفاتورة الأصلية برقمها، ثم حدّد الأصناف والكميات المرتجعة.</span>
+  </div>
+</div>
+
+@if (successMessage()) {
+  <div class="alert-banner success">{{ successMessage() }}</div>
+}
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+@if (!selectedInvoice()) {
+  <section class="search-panel">
+    <div class="search-row">
+      <input
+        type="text"
+        [(ngModel)]="searchQuery"
+        (keyup.enter)="search()"
+        placeholder="رقم الفاتورة (مثلاً INV-24118)…"
+        class="search-input"
+      />
+      <button type="button" class="btn-primary" [disabled]="searching()" (click)="search()">
+        {{ searching() ? 'جارٍ البحث…' : 'بحث' }}
+      </button>
+    </div>
+
+    @if (searchResults().length > 0) {
+      <div class="results-list">
+        @for (r of searchResults(); track r.id) {
+          <button type="button" class="result-row" (click)="selectInvoice(r.id)">
+            <span class="result-invoice mono">{{ r.invoiceNumber }}</span>
+            <span class="result-status">{{ r.statusTitle }}</span>
+            <span class="result-total mono">{{ r.totalAmount | number: '1.2-2' }}</span>
+            <span class="result-date mono">{{ r.createdAtUtc | date: 'yyyy-MM-dd' }}</span>
+          </button>
+        }
+      </div>
+    }
+  </section>
+} @else {
+  <section class="invoice-panel">
+    <div class="invoice-header">
+      <div>
+        <span class="invoice-number mono">{{ selectedInvoice()!.invoiceNumber }}</span>
+        <span class="invoice-status">{{ selectedInvoice()!.statusTitle }}</span>
+      </div>
+      <button type="button" class="btn-ghost" (click)="clearSelection()">دوّر عن فاتورة تانية</button>
+    </div>
+
+    @if (returnLines().length === 0) {
+      <div class="no-results">
+        <span class="no-results-title">لا يوجد أصناف قابلة للإرجاع بهذه الفاتورة</span>
+        <span class="no-results-sub">إما كل الأصناف اترجعت مسبقًا، أو الفاتورة نفسها ملغاة.</span>
+      </div>
+    } @else {
+      <div class="lines-table">
+        <div class="lines-head">
+          <span>الصنف</span>
+          <span>القابل للإرجاع</span>
+          <span>الكمية المرتجعة</span>
+          <span>السعر</span>
+          <span>الإجمالي</span>
+        </div>
+        @for (line of returnLines(); track line.saleInvoiceItemId) {
+          <div class="lines-row">
+            <span>{{ line.productName }}</span>
+            <span class="mono">{{ line.maxReturnable }}</span>
+            <input
+              type="number"
+              [(ngModel)]="line.quantity"
+              [min]="0"
+              [max]="line.maxReturnable"
+              step="1"
+            />
+            <span class="mono">{{ line.unitPrice | number: '1.2-2' }}</span>
+            <span class="mono">{{ (line.quantity * line.unitPrice) | number: '1.2-2' }}</span>
+          </div>
+        }
+      </div>
+
+      <div class="return-summary">
+        <label class="field">
+          <span>طريقة الاسترجاع</span>
+          <select [(ngModel)]="selectedPaymentMethodId">
+            @for (m of paymentMethods(); track m.id) {
+              <option [value]="m.id">{{ m.name }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span>ملاحظات (اختياري)</span>
+          <input type="text" [(ngModel)]="notes" placeholder="سبب الإرجاع، تفاصيل إضافية…" />
+        </label>
+        <div class="summary-total">
+          <span>إجمالي الاسترجاع:</span>
+          <span class="mono">{{ selectedTotal | number: '1.2-2' }}</span>
+        </div>
+      </div>
+
+      @if (submitError()) {
+        <p class="form-error">{{ submitError() }}</p>
+      }
+
+      <button
+        type="button"
+        class="btn-primary submit-btn"
+        [disabled]="submitting() || !hasAnySelectedQuantity"
+        (click)="submitReturn()"
+      >
+        {{ submitting() ? 'جارٍ التسجيل…' : 'تسجيل الإرجاع' }}
+      </button>
+    }
+  </section>
+}

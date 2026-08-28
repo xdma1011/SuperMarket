@@ -1,0 +1,57 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">النظام / المراجعات</span>
+    <h1>المراجعات المعلَّقة</h1>
+    <span class="subtitle">كل شي بانتظار مراجعتك — إرجاعات وضيافة تجاوزت الحد المسموح، بمكان واحد.</span>
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn-outline" (click)="load()">تحديث</button>
+  </div>
+</div>
+
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<div class="review-list">
+  @for (item of items(); track item.referenceId) {
+    <div class="review-card">
+      <span class="type-chip" [class.return]="isReturn(item)" [class.complimentary]="!isReturn(item)">
+        {{ item.typeTitle }}
+      </span>
+
+      <div class="review-body">
+        <div class="review-title-row">
+          <span class="review-title">{{ item.title }}</span>
+          <span class="review-time">{{ item.occurredAtUtc | date: 'yyyy-MM-dd HH:mm' }}</span>
+        </div>
+        <p class="review-detail">{{ item.detail }}</p>
+        @if (item.amount !== null) {
+          <span class="review-amount">{{ item.amount | number: '1.2-2' }}</span>
+        }
+      </div>
+
+      <button
+        type="button"
+        class="btn-primary"
+        [disabled]="processingId() === item.referenceId"
+        (click)="markReviewed(item)"
+      >
+        {{ processingId() === item.referenceId ? 'جارٍ...' : 'تمت المراجعة' }}
+      </button>
+    </div>
+  }
+
+  @if (!loading() && items().length === 0) {
+    <div class="no-results">
+      <span class="no-results-title">لا يوجد شي بانتظار المراجعة 🎉</span>
+      <span class="no-results-sub">كل الإرجاعات والضيافة تمت مراجعتها.</span>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="no-results">
+      <span class="no-results-sub">جارٍ التحميل…</span>
+    </div>
+  }
+</div>

@@ -1,0 +1,116 @@
+<div class="shell" dir="rtl">
+  <div
+    class="drawer-backdrop"
+    [class.visible]="drawerOpen()"
+    (click)="closeDrawer()"
+  ></div>
+
+  <aside class="sidebar" [class.drawer-open]="drawerOpen()">
+    <div class="brand">
+      <div class="brand-mark">و</div>
+      <div class="brand-text">
+        <span class="brand-name">متجر الواحة</span>
+        <span class="brand-sub">لوحة الإدارة</span>
+      </div>
+    </div>
+
+    <div class="nav-label">التنقل</div>
+    <nav class="nav-list">
+      @for (item of navItems(); track item.id) {
+        <a
+          class="nav-item"
+          [routerLink]="item.route"
+          routerLinkActive="active"
+          [routerLinkActiveOptions]="{ exact: item.route === '/' }"
+        >
+          <span class="nav-dot"></span>
+          <span class="nav-label-text">{{ item.label }}</span>
+          @if (item.badge) {
+            <span class="nav-badge">{{ item.badge }}</span>
+          }
+        </a>
+      }
+    </nav>
+
+    <div class="session-card">
+      <div class="session-status">
+        <span class="pulse-dot"></span>
+        <span class="session-title">الجلسة مفتوحة</span>
+      </div>
+      <div class="session-detail">{{ authService.currentUserFullName() }}</div>
+      <button type="button" class="logout-link" (click)="logout()">تسجيل الخروج</button>
+    </div>
+  </aside>
+
+  <div class="main-column">
+    <header class="topbar">
+      <button type="button" class="menu-btn" (click)="toggleDrawer()" aria-label="القائمة">
+        <span></span><span></span><span></span>
+      </button>
+
+      <div class="search-wrap" (click)="$event.stopPropagation()">
+        <label class="search-box">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6">
+            <circle cx="6.8" cy="6.8" r="4.6"></circle>
+            <line x1="10.2" y1="10.2" x2="14" y2="14"></line>
+          </svg>
+          <input
+            type="text"
+            [ngModel]="searchQuery()"
+            (ngModelChange)="onSearchInput($event)"
+            (focus)="hasQuery() && searchResults().length > 0 ? searchOpen.set(true) : null"
+            placeholder="بحث عام: منتج، فاتورة، مورد…"
+          />
+          @if (hasQuery()) {
+            <button type="button" class="clear-btn" (click)="clearQuery()" aria-label="مسح البحث">×</button>
+          }
+        </label>
+
+        @if (searchOpen()) {
+          <div class="search-dropdown" (click)="$event.stopPropagation()">
+            @if (searching()) {
+              <div class="search-empty">جارٍ البحث…</div>
+            } @else if (searchResults().length === 0) {
+              <div class="search-empty">لا نتائج مطابقة.</div>
+            } @else {
+              @for (r of searchResults(); track r.type + r.id) {
+                <button type="button" class="search-result-row" (click)="goToResult(r)">
+                  <span class="search-result-type">{{ r.typeLabel }}</span>
+                  <span class="search-result-label">{{ r.label }}</span>
+                  <span class="search-result-sub">{{ r.sublabel }}</span>
+                </button>
+              }
+            }
+          </div>
+        }
+      </div>
+
+      <div class="spacer"></div>
+
+      <button type="button" class="theme-btn" (click)="theme.toggle()">
+        <span class="theme-dot"></span>
+        <span>{{ themeLabel }}</span>
+      </button>
+
+      <button type="button" class="icon-square" routerLink="/notifications" aria-label="الإشعارات">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M4 6.6a4 4 0 0 1 8 0v3l1.2 2H2.8L4 9.6z"></path>
+          <path d="M6.4 12.2a1.7 1.7 0 0 0 3.2 0"></path>
+        </svg>
+        <span class="notif-dot"></span>
+      </button>
+
+      <div class="user-chip">
+        <div class="user-text">
+          <span class="user-name">{{ authService.currentUserFullName() }}</span>
+          <span class="user-role">مديرة الفرع</span>
+        </div>
+        <div class="user-avatar">م.س</div>
+      </div>
+    </header>
+
+    <main class="page-content">
+      <router-outlet></router-outlet>
+    </main>
+  </div>
+</div>
