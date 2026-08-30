@@ -6,6 +6,7 @@ using SupermarketSystem.Application.Catalog.CreateProductCategory;
 using SupermarketSystem.Application.Catalog.GetProductCategories;
 using SupermarketSystem.Application.Catalog.GetProducts;
 using SupermarketSystem.Application.Catalog.AddProductUnit;
+using SupermarketSystem.Application.Catalog.GetProductBranches;
 using SupermarketSystem.Application.Catalog.GetProductByBarcode;
 using SupermarketSystem.Application.Catalog.GetProductUnits;
 using SupermarketSystem.Application.Catalog.SetProductComplimentaryAllowed;
@@ -169,6 +170,18 @@ public static class CatalogEndpoints
         .WithSummary("يفعّل/يعطّل إمكانية تسجيل هذا المنتج ضمن الضيافة - أول تعديل حقيقي بالنظام (لا إنشاء).")
         .Produces(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status404NotFound);
+
+        products.MapGet("/{productId:guid}/branches", async (
+            Guid productId,
+            GetProductBranchesHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new GetProductBranchesQuery(productId), cancellationToken);
+            return Results.Ok(result);
+        })
+        .WithName("GetProductBranches")
+        .WithSummary("أي فروع مربوط فيها هذا المنتج حاليًا، بسعره بكل فرع - كانت ناقصة كليًا.")
+        .Produces<IReadOnlyList<ProductBranchItemDto>>(StatusCodes.Status200OK);
 
         products.MapPost("/{productId:guid}/branches", async (
             Guid productId,
