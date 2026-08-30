@@ -17,5 +17,10 @@
         <TextBlock x:Name="WelcomeText" Grid.Row="0" FontSize="18" FontWeight="Bold" Foreground="#1F1B16" />
         <Button x:Name="StartSaleButton" Grid.Row="2" Width="200" Height="46" FontSize="15"
                 Content="بدء البيع" HorizontalAlignment="Right" Click="StartSaleButton_Click" />
+
+        <!-- بلا نص واضح عمدًا - الحماية هي الباسوورد، لا إخفاء الزر -->
+        <Button x:Name="AdminAccessButton" Grid.Row="3" Width="28" Height="28" FontSize="12"
+                Content="⚙" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                Opacity="0.35" Click="AdminAccessButton_Click" />
     </Grid>
 </Window>

@@ -146,6 +146,16 @@ public sealed class ApiClient
     /// قبل ونجح فعليًا بس الرد ضاع، السيرفر بيرجّع WasReplay=true بدل
     /// ما يسجّل بيع مكرَّر.
     /// </summary>
+    /// <summary>
+    /// IsConnectivityFailure يفرّق بين حالتين مختلفتين تمامًا لازم يتعامل
+    /// معهم PendingSaleSyncService بشكل مختلف:
+    ///   - استثناء (نت مقطوع كليًا، السيرفر مو راد أصلًا) → true. باقي
+    ///     الطابور غالبًا رح يفشل لنفس السبب، فمعنى تكمل تجرّب كل وحدة
+    ///     صفر - وقف الدفعة كاملة أذكى.
+    ///   - رد فعلي من السيرفر برفض (400/401/409...) → false. هاي مشكلة
+    ///     خاصة بهاي الفاتورة بالذات (منتج انحذف، خطأ مصادقة، تعارض) -
+    ///     باقي الطابور ممكن يكون سليم تمامًا، ما في مبرر يتعطّل بسببها.
+    /// </summary>
     public async Task<PendingSaleSendResult> SendPendingSaleAsync(PendingSale pendingSale, CancellationToken cancellationToken)
     {
         try
@@ -155,15 +165,15 @@ public sealed class ApiClient
 
             if (response.IsSuccessStatusCode)
             {
-                return new PendingSaleSendResult(Success: true, ErrorMessage: null);
+                return new PendingSaleSendResult(Success: true, ErrorMessage: null, IsConnectivityFailure: false);
             }
 
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
-            return new PendingSaleSendResult(Success: false, ErrorMessage: $"{(int)response.StatusCode}: {body}");
+            return new PendingSaleSendResult(Success: false, ErrorMessage: $"{(int)response.StatusCode}: {body}", IsConnectivityFailure: false);
         }
         catch (Exception ex)
         {
-            return new PendingSaleSendResult(Success: false, ErrorMessage: ex.Message);
+            return new PendingSaleSendResult(Success: false, ErrorMessage: ex.Message, IsConnectivityFailure: true);
         }
     }
 
@@ -191,4 +201,4 @@ public sealed class ApiClient
     }
 }
 
-public sealed record PendingSaleSendResult(bool Success, string? ErrorMessage);
+public sealed record PendingSaleSendResult(bool Success, string? ErrorMessage, bool IsConnectivityFailure);

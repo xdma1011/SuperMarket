@@ -12,8 +12,11 @@ public partial class LoginWindow : Window
     private readonly string _dbPath;
     private readonly BackgroundSyncService _backgroundSync;
     private readonly Services.Printing.ReceiptPrinterService _receiptPrinter;
+    private readonly string _adminScreenPassword;
 
-    public LoginWindow(ApiClient apiClient, AuthSession authSession, string dbPath, BackgroundSyncService backgroundSync, Services.Printing.ReceiptPrinterService receiptPrinter)
+    public LoginWindow(
+        ApiClient apiClient, AuthSession authSession, string dbPath, BackgroundSyncService backgroundSync,
+        Services.Printing.ReceiptPrinterService receiptPrinter, string adminScreenPassword)
     {
         InitializeComponent();
         _apiClient = apiClient;
@@ -21,6 +24,7 @@ public partial class LoginWindow : Window
         _dbPath = dbPath;
         _backgroundSync = backgroundSync;
         _receiptPrinter = receiptPrinter;
+        _adminScreenPassword = adminScreenPassword;
     }
 
     private async void LoginButton_Click(object sender, RoutedEventArgs e)
@@ -76,7 +80,7 @@ public partial class LoginWindow : Window
 
         // نافذة رئيسية مؤقتة (جلسة لاحقة رح تستبدلها بشاشة البيع
         // الفعلية) - الهدف هلق إثبات إن تسجيل الدخول شغّال كاملًا.
-        var main = new MainWindow(_apiClient, _authSession, _dbPath, _receiptPrinter, _backgroundSync);
+        var main = new MainWindow(_apiClient, _authSession, _dbPath, _receiptPrinter, _backgroundSync, _adminScreenPassword);
         main.Show();
         Close();
     }

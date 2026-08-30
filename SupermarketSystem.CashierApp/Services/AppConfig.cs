@@ -24,6 +24,15 @@ public sealed class AppConfig
     /// <summary>منفذ الطباعة القياسي لأغلب طابعات الشبكة الحرارية (RAW/JetDirect) - نادرًا ما يحتاج تغيير.</summary>
     public int PrinterNetworkPort { get; set; } = 9100;
 
+    /// <summary>
+    /// باسوورد شاشة "الطابور المعلَّق" (Admin) - محلي بالكامل، بلا أي علاقة
+    /// بحساب المستخدم أو صلاحياته بالسيرفر. الهدف بسيط: يمنع الكاشير من
+    /// فتحها بالصدفة، لا حماية أمنية جدّية (محفوظ نص صريح بملف الإعدادات
+    /// المحلي، زي كل إعداد آخر بهالملف). صاحب المحل يقدر يغيّره من هون
+    /// مباشرة بأي وقت.
+    /// </summary>
+    public string AdminScreenPassword { get; set; } = "1234";
+
     private static readonly string ConfigPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
 
     public static AppConfig Load()

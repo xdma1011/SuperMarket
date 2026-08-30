@@ -39,7 +39,7 @@ public partial class App : Application
         var backgroundSync = new BackgroundSyncService(apiClient, dbPath, config.SyncIntervalSeconds, config.CatalogSyncPageSize);
         var receiptPrinter = new Services.Printing.ReceiptPrinterService(config);
 
-        var loginWindow = new LoginWindow(apiClient, authSession, dbPath, backgroundSync, receiptPrinter);
+        var loginWindow = new LoginWindow(apiClient, authSession, dbPath, backgroundSync, receiptPrinter, config.AdminScreenPassword);
         loginWindow.Show();
     }
 }
