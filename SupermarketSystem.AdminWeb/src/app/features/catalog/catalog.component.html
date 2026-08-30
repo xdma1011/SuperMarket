@@ -218,6 +218,54 @@
             </div>
           }
         </div>
+
+        <div class="units-section">
+          <div class="units-header">
+            <span>الفروع والأسعار</span>
+            <button type="button" class="icon-add-btn" (click)="openAddBranchForm()" title="إضافة فرع" aria-label="إضافة فرع" [disabled]="availableBranchesToAdd.length === 0">+</button>
+          </div>
+
+          @if (productBranches().length === 0) {
+            <p class="empty-branches-hint">⚠️ هذا المنتج غير مربوط بأي فرع بعد - ما رح يظهر بالكاشير إطلاقًا لحد ما تضيف سعر بفرع.</p>
+          }
+
+          <div class="units-list">
+            @for (b of productBranches(); track b.productBranchId) {
+              <div class="unit-row">
+                <span class="unit-name">{{ b.branchName }}</span>
+                <span class="unit-factor mono">{{ b.sellingPrice | number: '1.2-2' }}</span>
+              </div>
+            }
+          </div>
+
+          @if (addBranchFormOpen()) {
+            <div class="add-unit-form">
+              @if (addBranchError()) {
+                <p class="form-error">{{ addBranchError() }}</p>
+              }
+              <div class="add-unit-fields">
+                <label class="field">
+                  <span>الفرع</span>
+                  <select [(ngModel)]="newBranchId">
+                    @for (b of availableBranchesToAdd; track b.id) {
+                      <option [value]="b.id">{{ b.name }}</option>
+                    }
+                  </select>
+                </label>
+                <label class="field">
+                  <span>سعر البيع بهذا الفرع</span>
+                  <input type="number" [(ngModel)]="newBranchPrice" placeholder="0.00" min="0" step="0.01" />
+                </label>
+              </div>
+              <div class="add-unit-actions">
+                <button type="button" class="btn-primary small" [disabled]="addBranchSubmitting()" (click)="submitNewBranch()">
+                  {{ addBranchSubmitting() ? 'جارٍ الإضافة…' : 'إضافة الفرع' }}
+                </button>
+                <button type="button" class="btn-ghost small" (click)="closeAddBranchForm()">إلغاء</button>
+              </div>
+            </div>
+          }
+        </div>
       }
 
       <div class="modal-actions">

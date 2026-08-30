@@ -14,5 +14,6 @@ export enum ProductsOperation {
   GetUnits = '{productId}/units',
   GetByBarcode = 'by-barcode/{barcodeValue}',
   SetComplimentaryAllowed = '{productId}/complimentary-allowed',
+  GetBranches = '{productId}/branches',
   AddBranch = '{productId}/branches'
 }

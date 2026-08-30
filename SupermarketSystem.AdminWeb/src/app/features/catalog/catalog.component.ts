@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
-import { ProductCategoriesOperation, ProductsOperation } from '../../core/api/operations';
+import { ProductCategoriesOperation, ProductsOperation, BranchesOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
 import { BarcodeScannerComponent } from './barcode-scanner/barcode-scanner.component';
 
@@ -31,6 +31,21 @@ interface ProductUnitDto {
   unitName: string;
   conversionFactorToBase: number;
   isBaseUnit: boolean;
+}
+
+interface ProductBranchItemDto {
+  productBranchId: string;
+  branchId: string;
+  branchName: string;
+  sellingPrice: number;
+  minimumStock: number | null;
+  maximumStock: number | null;
+  isAvailableForSale: boolean;
+}
+
+interface BranchDto {
+  id: string;
+  name: string;
 }
 
 interface PagedResult<T> {
@@ -96,6 +111,16 @@ export class CatalogComponent implements OnInit {
   newUnitConversionFactor: number | null = null;
   newUnitBarcode = '';
 
+  // === قسم إدارة الفروع والأسعار (داخل نموذج تعديل منتج فقط) - كانت
+  // ناقصة كليًا، وهي أساسية: منتج بلا سعر بفرع = غير مرئي للكاشير إطلاقًا.
+  readonly productBranches = signal<ProductBranchItemDto[]>([]);
+  readonly branches = signal<BranchDto[]>([]);
+  readonly addBranchFormOpen = signal(false);
+  readonly addBranchSubmitting = signal(false);
+  readonly addBranchError = signal<string | null>(null);
+  newBranchId = '';
+  newBranchPrice: number | null = null;
+
   constructor(private readonly apiClient: ApiClient) {}
 
   ngOnInit(): void {
@@ -121,20 +146,25 @@ export class CatalogComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const [productsResult, categoriesResult] = await Promise.all([
+      const [productsResult, categoriesResult, branchesResult] = await Promise.all([
         firstValueFrom(this.apiClient.get<PagedResult<ProductDto>>(ApiController.Products, ProductsOperation.List, undefined, {
           pageNumber: this.productsPageNumber(),
           pageSize: this.productsPageSize()
         })),
-        firstValueFrom(this.apiClient.get<PagedResult<CategoryDto>>(ApiController.ProductCategories, ProductCategoriesOperation.List))
+        firstValueFrom(this.apiClient.get<PagedResult<CategoryDto>>(ApiController.ProductCategories, ProductCategoriesOperation.List)),
+        firstValueFrom(this.apiClient.get<PagedResult<BranchDto>>(ApiController.Branches, BranchesOperation.List, undefined, { pageSize: 500 }))
       ]);
 
       this.products.set(productsResult.items);
       this.productsTotalCount.set(productsResult.totalCount);
       this.categories.set(categoriesResult.items);
+      this.branches.set(branchesResult.items);
 
       if (categoriesResult.items.length > 0 && !this.productCategoryId) {
         this.productCategoryId = categoriesResult.items[0].id;
+      }
+      if (branchesResult.items.length > 0 && !this.newBranchId) {
+        this.newBranchId = branchesResult.items[0].id;
       }
     } catch {
       this.errorMessage.set('تعذّر تحميل الكتالوج.');
@@ -162,6 +192,18 @@ export class CatalogComponent implements OnInit {
     this.formError.set(null);
     this.addUnitFormOpen.set(false);
     this.loadProductUnits(product.id);
+    this.loadProductBranches(product.id);
+  }
+
+  private async loadProductBranches(productId: string): Promise<void> {
+    try {
+      const branches = await firstValueFrom(
+        this.apiClient.get<ProductBranchItemDto[]>(ApiController.Products, ProductsOperation.GetBranches, { productId })
+      );
+      this.productBranches.set(branches);
+    } catch {
+      this.productBranches.set([]);
+    }
   }
 
   private async loadProductUnits(productId: string): Promise<void> {
@@ -189,6 +231,9 @@ export class CatalogComponent implements OnInit {
     this.newUnitName = '';
     this.newUnitConversionFactor = null;
     this.newUnitBarcode = '';
+    this.productBranches.set([]);
+    this.addBranchFormOpen.set(false);
+    this.newBranchPrice = null;
   }
 
   async submitProduct(): Promise<void> {
@@ -411,6 +456,58 @@ export class CatalogComponent implements OnInit {
       this.addUnitError.set(message ?? 'تعذّر إضافة الوحدة.');
     } finally {
       this.addUnitSubmitting.set(false);
+    }
+  }
+
+  // === إدارة الفروع والأسعار ===
+
+  /** الفروع المتاحة للإضافة = كل الفروع ناقص اللي أصلًا مربوط فيهم المنتج - لا تكرار. */
+  get availableBranchesToAdd(): BranchDto[] {
+    const existingIds = new Set(this.productBranches().map(pb => pb.branchId));
+    return this.branches().filter(b => !existingIds.has(b.id));
+  }
+
+  openAddBranchForm(): void {
+    this.addBranchFormOpen.set(true);
+    this.addBranchError.set(null);
+    const available = this.availableBranchesToAdd;
+    this.newBranchId = available.length > 0 ? available[0].id : '';
+    this.newBranchPrice = null;
+  }
+
+  closeAddBranchForm(): void {
+    this.addBranchFormOpen.set(false);
+  }
+
+  async submitNewBranch(): Promise<void> {
+    if (!this.newBranchId || this.newBranchPrice === null || this.newBranchPrice < 0) {
+      this.addBranchError.set('اختر فرع وسعر بيع صالح (صفر أو أكتر).');
+      return;
+    }
+
+    this.addBranchSubmitting.set(true);
+    this.addBranchError.set(null);
+
+    try {
+      await firstValueFrom(
+        this.apiClient.post(ApiController.Products, ProductsOperation.AddBranch, {
+          branchId: this.newBranchId,
+          sellingPrice: this.newBranchPrice,
+          minimumStock: null,
+          maximumStock: null
+        }, { productId: this.editingProductId })
+      );
+
+      this.addBranchFormOpen.set(false);
+      await this.loadProductBranches(this.editingProductId);
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === 'object' && 'error' in err
+          ? (err as { error?: { detail?: string } }).error?.detail
+          : null;
+      this.addBranchError.set(message ?? 'تعذّر إضافة الفرع.');
+    } finally {
+      this.addBranchSubmitting.set(false);
     }
   }
 }
