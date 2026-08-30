@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using SupermarketSystem.Application.Common.Interfaces;
@@ -45,6 +46,58 @@ public sealed class RealCurrentUserContext : ICurrentUserContext
 
     public bool IsCrossBranchAccessAllowed
         => _httpContext?.User.FindFirst(JwtTokenService.CrossBranchClaim)?.Value == "true";
+
+    // X-Forwarded-For أولًا: خلف أي reverse proxy (Nginx/IIS)،
+    // Connection.RemoteIpAddress بيرجّع IP البروكسي نفسه ثابتًا لكل الطلبات
+    // — بلا فحص الهيدر هذا، سجلات AuditLog كلها كانت رح تحمل نفس الـIP
+    // بغض النظر عن العميل الحقيقي. أول قيمة بالهيدر (الأقرب للعميل الأصلي
+    // بسلسلة بروكسيات متعددة) هي المعتمدة؛ الهيدر غير موجود = اتصال مباشر،
+    // نرجع لـRemoteIpAddress.
+    public string? IpAddress
+    {
+        get
+        {
+            if (_httpContext is null)
+            {
+                return null;
+            }
+
+            var forwardedFor = _httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(forwardedFor))
+            {
+                return forwardedFor.Split(',')[0].Trim();
+            }
+
+            return _httpContext.Connection.RemoteIpAddress?.ToString();
+        }
+    }
+
+    // معرّف واحد يُولَّد أول مرة يُطلب بها خلال الطلب، ويُخزَّن بـHttpContext.Items
+    // — كل سطور AuditLog الناتجة من نفس عملية SaveChanges (وحتى من أكتر من
+    // SaveChanges بنفس الطلب) تحمل نفس القيمة. Guid جديد لا TraceIdentifier:
+    // عمود CorrelationId بـAuditLog من النوع uniqueidentifier أصلًا، وشكل
+    // TraceIdentifier الافتراضي بـASP.NET Core مو GUID قابل للتحويل مباشرة.
+    private static readonly object CorrelationIdItemsKey = new();
+
+    public Guid? CorrelationId
+    {
+        get
+        {
+            if (_httpContext is null)
+            {
+                return null;
+            }
+
+            if (_httpContext.Items[CorrelationIdItemsKey] is Guid existing)
+            {
+                return existing;
+            }
+
+            var generated = Guid.NewGuid();
+            _httpContext.Items[CorrelationIdItemsKey] = generated;
+            return generated;
+        }
+    }
 
     private Guid? TryGetGuidClaim(string claimType)
     {

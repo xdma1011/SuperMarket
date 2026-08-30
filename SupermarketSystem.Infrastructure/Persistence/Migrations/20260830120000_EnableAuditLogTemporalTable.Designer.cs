@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SupermarketSystem.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using SupermarketSystem.Infrastructure.Persistence;
 namespace SupermarketSystem.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260830120000_EnableAuditLogTemporalTable")]
+    partial class EnableAuditLogTemporalTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2040,14 +2043,6 @@ namespace SupermarketSystem.Infrastructure.Persistence.Migrations
                             Description = "Returns above this value are still completed immediately, but flagged for management review. 0 disables value-based flagging.",
                             Key = "Pos.HighValueReturnThreshold",
                             Value = "0"
-                        },
-                        new
-                        {
-                            Id = new Guid("d6e1f8a3-5c9b-4d27-8e4a-1b6c9d2e5f78"),
-                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Days a pending review item (unreviewed return, or NeedsReview stock movement) can stay unreviewed before PendingReviewEscalationBackgroundService flags it in an escalation notification.",
-                            Key = "PendingReview.EscalationThresholdDays",
-                            Value = "3"
                         });
                 });
 

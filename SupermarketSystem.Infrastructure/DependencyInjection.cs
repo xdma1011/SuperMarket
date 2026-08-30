@@ -72,6 +72,7 @@ public static class DependencyInjection
 
         services.AddScoped<IBackupService, SqlServerBackupService>();
         services.AddHostedService<DailyBackupBackgroundService>();
+        services.AddHostedService<PendingReviewEscalationBackgroundService>();
 
         // مزوّدو قراءة فاتورة الشراء بالذكاء الاصطناعي — بترتيب الأولوية
         // بالضبط: Gemini، ثم Gemini Flash، ثم Claude (خط دفاع أخير).

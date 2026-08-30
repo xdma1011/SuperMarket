@@ -92,7 +92,9 @@ public class SystemSettingConfiguration : IEntityTypeConfiguration<SystemSetting
             NewSetting("a4c9d6e1-3b7f-4a05-9c8e-9f2d5b0a7e34", Application.Reporting.GetProductConsumptionLevels.ConsumptionLevelSettingsKeys.LowThreshold, "1",
                 "Quantity sold within the query period at or above which a product is classified as 'Low' consumption (below Medium). Zero sales is always 'NearZero'."),
             NewSetting("b5d0e7f2-4c8a-4b16-9d9f-0a3e6c1b8f45", "Catalog.Version", "1",
-                "Global catalog version counter — incremented atomically on every product/category/unit/price change. The cashier app (offline-first) polls this cheaply to know when to pull a full catalog re-sync."));
+                "Global catalog version counter — incremented atomically on every product/category/unit/price change. The cashier app (offline-first) polls this cheaply to know when to pull a full catalog re-sync."),
+            NewSetting("d6e1f8a3-5c9b-4d27-8e4a-1b6c9d2e5f78", PendingReviewSettingsKeys.EscalationThresholdDays, "3",
+                "Days a pending review item (unreviewed return, or NeedsReview stock movement) can stay unreviewed before PendingReviewEscalationBackgroundService flags it in an escalation notification."));
     }
 
     private static readonly DateTime SeedTimestamp = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);

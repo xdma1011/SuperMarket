@@ -117,12 +117,14 @@ public class AuditableEntitySaveChangesInterceptor : SaveChangesInterceptor
         var utcNow = _dateTimeProvider.UtcNow;
         var userId = _currentUserContext.UserId;
         var branchId = _currentUserContext.BranchId;
+        var ipAddress = _currentUserContext.IpAddress;
+        var correlationId = _currentUserContext.CorrelationId;
 
         StampAuditFields(context, utcNow, userId);
 
         // Collected first, then added — adding to the change tracker while
         // enumerating Entries() would invalidate the enumeration.
-        var auditEntries = BuildAuditEntries(context, utcNow, userId, branchId);
+        var auditEntries = BuildAuditEntries(context, utcNow, userId, branchId, ipAddress, correlationId);
         foreach (var auditEntry in auditEntries)
         {
             context.Add(auditEntry);
@@ -145,7 +147,8 @@ public class AuditableEntitySaveChangesInterceptor : SaveChangesInterceptor
         }
     }
 
-    private static List<AuditLog> BuildAuditEntries(DbContext context, DateTime utcNow, Guid? userId, Guid? branchId)
+    private static List<AuditLog> BuildAuditEntries(
+        DbContext context, DateTime utcNow, Guid? userId, Guid? branchId, string? ipAddress, Guid? correlationId)
     {
         var auditEntries = new List<AuditLog>();
 
@@ -192,8 +195,8 @@ public class AuditableEntitySaveChangesInterceptor : SaveChangesInterceptor
                 action.Value,
                 oldValues,
                 newValues,
-                correlationId: null,
-                ipAddress: null,
+                correlationId,
+                ipAddress,
                 occurredAtUtc: utcNow));
         }
 

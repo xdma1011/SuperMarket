@@ -21,6 +21,12 @@ public interface ICurrentUserContext
     Guid? UserId { get; }
     Guid? BranchId { get; }
     bool IsCrossBranchAccessAllowed { get; }
+
+    /// <summary>عنوان IP الفعلي لصاحب الطلب — لسجلات المراجعة (AuditLog). Null لطلب بلا HttpContext (اختبارات، خدمات خلفية).</summary>
+    string? IpAddress { get; }
+
+    /// <summary>معرّف واحد ثابت لكل طلب HTTP — يربط كل سطور AuditLog الناتجة عن نفس العملية ببعضها.</summary>
+    Guid? CorrelationId { get; }
 }
 
 /// <summary>Trivial UTC clock abstraction — testability, and a single place enforcing "persisted timestamps are UTC" (Architecture Review §5).</summary>

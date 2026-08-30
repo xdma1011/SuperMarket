@@ -25,6 +25,8 @@ public sealed class PlaceholderCurrentUserContext : ICurrentUserContext
     public Guid? UserId => null;
     public Guid? BranchId => null;
     public bool IsCrossBranchAccessAllowed => true;
+    public string? IpAddress => null;
+    public Guid? CorrelationId => null;
 }
 
 public sealed class SystemDateTimeProvider : IDateTimeProvider
