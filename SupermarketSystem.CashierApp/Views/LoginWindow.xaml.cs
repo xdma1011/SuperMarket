@@ -76,7 +76,7 @@ public partial class LoginWindow : Window
 
         // نافذة رئيسية مؤقتة (جلسة لاحقة رح تستبدلها بشاشة البيع
         // الفعلية) - الهدف هلق إثبات إن تسجيل الدخول شغّال كاملًا.
-        var main = new MainWindow(_apiClient, _authSession, _dbPath, _receiptPrinter);
+        var main = new MainWindow(_apiClient, _authSession, _dbPath, _receiptPrinter, _backgroundSync);
         main.Show();
         Close();
     }

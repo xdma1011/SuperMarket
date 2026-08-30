@@ -25,9 +25,13 @@ public sealed class BackgroundSyncService
 
     private bool _isRunning;
     private Guid? _branchId;
+    private CancellationTokenSource? _manualSyncCts;
 
     public DateTime? LastSuccessfulSyncAtLocal { get; private set; }
     public string? LastErrorMessage { get; private set; }
+
+    /// <summary>Tick التلقائي وضغطة "مزامنة الآن" اليدوية بيشتركوا بنفس هالعلم - مزامنتان متوازيتان بأي وقت ممنوعتان.</summary>
+    public bool IsSyncing => _isRunning;
 
     public BackgroundSyncService(ApiClient apiClient, string dbPath, int syncIntervalSeconds, int catalogPageSize)
     {
@@ -59,7 +63,67 @@ public sealed class BackgroundSyncService
         _timer.Stop();
     }
 
-    private async Task RunOneCycleAsync()
+    private async Task RunOneCycleAsync() => await RunOneCycleAsync(CancellationToken.None);
+
+    /// <summary>
+    /// نتيجة دورة مزامنة يدوية واحدة - تفرّق بين "خلصت بنجاح"، "انلغت
+    /// بضغطة المستخدم"، و"فشلت" (LastErrorMessage فيه التفصيل بالحالة
+    /// الأخيرة). الواجهة (SaleWindow) بتعرض رسالة مختلفة حسب كل حالة.
+    /// </summary>
+    public enum ManualSyncOutcome { Completed, Cancelled, AlreadyRunning, Failed }
+
+    /// <summary>
+    /// كبسة "مزامنة الآن" - نفس منطق الدورة التلقائية بالضبط (Tick)، بس
+    /// بـCancellationToken فعلي يقدر المستخدم يلغيه لو أخد وقت أطول من
+    /// المتوقع (مثلًا نت بطيء جدًا لا مقطوع كليًا). لا تشتغل لو فيه دورة
+    /// تلقائية أو يدوية شغّالة أصلًا - _isRunning علم مشترك بين الاثنين.
+    /// </summary>
+    public async Task<ManualSyncOutcome> TriggerManualSyncAsync()
+    {
+        if (_isRunning || _branchId is null)
+        {
+            return ManualSyncOutcome.AlreadyRunning;
+        }
+
+        var cts = new CancellationTokenSource();
+        _manualSyncCts = cts;
+
+        try
+        {
+            await RunOneCycleAsync(cts.Token);
+
+            // ApiClient بيبلع كل استثناء (حتى OperationCanceledException) ويرجّع
+            // null/فشل هادئ - نفس فلسفة "لا نفجّر لأجل نت مقطوع" (راجع تعليقات
+            // ApiClient.GetCatalogSyncPageAsync). يعني الإلغاء هون ما بيوصل
+            // كاستثناء لهون غالبًا - لازم نفحص IsCancellationRequested صراحة
+            // بعد رجوع الاستدعاء العادي، لا نعتمد بس على catch تحت.
+            if (cts.IsCancellationRequested)
+            {
+                LastErrorMessage = "أُلغيت المزامنة بطلب المستخدم.";
+                return ManualSyncOutcome.Cancelled;
+            }
+
+            return LastErrorMessage is null ? ManualSyncOutcome.Completed : ManualSyncOutcome.Failed;
+        }
+        catch (OperationCanceledException)
+        {
+            LastErrorMessage = "أُلغيت المزامنة بطلب المستخدم.";
+            return ManualSyncOutcome.Cancelled;
+        }
+        finally
+        {
+            cts.Dispose();
+            _manualSyncCts = null;
+        }
+    }
+
+    /// <summary>يُستدعى من زر "إلغاء" بالواجهة - بلا تأثير لو ما في مزامنة يدوية شغّالة أصلًا (Tick التلقائي غير قابل للإلغاء عمدًا، هو خفيف وسريع أصلًا).</summary>
+    public void CancelManualSync()
+    {
+        _manualSyncCts?.Cancel();
+    }
+
+    private async Task RunOneCycleAsync(CancellationToken cancellationToken)
     {
         if (_isRunning || _branchId is null)
         {
@@ -71,12 +135,12 @@ public sealed class BackgroundSyncService
         try
         {
             var pendingSaleSync = new PendingSaleSyncService(_dbPath, _apiClient);
-            await pendingSaleSync.SyncPendingSalesAsync(CancellationToken.None);
+            await pendingSaleSync.SyncPendingSalesAsync(cancellationToken);
 
-            await RefreshPaymentMethodsAsync();
+            await RefreshPaymentMethodsAsync(cancellationToken);
 
             var catalogSync = new CatalogSyncService(_dbPath, _apiClient, _catalogPageSize);
-            var result = await catalogSync.SyncIfNeededAsync(_branchId.Value, CancellationToken.None);
+            var result = await catalogSync.SyncIfNeededAsync(_branchId.Value, cancellationToken);
 
             if (result.Status is CatalogSyncStatus.Completed or CatalogSyncStatus.AlreadyUpToDate)
             {
@@ -87,6 +151,10 @@ public sealed class BackgroundSyncService
             {
                 LastErrorMessage = "تعذّر إكمال مزامنة الكتالوج - رح تُعاد المحاولة بالدورة الجاية.";
             }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -104,9 +172,9 @@ public sealed class BackgroundSyncService
     /// وصحيح دائمًا). لو فشل الاتصال، الجدول المحلي القديم يضل كما هو،
     /// لا يُمسح — تخريب جزئي (مسح بلا استبدال) أسوأ من بيانات قديمة شوي.
     /// </summary>
-    private async Task RefreshPaymentMethodsAsync()
+    private async Task RefreshPaymentMethodsAsync(CancellationToken cancellationToken)
     {
-        var methods = await _apiClient.GetPaymentMethodsAsync(CancellationToken.None);
+        var methods = await _apiClient.GetPaymentMethodsAsync(cancellationToken);
         if (methods.Count == 0)
         {
             return;
@@ -123,6 +191,6 @@ public sealed class BackgroundSyncService
                 RequiresExternalReference = method.RequiresExternalReference
             });
         }
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken);
     }
 }

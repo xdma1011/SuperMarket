@@ -25,6 +25,10 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="16" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <TextBox x:Name="BarcodeBox" Grid.Column="0" Height="42" FontSize="16" Padding="10,0"
@@ -37,7 +41,15 @@
             <Button x:Name="SearchByNameButton" Grid.Column="4" Height="42" Width="120" Content="🔍 بحث بالاسم"
                     Style="{StaticResource SecondaryButton}" Click="SearchByNameButton_Click" />
 
-            <TextBlock x:Name="ConnectionStatusText" Grid.Column="6" VerticalAlignment="Center"
+            <!-- تفعّل بس لما يتأكد فعليًا وجود اتصال بالسيرفر (فحص دوري خفيف كل بضع ثواني، راجع SaleWindow.xaml.cs) -->
+            <Button x:Name="SyncNowButton" Grid.Column="6" Height="42" Width="110" Content="🔄 مزامنة الآن"
+                    Style="{StaticResource SecondaryButton}" Click="SyncNowButton_Click" IsEnabled="False" />
+
+            <!-- تظهر بس أثناء مزامنة يدوية شغّالة فعليًا (راجع SyncNowButton_Click) -->
+            <Button x:Name="CancelSyncButton" Grid.Column="8" Height="42" Width="80" Content="إلغاء"
+                    Style="{StaticResource SecondaryButton}" Click="CancelSyncButton_Click" Visibility="Collapsed" />
+
+            <TextBlock x:Name="ConnectionStatusText" Grid.Column="10" VerticalAlignment="Center"
                        FontSize="12" Text="" />
         </Grid>
 

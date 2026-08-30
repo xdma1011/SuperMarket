@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.CashierApp.Local;
 using SupermarketSystem.CashierApp.Services;
@@ -14,6 +15,7 @@ public partial class SaleWindow : Window
     private readonly AuthSession _authSession;
     private readonly string _dbPath;
     private readonly Services.Printing.ReceiptPrinterService _receiptPrinter;
+    private readonly BackgroundSyncService _backgroundSync;
 
     private readonly ObservableCollection<CartLine> _cart = new();
     private List<PaymentMethodDto> _paymentMethods = new();
@@ -23,22 +25,90 @@ public partial class SaleWindow : Window
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    public SaleWindow(ApiClient apiClient, AuthSession authSession, string dbPath, Services.Printing.ReceiptPrinterService receiptPrinter)
+    // فحص اتصال دوري خفيف - يحدّد بس تفعيل/تعطيل زر "مزامنة الآن"، لا علاقة
+    // له بتحميل بيانات الشاشة نفسها (تلك محلية بالكامل، راجع LoadPaymentMethodsAsync).
+    // 10 ثواني: كافية تلتقط انقطاع/عودة نت بسرعة معقولة، بلا ضغط زائد على السيرفر.
+    private readonly DispatcherTimer _connectivityTimer;
+
+    public SaleWindow(
+        ApiClient apiClient, AuthSession authSession, string dbPath,
+        Services.Printing.ReceiptPrinterService receiptPrinter, BackgroundSyncService backgroundSync)
     {
         InitializeComponent();
         _apiClient = apiClient;
         _authSession = authSession;
         _dbPath = dbPath;
         _receiptPrinter = receiptPrinter;
+        _backgroundSync = backgroundSync;
 
         CartGrid.ItemsSource = _cart;
         Loaded += SaleWindow_Loaded;
+        Closed += (_, _) => _connectivityTimer.Stop();
+
+        _connectivityTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
+        _connectivityTimer.Tick += async (_, _) => await RefreshConnectivityStateAsync();
     }
 
     private async void SaleWindow_Loaded(object sender, RoutedEventArgs e)
     {
         await LoadPaymentMethodsAsync();
         BarcodeBox.Focus();
+
+        _connectivityTimer.Start();
+        await RefreshConnectivityStateAsync();
+    }
+
+    /// <summary>
+    /// يحدّث تفعيل زر "مزامنة الآن" حسب اتصال فعلي بالسيرفر (لا بس وجود
+    /// كرت شبكة). ما يلمس الزر إطلاقًا لو فيه مزامنة شغّالة أصلًا (يدوية
+    /// أو تلقائية) - حالته وقتها محكومة من SyncNowButton_Click/الدورة نفسها.
+    /// </summary>
+    private async Task RefreshConnectivityStateAsync()
+    {
+        if (_backgroundSync.IsSyncing)
+        {
+            return;
+        }
+
+        var isConnected = await _apiClient.IsServerReachableAsync(CancellationToken.None);
+        SyncNowButton.IsEnabled = isConnected;
+        ConnectionStatusText.Text = isConnected ? "متصل" : "بلا اتصال بالسيرفر";
+    }
+
+    private async void SyncNowButton_Click(object sender, RoutedEventArgs e)
+    {
+        SyncNowButton.IsEnabled = false;
+        CancelSyncButton.IsEnabled = true;
+        CancelSyncButton.Visibility = Visibility.Visible;
+        ConnectionStatusText.Text = "جاري المزامنة...";
+
+        var outcome = await _backgroundSync.TriggerManualSyncAsync();
+
+        CancelSyncButton.Visibility = Visibility.Collapsed;
+
+        // إعادة تحميل طرق الدفع محليًا أولًا (لو المزامنة جابت تحديثًا،
+        // نادر بس ممكن) - قبل رسالة النتيجة، عشان LoadPaymentMethodsAsync
+        // ما تكتب فوق رسالة النتيجة (هي نفسها بتحدّث ConnectionStatusText).
+        await LoadPaymentMethodsAsync();
+
+        ConnectionStatusText.Text = outcome switch
+        {
+            BackgroundSyncService.ManualSyncOutcome.Completed => "تمت المزامنة بنجاح",
+            BackgroundSyncService.ManualSyncOutcome.Cancelled => "أُلغيت المزامنة",
+            BackgroundSyncService.ManualSyncOutcome.AlreadyRunning => "فيه مزامنة شغّالة أصلًا",
+            _ => $"فشلت المزامنة: {_backgroundSync.LastErrorMessage}"
+        };
+
+        // إعادة تفعيل الزر فورًا (بدل انتظار دورة الفحص الدوري لحد 10 ثواني) -
+        // لو الاتصال فعليًا انقطع بين الوقتين، الدورة الجاية للفحص الدوري
+        // (خلال 10 ثواني) بتعطّله من جديد تلقائيًا.
+        SyncNowButton.IsEnabled = true;
+    }
+
+    private void CancelSyncButton_Click(object sender, RoutedEventArgs e)
+    {
+        _backgroundSync.CancelManualSync();
+        CancelSyncButton.IsEnabled = false;
     }
 
     /// <summary>

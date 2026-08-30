@@ -166,6 +166,29 @@ public sealed class ApiClient
             return new PendingSaleSendResult(Success: false, ErrorMessage: ex.Message);
         }
     }
+
+    /// <summary>
+    /// فحص اتصال فعلي بالسيرفر — GET /health (بلا توكن، مفعّلة AllowAnonymous
+    /// بالباك إند). مهلة قصيرة عمدًا (3 ثواني): هدف هالفحص تفعيل/تعطيل زر
+    /// "مزامنة الآن" بالواجهة، مو انتظار طويل. NetworkInterface.GetIsNetworkAvailable
+    /// كان بيتحقق بس من وجود كرت شبكة فعّال، لا اتصال فعلي بالسيرفر - هيك
+    /// أدق: بيتأكد فعلًا إنه ممكن نوصل للباك إند.
+    /// </summary>
+    public async Task<bool> IsServerReachableAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+            var response = await _http.GetAsync("health", linkedCts.Token);
+            return response.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 }
 
 public sealed record PendingSaleSendResult(bool Success, string? ErrorMessage);

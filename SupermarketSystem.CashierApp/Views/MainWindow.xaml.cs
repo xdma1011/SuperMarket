@@ -9,20 +9,24 @@ public partial class MainWindow : Window
     private readonly AuthSession _authSession;
     private readonly string _dbPath;
     private readonly Services.Printing.ReceiptPrinterService _receiptPrinter;
+    private readonly BackgroundSyncService _backgroundSync;
 
-    public MainWindow(ApiClient apiClient, AuthSession authSession, string dbPath, Services.Printing.ReceiptPrinterService receiptPrinter)
+    public MainWindow(
+        ApiClient apiClient, AuthSession authSession, string dbPath,
+        Services.Printing.ReceiptPrinterService receiptPrinter, BackgroundSyncService backgroundSync)
     {
         InitializeComponent();
         _apiClient = apiClient;
         _authSession = authSession;
         _dbPath = dbPath;
         _receiptPrinter = receiptPrinter;
+        _backgroundSync = backgroundSync;
         WelcomeText.Text = $"مرحبًا، {authSession.FullName}";
     }
 
     private void StartSaleButton_Click(object sender, RoutedEventArgs e)
     {
-        var saleWindow = new SaleWindow(_apiClient, _authSession, _dbPath, _receiptPrinter);
+        var saleWindow = new SaleWindow(_apiClient, _authSession, _dbPath, _receiptPrinter, _backgroundSync);
         saleWindow.Show();
         Close();
     }
