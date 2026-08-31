@@ -8,6 +8,9 @@ rem Desktop) - it is the starting point, not part of an existing clone.
 rem
 rem No absolute path is hardcoded - the target folder is relative to
 rem wherever this file itself is saved (%~dp0).
+rem
+rem This window stays open and waits for a key press before closing,
+rem whether it finished, cancelled, or failed.
 rem ===================================================================
 
 setlocal enabledelayedexpansion
@@ -23,7 +26,7 @@ echo.
 where git >nul 2>&1
 if errorlevel 1 (
     echo [FAILED] git not found on PATH. Install Git for Windows from https://git-scm.com/download/win first.
-    exit /b 1
+    goto :end_fail
 )
 
 if exist "%TARGET_DIR%" (
@@ -31,13 +34,13 @@ if exist "%TARGET_DIR%" (
     set /p CONFIRM_DELETE="Type YES in capital letters to delete it completely and start fresh, anything else to cancel: "
     if not "!CONFIRM_DELETE!"=="YES" (
         echo Cancelled - no changes made.
-        exit /b 0
+        goto :end_ok
     )
     echo Deleting "%TARGET_DIR%"...
     rd /s /q "%TARGET_DIR%"
     if exist "%TARGET_DIR%" (
         echo [FAILED] Could not fully delete the folder - make sure no file inside it is open in another program ^(e.g. Visual Studio^) and try again.
-        exit /b 1
+        goto :end_fail
     )
 )
 
@@ -46,7 +49,7 @@ echo === git clone ===
 git clone "%REPO_URL%" "%TARGET_DIR%"
 if errorlevel 1 (
     echo [FAILED] git clone failed - see message above.
-    exit /b 1
+    goto :end_fail
 )
 
 echo.
@@ -59,8 +62,20 @@ if "%SETUP_RESULT%"=="0" (
     echo === All done ===
     echo Project is now at: %TARGET_DIR%
     echo Next step: open CMD in this folder and run dotnet ef migrations add InitialCreate ^(see setup.bat instructions above^).
+    goto :end_ok
 ) else (
     echo [FAILED] setup.bat reported an error - see messages above.
+    goto :end_fail
 )
 
-exit /b %SETUP_RESULT%
+:end_ok
+echo.
+echo Press any key to close this window . . .
+pause >nul
+exit /b 0
+
+:end_fail
+echo.
+echo Press any key to close this window . . .
+pause >nul
+exit /b 1

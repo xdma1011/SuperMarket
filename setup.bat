@@ -6,6 +6,10 @@ rem auto-discovered at run time (see scripts\_discover.bat).
 rem
 rem Does NOT run: dotnet ef database update (separate update-database.bat
 rem on purpose), and does NOT create/delete any migration.
+rem
+rem This window stays open and waits for a key press before closing,
+rem whether it finished, warned, or failed - so double-clicking this
+rem file never hides the output.
 rem ===================================================================
 
 setlocal enabledelayedexpansion
@@ -15,7 +19,7 @@ echo === 1. Discovering project structure ===
 call "%~dp0scripts\_discover.bat"
 if errorlevel 1 (
     echo [FAILED] Could not discover project structure - see message above.
-    exit /b 1
+    goto :end_fail
 )
 echo   .sln file:       %SLN_FILE%
 echo   API project:     %API_PROJECT%
@@ -26,7 +30,7 @@ echo === 2. Checking .NET SDK ===
 where dotnet >nul 2>&1
 if errorlevel 1 (
     echo [FAILED] dotnet CLI not found on PATH. Install .NET SDK 10 from https://dotnet.microsoft.com/download first.
-    exit /b 1
+    goto :end_fail
 )
 set "HAS_SDK10="
 for /f "delims=" %%v in ('dotnet --list-sdks 2^>nul') do (
@@ -45,7 +49,7 @@ echo === 3. dotnet restore ===
 dotnet restore "%SLN_FILE%"
 if errorlevel 1 (
     echo [FAILED] dotnet restore failed - see message above.
-    exit /b 1
+    goto :end_fail
 )
 echo.
 
@@ -53,7 +57,7 @@ echo === 4. dotnet tool restore (local dotnet-ef, from .config\dotnet-tools.json
 dotnet tool restore
 if errorlevel 1 (
     echo [FAILED] dotnet tool restore failed - see message above.
-    exit /b 1
+    goto :end_fail
 )
 echo.
 
@@ -61,7 +65,7 @@ echo === 5. dotnet build ===
 dotnet build "%SLN_FILE%" --no-restore
 if errorlevel 1 (
     echo [FAILED] dotnet build failed - see message above.
-    exit /b 1
+    goto :end_fail
 )
 echo.
 
@@ -88,4 +92,13 @@ if errorlevel 1 (
 echo.
 echo === Setup finished ===
 echo Next: run-api.bat to start the API, or update-database.bat to update the database (manual, after confirming migrations are correct).
+echo.
+echo Press any key to close this window . . .
+pause >nul
 exit /b 0
+
+:end_fail
+echo.
+echo Press any key to close this window . . .
+pause >nul
+exit /b 1

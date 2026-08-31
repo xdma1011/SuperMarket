@@ -5,6 +5,9 @@ rem setup.bat or run-api.bat). This actually connects to the database
 rem specified by DefaultConnection in the discovered API project's
 rem appsettings.json, and applies every migration not yet applied.
 rem Explicit confirmation is required before it runs.
+rem
+rem This window stays open and waits for a key press before closing,
+rem whether it finished, cancelled, or failed.
 rem ===================================================================
 
 setlocal enabledelayedexpansion
@@ -13,7 +16,7 @@ cd /d "%~dp0"
 call "%~dp0scripts\_discover.bat"
 if errorlevel 1 (
     echo [FAILED] Could not discover project structure - see message above.
-    exit /b 1
+    goto :end_fail
 )
 
 echo === Checking migrations first (no database connection yet) ===
@@ -24,7 +27,7 @@ if errorlevel 1 (
     echo           ^(pending model changes^).
     echo           Add a new migration to capture the difference before continuing - see setup.bat.
     echo           Refusing to run database update while the code model does not match the last migration.
-    exit /b 1
+    goto :end_fail
 )
 
 echo   OK, code model matches the last migration.
@@ -40,10 +43,25 @@ echo.
 set /p CONFIRM="Type YES in capital letters to continue, anything else to cancel: "
 if not "%CONFIRM%"=="YES" (
     echo Cancelled - no changes made.
-    exit /b 0
+    goto :end_ok
 )
 
 echo.
 echo === dotnet ef database update ===
 dotnet ef database update --project "%DB_PROJECT%" --startup-project "%API_PROJECT%"
-exit /b %errorlevel%
+if errorlevel 1 (
+    echo [FAILED] dotnet ef database update failed - see message above.
+    goto :end_fail
+)
+
+:end_ok
+echo.
+echo Press any key to close this window . . .
+pause >nul
+exit /b 0
+
+:end_fail
+echo.
+echo Press any key to close this window . . .
+pause >nul
+exit /b 1

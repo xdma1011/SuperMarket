@@ -5,6 +5,10 @@ rem path, no assumed project name. Tries to print the expected Swagger
 rem URL from launchSettings.json before starting - the certain URL is
 rem the one printed to the console under "Now listening on:"
 rem once it is actually running.
+rem
+rem This window stays open and waits for a key press before closing if
+rem it fails before or right after starting the server (dotnet run
+rem itself already keeps the window open while the server is running).
 rem ===================================================================
 
 setlocal enabledelayedexpansion
@@ -13,7 +17,7 @@ cd /d "%~dp0"
 call "%~dp0scripts\_discover.bat"
 if errorlevel 1 (
     echo [FAILED] Could not discover project structure - see message above.
-    exit /b 1
+    goto :end_fail
 )
 
 echo === Running: %API_PROJECT% ===
@@ -47,4 +51,19 @@ echo === Press Ctrl+C to stop the server ===
 echo.
 
 dotnet run --project "%API_PROJECT%"
-exit /b %errorlevel%
+if errorlevel 1 (
+    echo.
+    echo [FAILED] dotnet run exited with an error - see messages above.
+    goto :end_fail
+)
+
+echo.
+echo Press any key to close this window . . .
+pause >nul
+exit /b 0
+
+:end_fail
+echo.
+echo Press any key to close this window . . .
+pause >nul
+exit /b 1
