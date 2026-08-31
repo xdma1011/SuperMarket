@@ -2048,6 +2048,142 @@ namespace SupermarketSystem.Infrastructure.Persistence.Migrations
                             Description = "Days a pending review item (unreviewed return, or NeedsReview stock movement) can stay unreviewed before PendingReviewEscalationBackgroundService flags it in an escalation notification.",
                             Key = "PendingReview.EscalationThresholdDays",
                             Value = "3"
+                        },
+                        new
+                        {
+                            Id = new Guid("67264658-2e77-4241-8778-d5c8d20df993"),
+                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Allow a sale to proceed even when system stock is insufficient. Stock goes negative and is flagged for review rather than blocking the sale.",
+                            Key = "Inventory.AllowNegativeStock",
+                            Value = "true"
+                        },
+                        new
+                        {
+                            Id = new Guid("9e2fa6ca-2101-4c8f-bbf9-fe594f468e7f"),
+                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Telegram bot token. Empty disables the Telegram channel (silent, no error).",
+                            Key = "Notifications.TelegramBotToken",
+                            Value = ""
+                        },
+                        new
+                        {
+                            Id = new Guid("50a800fa-ae5d-4f4e-a50b-ff8adb30e7ff"),
+                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Telegram chat id notifications are sent to. Empty disables the Telegram channel.",
+                            Key = "Notifications.TelegramChatId",
+                            Value = ""
+                        },
+                        new
+                        {
+                            Id = new Guid("5fddc559-554c-4f20-8923-bfb5c1bb7c6e"),
+                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Cash-closing variance (absolute value) above which a notification is sent. 0 disables the alert.",
+                            Key = "CashClosing.VarianceAlertThreshold",
+                            Value = "0"
+                        },
+                        new
+                        {
+                            Id = new Guid("c2142398-e389-4c50-8ccf-1773249029d8"),
+                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Gemini API key. Empty disables both Gemini providers (silent, no error).",
+                            Key = "Ai.GeminiApiKey",
+                            Value = ""
+                        },
+                        new
+                        {
+                            Id = new Guid("ba427a27-4945-401b-954f-a090612ec2aa"),
+                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Gemini model name for the primary attempt. 'latest' aliases are maintained by Google to always point at the current recommended model.",
+                            Key = "Ai.GeminiProModelName",
+                            Value = "gemini-pro-latest"
+                        },
+                        new
+                        {
+                            Id = new Guid("a7bd1207-ab41-4a51-bdd6-a7aed05d0b5d"),
+                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Gemini Flash model name for the second attempt.",
+                            Key = "Ai.GeminiFlashModelName",
+                            Value = "gemini-flash-latest"
+                        },
+                        new
+                        {
+                            Id = new Guid("ba5a86fd-e696-4aef-ad52-25257d882014"),
+                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Claude API key. Empty disables the last-resort fallback provider (silent, no error).",
+                            Key = "Ai.ClaudeApiKey",
+                            Value = ""
+                        },
+                        new
+                        {
+                            Id = new Guid("e5f99833-a059-4192-92c7-33ed0d662169"),
+                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Claude model name for the final fallback attempt.",
+                            Key = "Ai.ClaudeModelName",
+                            Value = "claude-sonnet-5"
+                        },
+                        new
+                        {
+                            Id = new Guid("1c3e6a52-8f3a-4c6a-9f6e-2a6f7e9b0c1d"),
+                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Local directory where uploaded purchase-invoice images are stored as WebP, relative to the API process's working directory unless an absolute path is given.",
+                            Key = "Storage.PurchaseInvoiceImagesDirectory",
+                            Value = "PurchaseInvoiceImages"
+                        },
+                        new
+                        {
+                            Id = new Guid("7a2f4e91-3b6c-4d8a-9e1f-5c7b8a9d0e2f"),
+                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Consecutive failed login attempts before temporary lockout. 0 disables lockout entirely.",
+                            Key = "Auth.MaxFailedLoginAttempts",
+                            Value = "5"
+                        },
+                        new
+                        {
+                            Id = new Guid("8b3f5e92-4c7d-4e9b-0f2a-6d8c9b0e1f3a"),
+                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Lockout duration in minutes once the failed-attempt threshold is reached.",
+                            Key = "Auth.LockoutDurationMinutes",
+                            Value = "15"
+                        },
+                        new
+                        {
+                            Id = new Guid("c15d8f3a-6e2b-4a91-b7d4-9f0e3c5a8b1d"),
+                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Daily quantity threshold (per product, across all branches) before a complimentary issue is auto-flagged for review. Never blocks - allow-with-review only.",
+                            Key = "Complimentary.DailyReviewThresholdQuantity",
+                            Value = "10"
+                        },
+                        new
+                        {
+                            Id = new Guid("e2a7b4c9-1f5d-4e83-9a6c-7d0b3f8e5c12"),
+                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Quantity sold within the query period (base unit) at or above which a product is classified as 'High' consumption.",
+                            Key = "ConsumptionLevel.HighThreshold",
+                            Value = "50"
+                        },
+                        new
+                        {
+                            Id = new Guid("f3b8c5d0-2a6e-4f94-8b7d-8e1c4a9f6d23"),
+                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Quantity sold within the query period at or above which a product is classified as 'Medium' consumption (below High).",
+                            Key = "ConsumptionLevel.MediumThreshold",
+                            Value = "15"
+                        },
+                        new
+                        {
+                            Id = new Guid("a4c9d6e1-3b7f-4a05-9c8e-9f2d5b0a7e34"),
+                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Quantity sold within the query period at or above which a product is classified as 'Low' consumption (below Medium). Zero sales is always 'NearZero'.",
+                            Key = "ConsumptionLevel.LowThreshold",
+                            Value = "1"
+                        },
+                        new
+                        {
+                            Id = new Guid("b5d0e7f2-4c8a-4b16-9d9f-0a3e6c1b8f45"),
+                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Global catalog version counter - incremented atomically on every product/category/unit/price change. The cashier app (offline-first) polls this cheaply to know when to pull a full catalog re-sync.",
+                            Key = "Catalog.Version",
+                            Value = "1"
                         });
                 });
 
