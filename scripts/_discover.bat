@@ -1,27 +1,33 @@
 @echo off
-rem ═══════════════════════════════════════════════════════════════════
-rem مكتبة داخلية مشتركة — مستدعاة بـ "call" من setup.bat وrun-api.bat
-rem وupdate-database.bat. لا تشغّلها لحالها، بترجّع صفر شي مفيد.
+rem ===================================================================
+rem Internal shared library - called with "call" from setup.bat,
+rem run-api.bat and update-database.bat. Do not run it by itself, it
+rem returns nothing useful on its own.
 rem
-rem بتكتشف المشاريع تلقائيًا بلا افتراض أي اسم (لا اسم .sln، لا اسم
-rem مشروع API، لا اسم مشروع Infrastructure) وبلا أي مسار مطلق:
-rem   SLN_FILE      - ملف .sln الوحيد بجذر الـrepo
-rem   API_PROJECT   - .csproj اللي فيه Sdk="Microsoft.NET.Sdk.Web"
-rem                   (أول مشروع Web SDK يُلقى، هذا الوصف الأدق لـ"مشروع
-rem                   API/Startup" بلا اعتماد على أي اسم مجلد)
+rem Auto-discovers projects without assuming any name (not the .sln
+rem name, not the API project name, not the Infrastructure project
+rem name) and without any absolute path:
+rem   SLN_FILE      - the single .sln file at the repo root
+rem   API_PROJECT   - the .csproj with Sdk="Microsoft.NET.Sdk.Web"
+rem                   (first Web SDK project found - the most accurate
+rem                   description of "the API/Startup project" without
+rem                   relying on any folder name)
 rem   API_PROJECT_DIR
-rem   DB_PROJECT    - .csproj اللي فيه ملف .cs بصنف يرث من DbContext
-rem                   (نفس مشروع الـMigrations بنفس الاتفاقية القياسية
-rem                   لـEF Core - مشروع واحد بيحمل الاثنين سوا)
+rem   DB_PROJECT    - the .csproj containing a .cs file with a class
+rem                   inheriting from DbContext (same project as the
+rem                   migrations, per standard EF Core convention -
+rem                   one project holds both)
 rem   DB_PROJECT_DIR
 rem
-rem كل المتغيرات دي بتترجع بمسارات مطلقة مبنية من %~dp0 وقت التشغيل، لا
-rem أي مسار مكتوب يدويًا - بتشتغل من أي مكان اتعمله clone فيه المشروع.
-rem ═══════════════════════════════════════════════════════════════════
+rem All these variables are returned as absolute paths built from
+rem %~dp0 at run time, never a manually written path - this works from
+rem wherever the repo was cloned.
+rem ===================================================================
 
 setlocal enabledelayedexpansion
 
-rem جذر الـrepo = مجلد فوق مجلد scripts مباشرة (هاي السكربت داخل scripts\)
+rem repo root = the folder directly above the scripts folder (this
+rem script lives inside scripts\)
 set "REPO_ROOT=%~dp0.."
 for %%i in ("%REPO_ROOT%") do set "REPO_ROOT=%%~fi"
 
@@ -29,18 +35,18 @@ set "SLN_FILE="
 set "API_PROJECT="
 set "DB_PROJECT="
 
-rem --- اكتشاف ملف .sln (أول واحد بجذر الـrepo فقط، لا بحث متداخل) ---
+rem --- discover the .sln file (only the first one at repo root, no recursive search) ---
 for %%f in ("%REPO_ROOT%\*.sln") do (
     if not defined SLN_FILE set "SLN_FILE=%%~ff"
 )
 
 if not defined SLN_FILE (
     endlocal
-    echo [خطأ] ما لقيت أي ملف .sln بجذر الـrepo: %REPO_ROOT%
+    echo [ERROR] No .sln file found at repo root: %REPO_ROOT%
     exit /b 1
 )
 
-rem --- اكتشاف مشروع API: أول .csproj فيه Sdk="Microsoft.NET.Sdk.Web" ---
+rem --- discover the API project: first .csproj with Sdk="Microsoft.NET.Sdk.Web" ---
 for /f "delims=" %%p in ('dir /s /b "%REPO_ROOT%\*.csproj" 2^>nul ^| findstr /v /i "\\bin\\ \\obj\\"') do (
     if not defined API_PROJECT (
         findstr /c:"Microsoft.NET.Sdk.Web" "%%p" >nul 2>&1
@@ -52,16 +58,17 @@ for /f "delims=" %%p in ('dir /s /b "%REPO_ROOT%\*.csproj" 2^>nul ^| findstr /v 
 
 if not defined API_PROJECT (
     endlocal
-    echo [خطأ] ما لقيت أي مشروع Web SDK ^(Sdk="Microsoft.NET.Sdk.Web"^) - محتاج مشروع API/Startup.
+    echo [ERROR] No Web SDK project found ^(Sdk="Microsoft.NET.Sdk.Web"^) - need an API/Startup project.
     exit /b 1
 )
 
 for %%i in ("!API_PROJECT!") do set "API_PROJECT_DIR=%%~dpi"
 
-rem --- اكتشاف مشروع DbContext: أول .csproj فيه ملف .cs يحتوي ": DbContext" ---
-rem مستبعَد صراحة: أي مشروع بيستخدم EntityFrameworkCore.Sqlite - هاي علامة
-rem "قاعدة محلية/أوفلاين" (زي تطبيق كاشير WPF)، مش قاعدة السيرفر الرئيسية
-rem اللي API بيتعامل معها. فحص بالحزمة المستخدَمة لا باسم المجلد/المشروع.
+rem --- discover the DbContext project: first .csproj with a .cs file containing ": DbContext" ---
+rem explicitly excluded: any project using EntityFrameworkCore.Sqlite - that
+rem is a marker of a local/offline database (e.g. a WPF cashier app), not
+rem the main server database that the API talks to. Checked by package
+rem usage, not by folder/project name.
 for /f "delims=" %%p in ('dir /s /b "%REPO_ROOT%\*.csproj" 2^>nul ^| findstr /v /i "\\bin\\ \\obj\\"') do (
     if not defined DB_PROJECT (
         findstr /c:"EntityFrameworkCore.Sqlite" "%%p" >nul 2>&1
@@ -77,13 +84,13 @@ for /f "delims=" %%p in ('dir /s /b "%REPO_ROOT%\*.csproj" 2^>nul ^| findstr /v 
 
 if not defined DB_PROJECT (
     endlocal
-    echo [خطأ] ما لقيت أي مشروع فيه صنف يرث من DbContext.
+    echo [ERROR] No project found containing a class that inherits from DbContext.
     exit /b 1
 )
 
 for %%i in ("!DB_PROJECT!") do set "DB_PROJECT_DIR=%%~dpi"
 
-rem --- تصدير المتغيرات للسكربت المستدعي (بدون endlocal هون عمدًا) ---
+rem --- export the variables to the caller script (no endlocal here on purpose) ---
 endlocal & (
     set "REPO_ROOT=%REPO_ROOT%"
     set "SLN_FILE=%SLN_FILE%"

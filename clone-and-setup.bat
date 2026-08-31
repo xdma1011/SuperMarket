@@ -1,42 +1,42 @@
 @echo off
-rem ═══════════════════════════════════════════════════════════════════
-rem clone-and-setup.bat — نقطة البداية الكاملة لأول مرة (أو لتصفير كامل):
-rem يسحب المشروع من GitHub بمجلد جديد نظيف جنب هالسكربت، وبعدين يشغّل
-rem setup.bat تلقائيًا. لازم يكون هذا الملف محفوظ *برّا* أي نسخة قديمة
-rem من المشروع (مثلًا على سطح المكتب) - هو نقطة البداية، مو جزء من
-rem نسخة موجودة أصلًا.
+rem ===================================================================
+rem clone-and-setup.bat - the full first-time entry point (or a full
+rem reset): pulls the project from GitHub into a fresh folder next to
+rem this script, then runs setup.bat automatically. This file must be
+rem saved *outside* any existing copy of the project (e.g. on the
+rem Desktop) - it is the starting point, not part of an existing clone.
 rem
-rem بلا أي مسار مطلق مكتوب يدويًا - المجلد الهدف بيتحدد نسبةً لمكان هالملف
-rem نفسه (%~dp0)، بغض النظر وين حفظته.
-rem ═══════════════════════════════════════════════════════════════════
+rem No absolute path is hardcoded - the target folder is relative to
+rem wherever this file itself is saved (%~dp0).
+rem ===================================================================
 
 setlocal enabledelayedexpansion
 
 set "REPO_URL=https://github.com/xdma1011/SuperMarket.git"
 set "TARGET_DIR=%~dp0SuperMarket"
 
-echo === تصفير كامل وسحب نسخة جديدة من GitHub ===
-echo المصدر: %REPO_URL%
-echo الوجهة:  %TARGET_DIR%
+echo === Full reset and fresh pull from GitHub ===
+echo Source:      %REPO_URL%
+echo Destination: %TARGET_DIR%
 echo.
 
 where git >nul 2>&1
 if errorlevel 1 (
-    echo [فشل] git مش موجود بالـPATH. نزّل Git for Windows من https://git-scm.com/download/win أولًا.
+    echo [FAILED] git not found on PATH. Install Git for Windows from https://git-scm.com/download/win first.
     exit /b 1
 )
 
 if exist "%TARGET_DIR%" (
-    echo [تحذير] المجلد "%TARGET_DIR%" موجود أصلًا.
-    set /p CONFIRM_DELETE="اكتب YES بالحروف الكبيرة لحذفه بالكامل والبدء من جديد، أي شي تاني للإلغاء: "
+    echo [WARNING] The folder "%TARGET_DIR%" already exists.
+    set /p CONFIRM_DELETE="Type YES in capital letters to delete it completely and start fresh, anything else to cancel: "
     if not "!CONFIRM_DELETE!"=="YES" (
-        echo تم الإلغاء - صفر تغيير.
+        echo Cancelled - no changes made.
         exit /b 0
     )
-    echo جاري حذف "%TARGET_DIR%"...
+    echo Deleting "%TARGET_DIR%"...
     rd /s /q "%TARGET_DIR%"
     if exist "%TARGET_DIR%" (
-        echo [فشل] تعذّر حذف المجلد بالكامل - تأكد ما فيه ملف مفتوح ببرنامج تاني ^(Visual Studio مثلًا^) وحاول تاني.
+        echo [FAILED] Could not fully delete the folder - make sure no file inside it is open in another program ^(e.g. Visual Studio^) and try again.
         exit /b 1
     )
 )
@@ -45,22 +45,22 @@ echo.
 echo === git clone ===
 git clone "%REPO_URL%" "%TARGET_DIR%"
 if errorlevel 1 (
-    echo [فشل] git clone طلع بخطأ - راجع الرسالة فوق.
+    echo [FAILED] git clone failed - see message above.
     exit /b 1
 )
 
 echo.
-echo === تشغيل setup.bat من داخل النسخة الجديدة ===
+echo === Running setup.bat from the fresh clone ===
 call "%TARGET_DIR%\setup.bat"
 set "SETUP_RESULT=%errorlevel%"
 
 echo.
 if "%SETUP_RESULT%"=="0" (
-    echo === خلص كل شي بنجاح ===
-    echo المشروع الآن بـ: %TARGET_DIR%
-    echo الخطوة الجاية: افتح CMD بهالمجلد وشغّل dotnet ef migrations add InitialCreate ^(راجع تعليمات setup.bat فوق^).
+    echo === All done ===
+    echo Project is now at: %TARGET_DIR%
+    echo Next step: open CMD in this folder and run dotnet ef migrations add InitialCreate ^(see setup.bat instructions above^).
 ) else (
-    echo [فشل] setup.bat طلع بخطأ - راجع الرسائل فوق.
+    echo [FAILED] setup.bat reported an error - see messages above.
 )
 
 exit /b %SETUP_RESULT%

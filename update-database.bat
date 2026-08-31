@@ -1,43 +1,45 @@
 @echo off
-rem ═══════════════════════════════════════════════════════════════════
-rem update-database.bat — تشغيل يدوي فقط (لا setup.bat ولا run-api.bat
-rem بيستدعوه تلقائيًا). بيتصل فعليًا بقاعدة البيانات المحدَّدة بـ
-rem DefaultConnection بملف appsettings.json الخاص بمشروع الـAPI المكتشَف،
-rem ويطبّق كل الـMigrations غير المطبَّقة بعد. تأكيد صريح مطلوب قبل التنفيذ.
-rem ═══════════════════════════════════════════════════════════════════
+rem ===================================================================
+rem update-database.bat - manual run only (not called automatically by
+rem setup.bat or run-api.bat). This actually connects to the database
+rem specified by DefaultConnection in the discovered API project's
+rem appsettings.json, and applies every migration not yet applied.
+rem Explicit confirmation is required before it runs.
+rem ===================================================================
 
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
 call "%~dp0scripts\_discover.bat"
 if errorlevel 1 (
-    echo [فشل] تعذّر اكتشاف بنية المشروع - راجع الرسالة فوق.
+    echo [FAILED] Could not discover project structure - see message above.
     exit /b 1
 )
 
-echo === فحص الـMigrations أولًا (بلا أي اتصال بقاعدة البيانات) ===
+echo === Checking migrations first (no database connection yet) ===
 dotnet ef migrations has-pending-model-changes --project "%DB_PROJECT%" --startup-project "%API_PROJECT%"
 if errorlevel 1 (
     echo.
-    echo [توقف] فيه فرق بين موديل الكود وآخر Migration محفوظة ^(pending model changes^).
-    echo         لازم تضيف Migration جديدة تعكس الفرق قبل ما تكمل - راجع setup.bat.
-    echo         ما رح أشغّل database update وموديل الكود مش متطابق مع آخر Migration.
+    echo [STOPPED] There is a difference between the code model and the last saved migration
+    echo           ^(pending model changes^).
+    echo           Add a new migration to capture the difference before continuing - see setup.bat.
+    echo           Refusing to run database update while the code model does not match the last migration.
     exit /b 1
 )
 
-echo   تمام، موديل الكود مطابق لآخر Migration.
+echo   OK, code model matches the last migration.
 echo.
 
 set "APPSETTINGS=%API_PROJECT_DIR%appsettings.json"
-echo === تحذير ===
-echo هاي العملية رح تتصل فعليًا بقاعدة البيانات المحدَّدة بـ DefaultConnection
-echo بملف: %APPSETTINGS%
-echo وتطبّق عليها كل الـMigrations غير المطبَّقة. تأكد إنها القاعدة الصحيحة
-echo قبل ما تكمل.
+echo === WARNING ===
+echo This will actually connect to the database defined by DefaultConnection
+echo in this file: %APPSETTINGS%
+echo and apply every pending migration to it. Make sure this is the right
+echo database before continuing.
 echo.
-set /p CONFIRM="اكتب YES بالحروف الكبيرة للمتابعة، أي شي تاني للإلغاء: "
+set /p CONFIRM="Type YES in capital letters to continue, anything else to cancel: "
 if not "%CONFIRM%"=="YES" (
-    echo تم الإلغاء - صفر تغيير.
+    echo Cancelled - no changes made.
     exit /b 0
 )
 

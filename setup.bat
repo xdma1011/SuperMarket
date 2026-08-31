@@ -1,31 +1,31 @@
 @echo off
-rem ═══════════════════════════════════════════════════════════════════
-rem setup.bat — إعداد المشروع بعد git clone/git pull، من جذر الـrepo.
-rem بلا أي مسار مطلق، بلا افتراض اسم .sln أو اسم أي مشروع - كل شي
-rem مكتشَف تلقائيًا وقت التشغيل (راجع scripts\_discover.bat).
+rem ===================================================================
+rem setup.bat - project setup after git clone/git pull, run from repo root.
+rem No absolute paths, no assumed .sln or project names - everything is
+rem auto-discovered at run time (see scripts\_discover.bat).
 rem
-rem ما بيسوي: dotnet ef database update (سكربت منفصل update-database.bat
-rem عمدًا)، ولا أي إنشاء/حذف Migration.
-rem ═══════════════════════════════════════════════════════════════════
+rem Does NOT run: dotnet ef database update (separate update-database.bat
+rem on purpose), and does NOT create/delete any migration.
+rem ===================================================================
 
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
-echo === 1. اكتشاف بنية المشروع ===
+echo === 1. Discovering project structure ===
 call "%~dp0scripts\_discover.bat"
 if errorlevel 1 (
-    echo [فشل] تعذّر اكتشاف بنية المشروع - راجع الرسالة فوق.
+    echo [FAILED] Could not discover project structure - see message above.
     exit /b 1
 )
-echo   .sln:              %SLN_FILE%
-echo   مشروع API:          %API_PROJECT%
-echo   مشروع DbContext:    %DB_PROJECT%
+echo   .sln file:       %SLN_FILE%
+echo   API project:     %API_PROJECT%
+echo   DbContext proj:  %DB_PROJECT%
 echo.
 
-echo === 2. التحقق من .NET SDK ===
+echo === 2. Checking .NET SDK ===
 where dotnet >nul 2>&1
 if errorlevel 1 (
-    echo [فشل] dotnet CLI مش موجود بالـPATH. نزّل .NET SDK 10 من https://dotnet.microsoft.com/download أولًا.
+    echo [FAILED] dotnet CLI not found on PATH. Install .NET SDK 10 from https://dotnet.microsoft.com/download first.
     exit /b 1
 )
 set "HAS_SDK10="
@@ -34,25 +34,25 @@ for /f "delims=" %%v in ('dotnet --list-sdks 2^>nul') do (
     if not errorlevel 1 set "HAS_SDK10=1"
 )
 if not defined HAS_SDK10 (
-    echo [تحذير] ما لقيت .NET SDK 10.x مثبَّت. المشروع مبني على net10.0 - المفروض تنزّله.
-    echo          الـSDKs المثبَّتة عندك حاليًا:
+    echo [WARNING] .NET SDK 10.x not found. This project targets net10.0 - you should install it.
+    echo           SDKs currently installed on this machine:
     dotnet --list-sdks
-    echo          كمّل بأي حال، بس متوقَّع فشل بالخطوات الجاية لو فعلًا مش موجود.
+    echo           Continuing anyway, but the next steps are expected to fail if it is really missing.
 )
 echo.
 
 echo === 3. dotnet restore ===
 dotnet restore "%SLN_FILE%"
 if errorlevel 1 (
-    echo [فشل] dotnet restore طلع بخطأ - راجع الرسالة فوق.
+    echo [FAILED] dotnet restore failed - see message above.
     exit /b 1
 )
 echo.
 
-echo === 4. dotnet tool restore (dotnet-ef محلي، من .config\dotnet-tools.json) ===
+echo === 4. dotnet tool restore (local dotnet-ef, from .config\dotnet-tools.json) ===
 dotnet tool restore
 if errorlevel 1 (
-    echo [فشل] dotnet tool restore طلع بخطأ - راجع الرسالة فوق.
+    echo [FAILED] dotnet tool restore failed - see message above.
     exit /b 1
 )
 echo.
@@ -60,33 +60,32 @@ echo.
 echo === 5. dotnet build ===
 dotnet build "%SLN_FILE%" --no-restore
 if errorlevel 1 (
-    echo [فشل] dotnet build طلع بخطأ - راجع الرسالة فوق.
+    echo [FAILED] dotnet build failed - see message above.
     exit /b 1
 )
 echo.
 
-echo === 6. حالة Migrations ===
+echo === 6. Migrations status ===
 dotnet ef migrations list --project "%DB_PROJECT%" --startup-project "%API_PROJECT%" --no-build
 if errorlevel 1 (
-    echo [تحذير] تعذّر قراءة قائمة الـMigrations - راجع رسالة الخطأ فوق يدويًا.
+    echo [WARNING] Could not read the migrations list - check the error message above manually.
 ) else (
     echo.
-    echo === 7. فحص "pending model changes" ===
+    echo === 7. Checking for pending model changes ===
     dotnet ef migrations has-pending-model-changes --project "%DB_PROJECT%" --startup-project "%API_PROJECT%" --no-build
     if errorlevel 1 (
         echo.
-        echo [انتبه] فيه فرق بين موديل الكود الحالي وآخر Migration محفوظة.
-        echo          هذا سكربت setup.bat ما بيصلحها تلقائيًا عمدًا - لازم Migration
-        echo          يدوية جديدة تعكس الفرق. لو أول مرة تشغّل المشروع وصفر
-        echo          Migrations موجودة أصلًا، هذا متوقَّع تمامًا: شغّل
-        echo            dotnet ef migrations add InitialCreate --project "%DB_PROJECT%" --startup-project "%API_PROJECT%"
-        echo          مرة وحدة بس.
+        echo [NOTE] There is a difference between the current code model and the last saved migration.
+        echo        setup.bat deliberately does NOT fix this automatically - a new manual migration
+        echo        is needed to capture the difference. If this is the first run and there are zero
+        echo        migrations yet, this is completely expected: run this once:
+        echo          dotnet ef migrations add InitialCreate --project "%DB_PROJECT%" --startup-project "%API_PROJECT%"
     ) else (
-        echo   ولا فرق - موديل الكود مطابق تمامًا لآخر Migration.
+        echo   No difference - code model matches the last migration exactly.
     )
 )
 
 echo.
-echo === خلص الإعداد ===
-echo التالي: run-api.bat لتشغيل الـAPI، أو update-database.bat لتحديث قاعدة البيانات (يدوي، بعد ما تتأكد الـMigrations سليمة).
+echo === Setup finished ===
+echo Next: run-api.bat to start the API, or update-database.bat to update the database (manual, after confirming migrations are correct).
 exit /b 0
