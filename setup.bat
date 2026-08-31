@@ -70,22 +70,50 @@ if errorlevel 1 (
 echo.
 
 echo === 6. Migrations status ===
-dotnet ef migrations list --project "%DB_PROJECT%" --startup-project "%API_PROJECT%" --no-build
-if errorlevel 1 (
+set "MIGRATIONS_LOG=%TEMP%\_setup_migrations_list_%RANDOM%.txt"
+dotnet ef migrations list --project "%DB_PROJECT%" --startup-project "%API_PROJECT%" --no-build > "%MIGRATIONS_LOG%" 2>&1
+set "MIGRATIONS_LIST_RESULT=%errorlevel%"
+type "%MIGRATIONS_LOG%"
+
+if not "%MIGRATIONS_LIST_RESULT%"=="0" (
     echo [WARNING] Could not read the migrations list - check the error message above manually.
+    del "%MIGRATIONS_LOG%" >nul 2>&1
 ) else (
-    echo.
-    echo === 7. Checking for pending model changes ===
-    dotnet ef migrations has-pending-model-changes --project "%DB_PROJECT%" --startup-project "%API_PROJECT%" --no-build
-    if errorlevel 1 (
+    findstr /c:"No migrations were found" "%MIGRATIONS_LOG%" >nul 2>&1
+    if not errorlevel 1 (
+        rem Zero migrations exist yet - this is the one case where the name
+        rem and intent are always the same and unambiguous ("create
+        rem everything from the current model"), so it is safe to generate
+        rem automatically. Any later migration (an actual feature change)
+        rem still needs a human to pick a name that describes it - never
+        rem auto-generated.
+        del "%MIGRATIONS_LOG%" >nul 2>&1
         echo.
-        echo [NOTE] There is a difference between the current code model and the last saved migration.
-        echo        setup.bat deliberately does NOT fix this automatically - a new manual migration
-        echo        is needed to capture the difference. If this is the first run and there are zero
-        echo        migrations yet, this is completely expected: run this once:
-        echo          dotnet ef migrations add InitialCreate --project "%DB_PROJECT%" --startup-project "%API_PROJECT%"
+        echo === 7. No migrations found yet - creating InitialCreate automatically ===
+        dotnet ef migrations add InitialCreate --project "%DB_PROJECT%" --startup-project "%API_PROJECT%" --no-build
+        if errorlevel 1 (
+            echo [FAILED] Could not create the InitialCreate migration - see message above.
+            goto :end_fail
+        )
+        echo.
+        echo   InitialCreate migration created. Remember to commit and push it:
+        echo     git add .
+        echo     git commit -m "Add InitialCreate migration"
+        echo     git push
     ) else (
-        echo   No difference - code model matches the last migration exactly.
+        del "%MIGRATIONS_LOG%" >nul 2>&1
+        echo.
+        echo === 7. Checking for pending model changes ===
+        dotnet ef migrations has-pending-model-changes --project "%DB_PROJECT%" --startup-project "%API_PROJECT%" --no-build
+        if errorlevel 1 (
+            echo.
+            echo [NOTE] There is a difference between the current code model and the last saved migration.
+            echo        setup.bat deliberately does NOT fix this automatically here - migrations already
+            echo        exist, so a new one needs a human-chosen name describing the actual change:
+            echo          dotnet ef migrations add ^<DescriptiveName^> --project "%DB_PROJECT%" --startup-project "%API_PROJECT%"
+        ) else (
+            echo   No difference - code model matches the last migration exactly.
+        )
     )
 )
 
