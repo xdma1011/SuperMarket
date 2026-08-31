@@ -5,7 +5,7 @@ namespace SupermarketSystem.CashierApp.Services;
 
 public sealed class AppConfig
 {
-    public string ApiBaseUrl { get; set; } = "https://localhost:56024/api/v1";
+    public string ApiBaseUrl { get; set; } = "http://localhost:5200/api/v1";
     public int SyncIntervalSeconds { get; set; } = 60;
     public int CatalogSyncPageSize { get; set; } = 200;
 
