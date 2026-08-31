@@ -34,6 +34,46 @@ echo   OK, code model matches the last migration.
 echo.
 
 set "APPSETTINGS=%API_PROJECT_DIR%appsettings.json"
+set "FACTORY_FILE=%DB_PROJECT_DIR%Persistence\AppDbContextFactory.cs"
+
+echo === Connection string ===
+where powershell >nul 2>&1
+if errorlevel 1 (
+    echo   [NOTE] PowerShell not found on PATH - skipping the replace-connection-string step.
+    echo          Edit ConnectionStrings:DefaultConnection in %APPSETTINGS% by hand if needed.
+) else (
+    echo   Current value in %APPSETTINGS%:
+    powershell -NoProfile -Command "try { (Get-Content -Raw '%APPSETTINGS%' | ConvertFrom-Json).ConnectionStrings.DefaultConnection } catch { Write-Output '(could not read it)' }"
+    echo.
+    set "NEW_CONNSTR="
+    set /p NEW_CONNSTR="Enter a NEW connection string to replace it everywhere, or press Enter to keep the current one: "
+    if not "!NEW_CONNSTR!"=="" (
+        echo.
+        echo   New value will be:
+        echo     !NEW_CONNSTR!
+        echo   This will overwrite DefaultConnection in BOTH:
+        echo     %APPSETTINGS%
+        echo     %FACTORY_FILE%
+        echo.
+        set "CONFIRM_CONNSTR="
+        set /p CONFIRM_CONNSTR="Type YES in capital letters to apply this replacement, anything else to skip it: "
+        if "!CONFIRM_CONNSTR!"=="YES" (
+            set "CONNSTR_VALUE_FILE=%TEMP%\_setupdb_connstr_%RANDOM%.txt"
+            > "!CONNSTR_VALUE_FILE!" (echo|set /p="!NEW_CONNSTR!")
+            powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\set-connection-string.ps1" -AppSettingsPath "%APPSETTINGS%" -FactoryPath "%FACTORY_FILE%" -ValueFile "!CONNSTR_VALUE_FILE!"
+            set "CONNSTR_RESULT=!errorlevel!"
+            del "!CONNSTR_VALUE_FILE!" >nul 2>&1
+            if not "!CONNSTR_RESULT!"=="0" (
+                echo [FAILED] Could not update the connection string - see message above.
+                goto :end_fail
+            )
+        ) else (
+            echo   Skipped - connection string left unchanged.
+        )
+    )
+)
+echo.
+
 echo === WARNING ===
 echo This will actually connect to the database defined by DefaultConnection
 echo in this file: %APPSETTINGS%
