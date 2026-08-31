@@ -12,6 +12,15 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <!-- بلا هاي الحزمة، أوامر Package Manager Console (Add-Migration،
+         Update-Database) مو موجودة أصلًا كـcmdlets بـVisual Studio - هذا
+         سبب خطأ "term 'update-database' is not recognized" بالضبط.
+         Infrastructure هو المشروع اللي فيه AppDbContext والـMigrations،
+         فهو المكان الصحيح لهاي الحزمة (لازم يكون Default project بالـPMC). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.0" />
