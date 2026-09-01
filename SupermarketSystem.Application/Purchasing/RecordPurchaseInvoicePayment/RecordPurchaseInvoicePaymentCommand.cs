@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Results;
+using SupermarketSystem.Domain.CashManagement;
 
 namespace SupermarketSystem.Application.Purchasing.RecordPurchaseInvoicePayment;
 
@@ -20,16 +21,26 @@ public sealed record RecordPurchaseInvoicePaymentResponse(
 /// المدفوعات ما يتجاوز إجمالي الفاتورة. بخلاف مسارات البيع عالية
 /// التزامن، هذا المسار عادة إداري لمستخدم واحد بلحظة معيّنة — ضمان
 /// EF Core العادي داخل معاملة كافٍ هون.
+///
+/// فجوة كانت موجودة من زمان وانسدّت هون: هالدفعة كانت ما بتنكتب
+/// بـCashDrawerLog إطلاقًا مهما كانت طريقة الدفع - يعني كاش خارج فعليًا
+/// للمورد بيضل غير معروف للنظام، وتقفيل الصندوق (CashClosing) كان
+/// يظهر عجز غير مفسَّر كل مرة. الآن، تمامًا زي CompleteSaleCommand،
+/// الاعتماد على PaymentMethod.AffectsCashDrawer (سلوك، لا اسم/كود) هو
+/// اللي بيقرر تسجيل حركة الدرج.
 /// </summary>
 public sealed class RecordPurchaseInvoicePaymentHandler
 {
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserContext _currentUser;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public RecordPurchaseInvoicePaymentHandler(IApplicationDbContext context, ICurrentUserContext currentUser)
+    public RecordPurchaseInvoicePaymentHandler(
+        IApplicationDbContext context, ICurrentUserContext currentUser, IDateTimeProvider dateTimeProvider)
     {
         _context = context;
         _currentUser = currentUser;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<Result<RecordPurchaseInvoicePaymentResponse>> HandleAsync(
@@ -59,9 +70,9 @@ public sealed class RecordPurchaseInvoicePaymentHandler
                 Error.NotFound("Payment.InvoiceNotFound", $"فاتورة الشراء '{command.PurchaseInvoiceId}' غير موجودة."));
         }
 
-        var methodExists = await _context.PaymentMethods.AsNoTracking()
-            .AnyAsync(pm => pm.Id == command.PaymentMethodId && pm.IsActive, cancellationToken);
-        if (!methodExists)
+        var paymentMethod = await _context.PaymentMethods.AsNoTracking()
+            .FirstOrDefaultAsync(pm => pm.Id == command.PaymentMethodId && pm.IsActive, cancellationToken);
+        if (paymentMethod is null)
         {
             return Result.Failure<RecordPurchaseInvoicePaymentResponse>(
                 Error.NotFound("Payment.MethodNotFound", $"طريقة الدفع '{command.PaymentMethodId}' غير موجودة أو غير فعّالة."));
@@ -82,9 +93,23 @@ public sealed class RecordPurchaseInvoicePaymentHandler
                 Error.Validation("Payment.ExceedsInvoiceTotal", ex.Message));
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
-
         var newPayment = invoice.Payments.Last();
+
+        // نفس مبدأ CompleteSaleCommand حرفيًا: الاعتماد على سلوك طريقة
+        // الدفع (AffectsCashDrawer)، لا اسمها أو كودها (§16.2).
+        if (paymentMethod.AffectsCashDrawer)
+        {
+            _context.CashDrawerLogs.Add(new CashDrawerLog(
+                invoice.BranchId,
+                CashDrawerMovementType.PurchasePaymentCashOut,
+                command.Amount,
+                CashDrawerReferenceType.PurchaseInvoicePayment,
+                newPayment.Id,
+                userId,
+                _dateTimeProvider.UtcNow));
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
 
         return Result.Success(new RecordPurchaseInvoicePaymentResponse(
             newPayment.Id, invoice.TotalPaidAmount, invoice.TotalAmount - invoice.TotalPaidAmount));

@@ -332,6 +332,7 @@ public sealed class CompleteCashClosingHandler
         CashDrawerMovementType.PayOut => -1,
         CashDrawerMovementType.DrawerOpen => 1,
         CashDrawerMovementType.DrawerClose => -1,
+        CashDrawerMovementType.PurchasePaymentCashOut => -1,
         _ => throw new InvalidOperationException($"قيمة CashDrawerMovementType غير معروفة: {movementType}")
     };
 }

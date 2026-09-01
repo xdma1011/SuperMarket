@@ -13,7 +13,14 @@ public enum CashDrawerMovementType
     PayIn = 5,
     PayOut = 6,
     DrawerOpen = 7,
-    DrawerClose = 8
+    DrawerClose = 8,
+    /// <summary>
+    /// دفعة كاش لمورد (RecordPurchaseInvoicePaymentCommand، لما طريقة
+    /// الدفع AffectsCashDrawer=true). فجوة كانت موجودة من زمان: دفعات
+    /// الموردين كانت ما بتنكتب بـCashDrawerLog إطلاقًا، فالتقفيل كان
+    /// يظهر عجز غير مفسَّر كل مرة يصير فيها دفع كاش لمورد.
+    /// </summary>
+    PurchasePaymentCashOut = 9
 }
 
 /// <summary>
@@ -34,7 +41,10 @@ public enum CashDrawerReferenceType
     /// the CashClosing record it belongs to — this member did not exist
     /// before there was an operation that needed it.
     /// </summary>
-    CashClosing = 4
+    CashClosing = 4,
+
+    /// <summary>يشير لدفعة PurchaseInvoicePayment محدَّدة، نفس مبدأ SaleInvoicePayment - المرجع سطر الدفعة، لا رأس الفاتورة.</summary>
+    PurchaseInvoicePayment = 5
 }
 
 /// <summary>
