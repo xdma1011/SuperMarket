@@ -39,31 +39,6 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
             IsDeleted = false,
             CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });
-
-        // Seed: the one bootstrap admin account (see BootstrapSeedIds) —
-        // a fresh database gets a real, active, loggable-in admin user
-        // automatically, tied to the Master Admin role and the Main
-        // branch (UserRoleConfiguration / UserBranchConfiguration below),
-        // instead of everyone having to hand-write the same
-        // INSERT/UPDATE SQL after every fresh database.
-        //
-        // PasswordHash is deliberately left unset (null) here — a literal
-        // password hash has no business sitting in version control (this
-        // repo is on GitHub), and this migration-generation environment
-        // has no way to produce one it could verify actually round-trips
-        // through AspNetPasswordHasher correctly. One-time manual step
-        // after the database is created: run `tools/HashPassword`, then
-        //   UPDATE Users SET PasswordHash = N'<paste>' WHERE Username = N'admin';
-        builder.HasData(new
-        {
-            Id = BootstrapSeedIds.AdminUserId,
-            FullName = "Admin",
-            Username = "admin",
-            Email = "admin@local.invalid",
-            IsActive = true,
-            IsDeleted = false,
-            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-        });
     }
 }
 
@@ -547,18 +522,6 @@ public class UserRoleConfiguration : IEntityTypeConfiguration<UserRole>
             .WithMany()
             .HasForeignKey(ur => ur.RoleId)
             .OnDelete(DeleteBehavior.Restrict);
-
-        // Seed: grants the bootstrap admin (BootstrapSeedIds.AdminUserId)
-        // the Master Admin role at the bootstrap Main branch — see
-        // BranchConfiguration/UserConfiguration for the branch/user rows
-        // this references.
-        builder.HasData(new
-        {
-            Id = Guid.Parse("33333333-3333-3333-3333-333333333333"),
-            UserId = BootstrapSeedIds.AdminUserId,
-            RoleId = Guid.Parse("50e6125a-cac0-4d82-a0b8-9f3c6fff59d7"), // Master Admin, seeded in RoleConfiguration above
-            BranchId = BootstrapSeedIds.MainBranchId
-        });
     }
 }
 
@@ -576,19 +539,6 @@ public class UserBranchConfiguration : IEntityTypeConfiguration<UserBranch>
             .HasForeignKey(ub => ub.UserId)
             .OnDelete(DeleteBehavior.Cascade);
         // Branch FK configured (Restrict) on the Branches side.
-
-        // Seed: gives the bootstrap admin access to the bootstrap Main
-        // branch, as their default — see BranchConfiguration/
-        // UserConfiguration for the rows this references. Login's branch
-        // resolution (LoginCommand.ResolveBranchAsync) needs a UserBranch
-        // row to pick a branch at all.
-        builder.HasData(new
-        {
-            Id = Guid.Parse("44444444-4444-4444-4444-444444444444"),
-            UserId = BootstrapSeedIds.AdminUserId,
-            BranchId = BootstrapSeedIds.MainBranchId,
-            IsDefault = true
-        });
     }
 }
 
