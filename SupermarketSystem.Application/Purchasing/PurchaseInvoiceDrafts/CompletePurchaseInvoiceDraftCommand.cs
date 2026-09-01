@@ -19,11 +19,14 @@ public sealed class CompletePurchaseInvoiceDraftHandler
 {
     private readonly IApplicationDbContext _context;
     private readonly CompletePurchaseInvoiceHandler _completeInvoiceHandler;
+    private readonly ICurrentUserContext _currentUser;
 
-    public CompletePurchaseInvoiceDraftHandler(IApplicationDbContext context, CompletePurchaseInvoiceHandler completeInvoiceHandler)
+    public CompletePurchaseInvoiceDraftHandler(
+        IApplicationDbContext context, CompletePurchaseInvoiceHandler completeInvoiceHandler, ICurrentUserContext currentUser)
     {
         _context = context;
         _completeInvoiceHandler = completeInvoiceHandler;
+        _currentUser = currentUser;
     }
 
     public async Task<Result<CompletePurchaseInvoiceResponse>> HandleAsync(
@@ -93,6 +96,40 @@ public sealed class CompletePurchaseInvoiceDraftHandler
         }
 
         draft.MarkCompleted(completeResult.Value.PurchaseInvoiceId);
+
+        // لو حدا دفع كاش للمورد لحظة الرفع (PaidNowAmount)، الفاتورة
+        // الحقيقية لسا Received بلا أي دفعة مسجَّلة عليها. نسجّلها هون
+        // مباشرة على الـentity (AddPayment)، لا عبر
+        // RecordPurchaseInvoicePaymentHandler - لأنه هذاك بيكتب حركة
+        // CashDrawerLog جديدة، وحركتنا مكتوبة أصلًا لحظة رفع المسودة
+        // (CreatePurchaseInvoiceDraftFromImageHandler). تسجيلها هنا
+        // مرتين كان رح يطرح نفس المبلغ من الدرج مرتين وهميًا.
+        if (draft.PaidNowAmount is { } paidNowAmount && draft.PaidNowPaymentMethodId is { } paidNowMethodId)
+        {
+            var invoice = await _context.PurchaseInvoices
+                .Include(pi => pi.Payments)
+                .FirstAsync(pi => pi.Id == completeResult.Value.PurchaseInvoiceId, cancellationToken);
+
+            var actorUserId = _currentUser.UserId ?? Domain.Identity.User.SystemUserId;
+
+            try
+            {
+                invoice.AddPayment(
+                    paidNowMethodId, paidNowAmount, actorUserId, invoice.BranchId,
+                    externalReference: "AI-Draft-PaidNow", clientRequestId: Guid.NewGuid());
+            }
+            catch (Domain.Common.DomainException)
+            {
+                // المبلغ المدفوع مسبقًا أكبر من إجمالي الفاتورة الفعلي (بعد
+                // ما راجع المستخدم الكميات/الأسعار) - حالة نادرة بس ممكنة.
+                // الفاتورة والمخزون خلص انسجّلوا بنجاح فعلًا (SaveChangesAsync
+                // بـ_completeInvoiceHandler خلص) - ما بنوقف الاعتماد لأجل
+                // هالتفصيل، بنسيبها بلا دفعة تلقائية والمستخدم يسجّلها يدويًا
+                // من شاشة دفعات المورد العادية (المبلغ نفسه مسجَّل أصلًا
+                // بحركة الدرج لحظة الرفع، فمافي كاش ضايع أو مخفي).
+            }
+        }
+
         await _context.SaveChangesAsync(cancellationToken);
 
         return completeResult;

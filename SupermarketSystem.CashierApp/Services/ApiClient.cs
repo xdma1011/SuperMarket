@@ -207,7 +207,8 @@ public sealed class ApiClient
     /// - الكاشير ما بيراجع، بس بيتأكد النجاح أو الفشل.
     /// </summary>
     public async Task<UploadInvoiceDraftResult> UploadPurchaseInvoiceDraftAsync(
-        Guid branchId, byte[] imageBytes, string fileName, string contentType, CancellationToken cancellationToken)
+        Guid branchId, byte[] imageBytes, string fileName, string contentType,
+        decimal? paidNowAmount, Guid? paidNowPaymentMethodId, CancellationToken cancellationToken)
     {
         try
         {
@@ -216,7 +217,13 @@ public sealed class ApiClient
             fileContent.Headers.ContentType = new MediaTypeHeaderValue(string.IsNullOrWhiteSpace(contentType) ? "image/jpeg" : contentType);
             content.Add(fileContent, "file", fileName);
 
-            var response = await _http.PostAsync($"purchase-invoices/drafts/from-image?branchId={branchId}", content, cancellationToken);
+            var query = $"purchase-invoices/drafts/from-image?branchId={branchId}";
+            if (paidNowAmount is { } amount && paidNowPaymentMethodId is { } methodId)
+            {
+                query += $"&paidNowAmount={amount.ToString(System.Globalization.CultureInfo.InvariantCulture)}&paidNowPaymentMethodId={methodId}";
+            }
+
+            var response = await _http.PostAsync(query, content, cancellationToken);
 
             if (response.IsSuccessStatusCode)
             {

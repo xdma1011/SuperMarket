@@ -17,6 +17,7 @@ public sealed record PurchaseInvoiceDraftListItemDto(
     int ItemCount,
     int UnmatchedItemCount,
     int Status,
+    decimal? PaidNowAmount,
     DateTime CreatedAtUtc);
 
 public sealed class GetPurchaseInvoiceDraftsHandler
@@ -61,6 +62,7 @@ public sealed class GetPurchaseInvoiceDraftsHandler
                 d.ExtractionConfidence,
                 d.ItemsJson,
                 d.Status,
+                d.PaidNowAmount,
                 d.CreatedAtUtc
             })
             .ToListAsync(cancellationToken);
@@ -81,6 +83,7 @@ public sealed class GetPurchaseInvoiceDraftsHandler
                     itemsList.Count,
                     itemsList.Count(i => i.MatchedProductId is null),
                     (int)d.Status,
+                    d.PaidNowAmount,
                     d.CreatedAtUtc);
             })
             .ToList();

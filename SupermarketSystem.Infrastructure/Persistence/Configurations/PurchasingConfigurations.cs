@@ -140,6 +140,7 @@ public class PurchaseInvoiceDraftConfiguration : IEntityTypeConfiguration<Purcha
         // nvarchar(4000) بسهولة؛ nvarchar(max) الافتراضي هون مقصود.
         builder.Property(d => d.ItemsJson).IsRequired();
         builder.Property(d => d.Status).HasConversion<int>().IsRequired();
+        builder.Property(d => d.PaidNowAmount).HasColumnType("decimal(18,4)");
         builder.Property(d => d.RowVersion).IsRowVersion();
         builder.Property(d => d.CreatedAtUtc).HasColumnType("datetime2").IsRequired();
         builder.Property(d => d.UpdatedAtUtc).HasColumnType("datetime2");
@@ -148,6 +149,7 @@ public class PurchaseInvoiceDraftConfiguration : IEntityTypeConfiguration<Purcha
 
         builder.HasOne<Supplier>().WithMany().HasForeignKey(d => d.MatchedSupplierId).OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<PurchaseInvoice>().WithMany().HasForeignKey(d => d.ResultingPurchaseInvoiceId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<PaymentMethod>().WithMany().HasForeignKey(d => d.PaidNowPaymentMethodId).OnDelete(DeleteBehavior.Restrict);
         // Branch FK (Restrict) configured on the Branches side.
     }
 }

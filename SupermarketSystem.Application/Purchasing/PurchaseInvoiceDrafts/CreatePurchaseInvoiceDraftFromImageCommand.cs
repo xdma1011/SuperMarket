@@ -1,11 +1,21 @@
 using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Results;
+using SupermarketSystem.Domain.CashManagement;
+using SupermarketSystem.Domain.Payments;
 using SupermarketSystem.Domain.Purchasing;
 
 namespace SupermarketSystem.Application.Purchasing.PurchaseInvoiceDrafts;
 
-public sealed record CreatePurchaseInvoiceDraftFromImageCommand(Guid BranchId, byte[] ImageBytes, string MimeType);
+/// <summary>
+/// PaidNowAmount/PaidNowPaymentMethodId اختياريان تمامًا - لو حدا دفع
+/// كاش (أو أي طريقة تؤثر بالدرج) للمورد لحظة استلام البضاعة، قبل أي
+/// مراجعة. هذا هو الحل الحقيقي لمشكلة توقيت كانت موجودة: الكاش يطلع من
+/// الدرج بلحظة الاستلام، لا بلحظة اعتماد المراجع للمسودة لاحقًا - لو ما
+/// سجّلناها هون فورًا، تقفيل نفس اليوم بيظهر عجز غير مفسَّر.
+/// </summary>
+public sealed record CreatePurchaseInvoiceDraftFromImageCommand(
+    Guid BranchId, byte[] ImageBytes, string MimeType, decimal? PaidNowAmount, Guid? PaidNowPaymentMethodId);
 
 public sealed record CreatePurchaseInvoiceDraftFromImageResponse(
     Guid DraftId,
@@ -19,7 +29,8 @@ public sealed record CreatePurchaseInvoiceDraftFromImageResponse(
     decimal? ExtractedInvoiceTotal,
     string? ExtractionConfidence,
     IReadOnlyList<string> Warnings,
-    IReadOnlyList<PurchaseInvoiceDraftItemDto> Items);
+    IReadOnlyList<PurchaseInvoiceDraftItemDto> Items,
+    decimal? PaidNowAmount);
 
 /// <summary>
 /// يرفع صورة، يحفظها (تحفظ حتى لو فشل الاستخراج - نفس سلوك المسار
@@ -39,23 +50,55 @@ public sealed class CreatePurchaseInvoiceDraftFromImageHandler
     private readonly IApplicationDbContext _context;
     private readonly IImageStorageService _imageStorage;
     private readonly IInvoiceExtractionService _extractionService;
+    private readonly ICurrentUserContext _currentUser;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     public CreatePurchaseInvoiceDraftFromImageHandler(
-        IApplicationDbContext context, IImageStorageService imageStorage, IInvoiceExtractionService extractionService)
+        IApplicationDbContext context, IImageStorageService imageStorage, IInvoiceExtractionService extractionService,
+        ICurrentUserContext currentUser, IDateTimeProvider dateTimeProvider)
     {
         _context = context;
         _imageStorage = imageStorage;
         _extractionService = extractionService;
+        _currentUser = currentUser;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<Result<CreatePurchaseInvoiceDraftFromImageResponse>> HandleAsync(
         CreatePurchaseInvoiceDraftFromImageCommand command, CancellationToken cancellationToken)
     {
+        if (command.PaidNowAmount is { } paidAmount)
+        {
+            if (paidAmount <= 0)
+            {
+                return Result.Failure<CreatePurchaseInvoiceDraftFromImageResponse>(
+                    Error.Validation("PurchaseInvoiceDraft.PaidNowAmountInvalid", "المبلغ المدفوع الآن يجب أن يكون موجبًا."));
+            }
+
+            if (command.PaidNowPaymentMethodId is null)
+            {
+                return Result.Failure<CreatePurchaseInvoiceDraftFromImageResponse>(
+                    Error.Validation("PurchaseInvoiceDraft.PaidNowMethodRequired", "حدّد طريقة الدفع لو دفعت مبلغًا الآن."));
+            }
+        }
+
         var branchExists = await _context.Branches.AsNoTracking().AnyAsync(b => b.Id == command.BranchId, cancellationToken);
         if (!branchExists)
         {
             return Result.Failure<CreatePurchaseInvoiceDraftFromImageResponse>(
                 Error.NotFound("PurchaseInvoiceDraft.BranchNotFound", $"الفرع '{command.BranchId}' غير موجود."));
+        }
+
+        PaymentMethod? paidNowMethod = null;
+        if (command.PaidNowPaymentMethodId is { } paidMethodId)
+        {
+            paidNowMethod = await _context.PaymentMethods.AsNoTracking()
+                .FirstOrDefaultAsync(pm => pm.Id == paidMethodId && pm.IsActive, cancellationToken);
+            if (paidNowMethod is null)
+            {
+                return Result.Failure<CreatePurchaseInvoiceDraftFromImageResponse>(
+                    Error.NotFound("PurchaseInvoiceDraft.PaidNowMethodNotFound", $"طريقة الدفع '{paidMethodId}' غير موجودة أو غير فعّالة."));
+            }
         }
 
         var storageResult = await _imageStorage.SaveAsWebPAsync(command.ImageBytes, cancellationToken);
@@ -119,9 +162,29 @@ public sealed class CreatePurchaseInvoiceDraftFromImageHandler
             extraction.InvoiceTotal,
             extraction.ExtractionConfidence,
             PurchaseInvoiceDraftItemsSerializer.SerializeWarnings(extraction.Warnings),
-            PurchaseInvoiceDraftItemsSerializer.Serialize(draftItems));
+            PurchaseInvoiceDraftItemsSerializer.Serialize(draftItems),
+            command.PaidNowAmount,
+            command.PaidNowPaymentMethodId);
 
         _context.PurchaseInvoiceDrafts.Add(draft);
+
+        // نفس مبدأ CompleteSaleCommand/RecordPurchaseInvoicePaymentCommand:
+        // نعتمد على AffectsCashDrawer (سلوك)، لا اسم/كود طريقة الدفع.
+        // هون بالذات الفرق الجوهري: الحركة تُكتب لحظة الرفع نفسها، لا
+        // لحظة اعتماد المراجع لاحقًا - لأنه الكاش طلع من الدرج فعليًا الآن.
+        if (paidNowMethod is { AffectsCashDrawer: true } && command.PaidNowAmount is { } cashOutAmount)
+        {
+            var actorUserId = _currentUser.UserId ?? Domain.Identity.User.SystemUserId;
+            _context.CashDrawerLogs.Add(new CashDrawerLog(
+                command.BranchId,
+                CashDrawerMovementType.PurchasePaymentCashOut,
+                cashOutAmount,
+                CashDrawerReferenceType.PurchaseInvoiceDraft,
+                draft.Id,
+                actorUserId,
+                _dateTimeProvider.UtcNow));
+        }
+
         await _context.SaveChangesAsync(cancellationToken);
 
         return Result.Success(new CreatePurchaseInvoiceDraftFromImageResponse(
@@ -136,7 +199,8 @@ public sealed class CreatePurchaseInvoiceDraftFromImageHandler
             extraction.InvoiceTotal,
             extraction.ExtractionConfidence,
             extraction.Warnings,
-            draftItems));
+            draftItems,
+            command.PaidNowAmount));
     }
 
     private static List<string> TokensOf(string rawName) =>

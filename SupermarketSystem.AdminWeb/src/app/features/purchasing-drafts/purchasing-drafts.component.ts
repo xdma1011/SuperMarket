@@ -5,7 +5,7 @@ import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
-import { PurchaseInvoiceDraftsOperation, BranchesOperation } from '../../core/api/operations';
+import { PurchaseInvoiceDraftsOperation, BranchesOperation, PaymentMethodsOperation } from '../../core/api/operations';
 
 interface PurchaseInvoiceDraftListItemDto {
   id: string;
@@ -17,10 +17,16 @@ interface PurchaseInvoiceDraftListItemDto {
   itemCount: number;
   unmatchedItemCount: number;
   status: number;
+  paidNowAmount: number | null;
   createdAtUtc: string;
 }
 
 interface BranchDto {
+  id: string;
+  name: string;
+}
+
+interface PaymentMethodDto {
   id: string;
   name: string;
 }
@@ -46,6 +52,7 @@ interface PagedResult<T> {
 export class PurchasingDraftsComponent implements OnInit {
   readonly drafts = signal<PurchaseInvoiceDraftListItemDto[]>([]);
   readonly branches = signal<BranchDto[]>([]);
+  readonly paymentMethods = signal<PaymentMethodDto[]>([]);
   readonly loading = signal(true);
   readonly errorMessage = signal<string | null>(null);
 
@@ -55,6 +62,9 @@ export class PurchasingDraftsComponent implements OnInit {
 
   selectedBranchId = '';
   selectedFile: File | null = null;
+  paidNow = false;
+  paidNowAmount: number | null = null;
+  paidNowPaymentMethodId = '';
 
   constructor(private readonly apiClient: ApiClient, private readonly router: Router) {}
 
@@ -67,20 +77,25 @@ export class PurchasingDraftsComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const [draftsResult, branchesResult] = await Promise.all([
+      const [draftsResult, branchesResult, paymentMethodsResult] = await Promise.all([
         firstValueFrom(
           this.apiClient.get<PagedResult<PurchaseInvoiceDraftListItemDto>>(
             ApiController.PurchaseInvoices, PurchaseInvoiceDraftsOperation.List, undefined, { pageSize: 100 })
         ),
         firstValueFrom(
           this.apiClient.get<PagedResult<BranchDto>>(ApiController.Branches, BranchesOperation.List, undefined, { pageSize: 500 })
-        )
+        ),
+        firstValueFrom(this.apiClient.get<PaymentMethodDto[]>(ApiController.PaymentMethods, PaymentMethodsOperation.List))
       ]);
 
       this.drafts.set(draftsResult.items);
       this.branches.set(branchesResult.items);
+      this.paymentMethods.set(paymentMethodsResult);
       if (branchesResult.items.length > 0 && !this.selectedBranchId) {
         this.selectedBranchId = branchesResult.items[0].id;
+      }
+      if (paymentMethodsResult.length > 0 && !this.paidNowPaymentMethodId) {
+        this.paidNowPaymentMethodId = paymentMethodsResult[0].id;
       }
     } catch {
       this.errorMessage.set('تعذّر تحميل مسودات فواتير الشراء.');
@@ -98,6 +113,8 @@ export class PurchasingDraftsComponent implements OnInit {
     this.uploadModalOpen.set(true);
     this.uploadError.set(null);
     this.selectedFile = null;
+    this.paidNow = false;
+    this.paidNowAmount = null;
   }
 
   closeUploadModal(): void {
@@ -115,6 +132,11 @@ export class PurchasingDraftsComponent implements OnInit {
       return;
     }
 
+    if (this.paidNow && (!this.paidNowAmount || this.paidNowAmount <= 0 || !this.paidNowPaymentMethodId)) {
+      this.uploadError.set('حدّد مبلغًا موجبًا وطريقة الدفع لو دفعت للمورد الآن.');
+      return;
+    }
+
     this.uploading.set(true);
     this.uploadError.set(null);
 
@@ -122,13 +144,19 @@ export class PurchasingDraftsComponent implements OnInit {
       const formData = new FormData();
       formData.append('file', this.selectedFile);
 
+      const queryParams: Record<string, string> = { branchId: this.selectedBranchId };
+      if (this.paidNow && this.paidNowAmount && this.paidNowPaymentMethodId) {
+        queryParams['paidNowAmount'] = String(this.paidNowAmount);
+        queryParams['paidNowPaymentMethodId'] = this.paidNowPaymentMethodId;
+      }
+
       const response = await firstValueFrom(
         this.apiClient.post<{ draftId: string }>(
           ApiController.PurchaseInvoices,
           PurchaseInvoiceDraftsOperation.CreateFromImage,
           formData,
           undefined,
-          { branchId: this.selectedBranchId }
+          queryParams
         )
       );
 

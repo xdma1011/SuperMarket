@@ -29,6 +29,28 @@
     </label>
   </div>
 
+  <label class="field checkbox-field">
+    <input type="checkbox" [(ngModel)]="paidNow" />
+    <span>دفعت للمورد كاش الآن (وقت الاستلام)</span>
+  </label>
+
+  @if (paidNow) {
+    <div class="modal-fields">
+      <label class="field">
+        <span>المبلغ المدفوع</span>
+        <input type="number" min="0.01" step="0.01" [(ngModel)]="paidNowAmount" />
+      </label>
+      <label class="field">
+        <span>طريقة الدفع</span>
+        <select [(ngModel)]="paidNowPaymentMethodId">
+          @for (m of paymentMethods(); track m.id) {
+            <option [value]="m.id">{{ m.name }}</option>
+          }
+        </select>
+      </label>
+    </div>
+  }
+
   <div class="modal-actions">
     <button type="button" class="btn-primary" [disabled]="uploading()" (click)="upload()">
       {{ uploading() ? 'جارٍ القراءة والرفع… (قد تستغرق لحظات)' : 'رفع وقراءة الفاتورة' }}

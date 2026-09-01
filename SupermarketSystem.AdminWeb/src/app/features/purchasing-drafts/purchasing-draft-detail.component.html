@@ -30,6 +30,12 @@
 @if (errorMessage()) {
   <div class="alert-banner">{{ errorMessage() }}</div>
 }
+@if (draft()?.paidNowAmount) {
+  <div class="alert-banner info">
+    ⚠ دُفع للمورد {{ draft()!.paidNowAmount | number: '1.2-2' }} ({{ paymentMethodNameOf(draft()!.paidNowPaymentMethodId) }}) وقت الرفع - مسجَّل أصلًا بدرج الكاش.
+    عند الاعتماد، هذا المبلغ يُسجَّل تلقائيًا كدفعة على الفاتورة - لا داعي لتسجيله يدويًا مرة ثانية.
+  </div>
+}
 
 @if (loading()) {
   <div class="no-results"><span class="no-results-sub">جارٍ التحميل…</span></div>

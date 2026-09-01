@@ -5,7 +5,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
-import { PurchaseInvoiceDraftsOperation, SuppliersOperation, ProductsOperation } from '../../core/api/operations';
+import { PurchaseInvoiceDraftsOperation, SuppliersOperation, ProductsOperation, PaymentMethodsOperation } from '../../core/api/operations';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../core/services/auth.service';
 
@@ -39,9 +39,16 @@ interface PurchaseInvoiceDraftDetailDto {
   items: PurchaseInvoiceDraftItemDto[];
   status: number;
   resultingPurchaseInvoiceId: string | null;
+  paidNowAmount: number | null;
+  paidNowPaymentMethodId: string | null;
 }
 
 interface SupplierDto {
+  id: string;
+  name: string;
+}
+
+interface PaymentMethodDto {
   id: string;
   name: string;
 }
@@ -83,6 +90,7 @@ interface EditableItem extends PurchaseInvoiceDraftItemDto {
 export class PurchasingDraftDetailComponent implements OnInit {
   readonly draft = signal<PurchaseInvoiceDraftDetailDto | null>(null);
   readonly suppliers = signal<SupplierDto[]>([]);
+  readonly paymentMethods = signal<PaymentMethodDto[]>([]);
   readonly imageUrl = signal<string | null>(null);
   readonly loading = signal(true);
   readonly errorMessage = signal<string | null>(null);
@@ -114,18 +122,20 @@ export class PurchasingDraftDetailComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const [draftResult, suppliersResult] = await Promise.all([
+      const [draftResult, suppliersResult, paymentMethodsResult] = await Promise.all([
         firstValueFrom(
           this.apiClient.get<PurchaseInvoiceDraftDetailDto>(
             ApiController.PurchaseInvoices, PurchaseInvoiceDraftsOperation.GetById, { draftId: this.draftId })
         ),
         firstValueFrom(
           this.apiClient.get<{ items: SupplierDto[] }>(ApiController.Suppliers, SuppliersOperation.List, undefined, { pageSize: 500 })
-        )
+        ),
+        firstValueFrom(this.apiClient.get<PaymentMethodDto[]>(ApiController.PaymentMethods, PaymentMethodsOperation.List))
       ]);
 
       this.draft.set(draftResult);
       this.suppliers.set(suppliersResult.items);
+      this.paymentMethods.set(paymentMethodsResult);
       this.matchedSupplierId = draftResult.matchedSupplierId ?? '';
       this.supplierInvoiceReference = draftResult.supplierInvoiceReference ?? '';
       this.items = draftResult.items.map(i => ({
@@ -159,6 +169,11 @@ export class PurchasingDraftDetailComponent implements OnInit {
 
   supplierNameOf(id: string): string {
     return this.suppliers().find(s => s.id === id)?.name ?? '—';
+  }
+
+  paymentMethodNameOf(id: string | null): string {
+    if (!id) return '—';
+    return this.paymentMethods().find(m => m.id === id)?.name ?? '—';
   }
 
   get unmatchedCount(): number {

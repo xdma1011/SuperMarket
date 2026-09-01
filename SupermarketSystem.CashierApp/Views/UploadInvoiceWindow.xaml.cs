@@ -13,6 +13,11 @@ namespace SupermarketSystem.CashierApp.Views;
 /// صاحب المشروع: "الكاشير يقدر يضيفها بس بلا قبول أو موافقة"). المسح
 /// الضوئي اختياري بالكامل - لو ما في سكانر متصل، يبقى "اختيار ملف" (يشمل
 /// صور محوّلة من الموبايل لهالجهاز) الطريقة العادية.
+///
+/// خانة "دفعت الآن" اختيارية - لو الكاشير سلّم كاش فعليًا للمورد لحظة
+/// الاستلام، المبلغ ينكتب فورًا بدرج الكاش (لا ينتظر مراجعة لاحقة) - هذا
+/// يحل مشكلة توقيت حقيقية بتقفيل الصندوق اليومي (راجع نقاش صاحب
+/// المشروع).
 /// </summary>
 public partial class UploadInvoiceWindow : Window
 {
@@ -35,6 +40,23 @@ public partial class UploadInvoiceWindow : Window
             BrowseButton.IsEnabled = false;
             ScanButton.IsEnabled = false;
         }
+
+        _ = LoadPaymentMethodsAsync();
+    }
+
+    private async Task LoadPaymentMethodsAsync()
+    {
+        var methods = await _apiClient.GetPaymentMethodsAsync(CancellationToken.None);
+        PaymentMethodComboBox.ItemsSource = methods;
+        if (methods.Count > 0)
+        {
+            PaymentMethodComboBox.SelectedIndex = 0;
+        }
+    }
+
+    private void PaidNowCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        PaidNowFieldsGrid.Visibility = PaidNowCheckBox.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void BrowseButton_Click(object sender, RoutedEventArgs e)
@@ -113,18 +135,44 @@ public partial class UploadInvoiceWindow : Window
             return;
         }
 
+        decimal? paidNowAmount = null;
+        Guid? paidNowPaymentMethodId = null;
+
+        if (PaidNowCheckBox.IsChecked == true)
+        {
+            if (!decimal.TryParse(PaidNowAmountText.Text, out var amount) || amount <= 0)
+            {
+                StatusText.Text = "أدخل مبلغًا موجبًا صحيحًا لخانة \"دفعت الآن\".";
+                return;
+            }
+
+            if (PaymentMethodComboBox.SelectedItem is not PaymentMethodDto selectedMethod)
+            {
+                StatusText.Text = "اختر طريقة الدفع لخانة \"دفعت الآن\".";
+                return;
+            }
+
+            paidNowAmount = amount;
+            paidNowPaymentMethodId = selectedMethod.Id;
+        }
+
         UploadButton.IsEnabled = false;
         BrowseButton.IsEnabled = false;
         ScanButton.IsEnabled = false;
         StatusText.Text = "جارٍ الرفع والقراءة الآلية… قد تستغرق لحظات.";
 
         var result = await _apiClient.UploadPurchaseInvoiceDraftAsync(
-            _branchId.Value, _selectedImageBytes, _selectedFileName, _selectedContentType, CancellationToken.None);
+            _branchId.Value, _selectedImageBytes, _selectedFileName, _selectedContentType,
+            paidNowAmount, paidNowPaymentMethodId, CancellationToken.None);
 
         if (result.Success)
         {
-            StatusText.Text = "تم رفع الفاتورة وقراءتها - بانتظار مراجعة الإدارة قبل اعتمادها.";
+            StatusText.Text = paidNowAmount is not null
+                ? "تم رفع الفاتورة وقراءتها، وسُجّل المبلغ المدفوع بدرج الكاش فورًا - بانتظار مراجعة الإدارة."
+                : "تم رفع الفاتورة وقراءتها - بانتظار مراجعة الإدارة قبل اعتمادها.";
             _selectedImageBytes = null;
+            PaidNowCheckBox.IsChecked = false;
+            PaidNowAmountText.Text = string.Empty;
         }
         else
         {

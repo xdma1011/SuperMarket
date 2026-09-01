@@ -21,6 +21,8 @@ public static class PurchaseInvoiceDraftEndpoints
         app.MapPost("/api/v1/purchase-invoices/drafts/from-image", async (
             IFormFile file,
             Guid branchId,
+            decimal? paidNowAmount,
+            Guid? paidNowPaymentMethodId,
             CreatePurchaseInvoiceDraftFromImageHandler handler,
             CancellationToken cancellationToken) =>
         {
@@ -37,7 +39,8 @@ public static class PurchaseInvoiceDraftEndpoints
             }
 
             var result = await handler.HandleAsync(
-                new CreatePurchaseInvoiceDraftFromImageCommand(branchId, imageBytes, file.ContentType), cancellationToken);
+                new CreatePurchaseInvoiceDraftFromImageCommand(branchId, imageBytes, file.ContentType, paidNowAmount, paidNowPaymentMethodId),
+                cancellationToken);
 
             return result.ToHttpResult(response =>
                 Results.Created($"/api/v1/purchase-invoices/drafts/{response.DraftId}", response));

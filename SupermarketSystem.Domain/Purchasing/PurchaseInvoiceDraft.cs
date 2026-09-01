@@ -39,6 +39,19 @@ public class PurchaseInvoiceDraft : AuditableEntity, IBranchOwned
     public PurchaseInvoiceDraftStatus Status { get; private set; }
     public Guid? ResultingPurchaseInvoiceId { get; private set; }
 
+    /// <summary>
+    /// كاش (أو أي طريقة دفع تؤثر على الدرج) دُفع فعليًا للمورد لحظة
+    /// استلام البضاعة، قبل أي مراجعة - غير قابل للتعديل بعد الإنشاء
+    /// عمدًا (لو تغيّر فعليًا، الكاش أصلًا طلع من الدرج، ما في "تراجع").
+    /// حركة CashDrawerLog تُكتب فورًا لحظة الرفع (راجع
+    /// CreatePurchaseInvoiceDraftFromImageCommand) - هذا الحقلان هون بس
+    /// أرشيف يخلي CompletePurchaseInvoiceDraftHandler يعرف يربط دفعة
+    /// PurchaseInvoicePayment رسمية بالفاتورة النهائية بلا ما يكرّر
+    /// حركة الدرج (مسجَّلة أصلًا).
+    /// </summary>
+    public decimal? PaidNowAmount { get; private set; }
+    public Guid? PaidNowPaymentMethodId { get; private set; }
+
     public byte[]? RowVersion { get; private set; }
 
     private PurchaseInvoiceDraft() { } // EF Core
@@ -55,7 +68,9 @@ public class PurchaseInvoiceDraft : AuditableEntity, IBranchOwned
         decimal? extractedInvoiceTotal,
         string? extractionConfidence,
         string? warningsText,
-        string itemsJson)
+        string itemsJson,
+        decimal? paidNowAmount,
+        Guid? paidNowPaymentMethodId)
     {
         BranchId = branchId;
         ImageReference = imageReference;
@@ -69,6 +84,8 @@ public class PurchaseInvoiceDraft : AuditableEntity, IBranchOwned
         ExtractionConfidence = extractionConfidence;
         WarningsText = warningsText;
         ItemsJson = itemsJson;
+        PaidNowAmount = paidNowAmount;
+        PaidNowPaymentMethodId = paidNowPaymentMethodId;
         Status = PurchaseInvoiceDraftStatus.PendingReview;
     }
 

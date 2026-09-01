@@ -23,6 +23,7 @@
           <th>غير مطابَقة</th>
           <th>المزوّد</th>
           <th>الثقة</th>
+          <th>مدفوع الآن</th>
           <th>التاريخ</th>
           <th></th>
         </tr>
@@ -48,6 +49,13 @@
             </td>
             <td>{{ d.providerName || '—' }}</td>
             <td>{{ d.extractionConfidence || '—' }}</td>
+            <td class="mono">
+              @if (d.paidNowAmount) {
+                <span class="paid-chip">{{ d.paidNowAmount | number: '1.2-2' }}</span>
+              } @else {
+                —
+              }
+            </td>
             <td class="mono">{{ d.createdAtUtc | date: 'yyyy-MM-dd HH:mm' }}</td>
             <td>
               <button type="button" class="link-btn" (click)="openDraft(d)">مراجعة</button>
@@ -101,6 +109,28 @@
           <input type="file" accept="image/*" (change)="onFileSelected($event)" />
         </label>
       </div>
+
+      <label class="field checkbox-field">
+        <input type="checkbox" [(ngModel)]="paidNow" />
+        <span>دفعت للمورد كاش الآن (وقت الاستلام)</span>
+      </label>
+
+      @if (paidNow) {
+        <div class="modal-fields">
+          <label class="field">
+            <span>المبلغ المدفوع</span>
+            <input type="number" min="0.01" step="0.01" [(ngModel)]="paidNowAmount" />
+          </label>
+          <label class="field">
+            <span>طريقة الدفع</span>
+            <select [(ngModel)]="paidNowPaymentMethodId">
+              @for (m of paymentMethods(); track m.id) {
+                <option [value]="m.id">{{ m.name }}</option>
+              }
+            </select>
+          </label>
+        </div>
+      }
 
       <div class="modal-actions">
         <button type="button" class="btn-primary" [disabled]="uploading()" (click)="upload()">

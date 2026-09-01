@@ -21,7 +21,9 @@ public sealed record PurchaseInvoiceDraftDetailDto(
     IReadOnlyList<string> Warnings,
     IReadOnlyList<PurchaseInvoiceDraftItemDto> Items,
     int Status,
-    Guid? ResultingPurchaseInvoiceId);
+    Guid? ResultingPurchaseInvoiceId,
+    decimal? PaidNowAmount,
+    Guid? PaidNowPaymentMethodId);
 
 public sealed class GetPurchaseInvoiceDraftByIdHandler
 {
@@ -59,6 +61,8 @@ public sealed class GetPurchaseInvoiceDraftByIdHandler
             PurchaseInvoiceDraftItemsSerializer.DeserializeWarnings(draft.WarningsText),
             PurchaseInvoiceDraftItemsSerializer.Deserialize(draft.ItemsJson),
             (int)draft.Status,
-            draft.ResultingPurchaseInvoiceId));
+            draft.ResultingPurchaseInvoiceId,
+            draft.PaidNowAmount,
+            draft.PaidNowPaymentMethodId));
     }
 }

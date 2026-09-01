@@ -44,7 +44,16 @@ public enum CashDrawerReferenceType
     CashClosing = 4,
 
     /// <summary>يشير لدفعة PurchaseInvoicePayment محدَّدة، نفس مبدأ SaleInvoicePayment - المرجع سطر الدفعة، لا رأس الفاتورة.</summary>
-    PurchaseInvoicePayment = 5
+    PurchaseInvoicePayment = 5,
+
+    /// <summary>
+    /// كاش دُفع فعليًا لمورد لحظة استلام بضاعة بمسودة فاتورة (AI) لسا
+    /// بانتظار مراجعة - قبل ما يصير فيه PurchaseInvoicePayment حقيقي
+    /// أصلًا. يحل مشكلة توقيت حقيقية: الكاش بيطلع من الدرج بلحظة
+    /// الاستلام، مش بلحظة اعتماد المراجع للمسودة (اللي ممكن تصير بعد
+    /// يوم أو أكتر).
+    /// </summary>
+    PurchaseInvoiceDraft = 6
 }
 
 /// <summary>
