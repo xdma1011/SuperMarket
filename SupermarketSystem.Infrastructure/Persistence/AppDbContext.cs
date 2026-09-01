@@ -77,6 +77,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<PurchaseInvoice> PurchaseInvoices => Set<PurchaseInvoice>();
     public DbSet<PurchaseInvoicePayment> PurchaseInvoicePayments => Set<PurchaseInvoicePayment>();
     public DbSet<PurchaseInvoiceItem> PurchaseInvoiceItems => Set<PurchaseInvoiceItem>();
+    public DbSet<PurchaseInvoiceDraft> PurchaseInvoiceDrafts => Set<PurchaseInvoiceDraft>();
 
     // Sales
     public DbSet<SaleInvoice> SaleInvoices => Set<SaleInvoice>();

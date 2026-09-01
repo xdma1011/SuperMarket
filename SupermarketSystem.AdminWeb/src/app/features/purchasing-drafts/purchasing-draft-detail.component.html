@@ -1,0 +1,145 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">المشتريات / مسودات الذكاء الاصطناعي / مراجعة</span>
+    <h1>مراجعة مسودة فاتورة</h1>
+    @if (draft(); as d) {
+      <span class="subtitle">
+        قُرئت عبر {{ d.providerName || '—' }} - الثقة: {{ d.extractionConfidence || '—' }}
+        @if (unmatchedCount > 0) {
+          - <strong>{{ unmatchedCount }}</strong> صنف بانتظار مطابقة يدوية
+        }
+      </span>
+    }
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn-outline" [disabled]="discarding()" (click)="discard()">
+      {{ discarding() ? 'جارٍ التجاهل…' : 'تجاهل المسودة' }}
+    </button>
+    <button type="button" class="btn-outline" [disabled]="saving()" (click)="save()">
+      {{ saving() ? 'جارٍ الحفظ…' : 'حفظ التعديلات' }}
+    </button>
+    <button type="button" class="btn-primary" [disabled]="completing() || unmatchedCount > 0 || !matchedSupplierId" (click)="complete()">
+      {{ completing() ? 'جارٍ الاعتماد…' : 'اعتماد الفاتورة' }}
+    </button>
+  </div>
+</div>
+
+@if (actionMessage()) {
+  <div class="alert-banner success">{{ actionMessage() }}</div>
+}
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+@if (loading()) {
+  <div class="no-results"><span class="no-results-sub">جارٍ التحميل…</span></div>
+}
+
+@if (!loading() && draft(); as d) {
+  <div class="draft-layout">
+    <div class="draft-image-panel">
+      @if (imageUrl()) {
+        <img [src]="imageUrl()" alt="صورة الفاتورة" />
+      } @else {
+        <div class="no-results"><span class="no-results-sub">تعذّر تحميل الصورة</span></div>
+      }
+      @if (d.warnings.length > 0) {
+        <div class="warnings-box">
+          <strong>ملاحظات القراءة الآلية:</strong>
+          <ul>
+            @for (w of d.warnings; track w) {
+              <li>{{ w }}</li>
+            }
+          </ul>
+        </div>
+      }
+    </div>
+
+    <div class="draft-form-panel">
+      <div class="modal-fields">
+        <label class="field">
+          <span>المورد {{ d.rawSupplierName ? '(AI قرأ: ' + d.rawSupplierName + ')' : '' }}</span>
+          <select [(ngModel)]="matchedSupplierId">
+            <option value="">— اختر المورد —</option>
+            @for (s of suppliers(); track s.id) {
+              <option [value]="s.id">{{ s.name }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span>مرجع فاتورة المورد</span>
+          <input type="text" [(ngModel)]="supplierInvoiceReference" />
+        </label>
+      </div>
+
+      <div class="lines-table drafts">
+        <div class="lines-head drafts">
+          <span>الصنف (كما قرأه AI)</span>
+          <span>المطابقة</span>
+          <span>كمية</span>
+          <span>تكلفة</span>
+          <span></span>
+        </div>
+
+        @for (item of items; track $index) {
+          <div class="lines-row drafts">
+            <span>
+              {{ item.rawProductName }}
+              @if (item.unitOfMeasure) {
+                <span class="raw-unit">({{ item.unitOfMeasure }})</span>
+              }
+            </span>
+
+            <span class="match-cell">
+              @if (item.matchedProductId) {
+                <span class="paid-chip">{{ item.matchedProductName }}</span>
+                <button type="button" class="link-btn" (click)="clearMatch(item)">تغيير</button>
+              } @else {
+                <div class="match-search">
+                  <input
+                    type="text"
+                    placeholder="ابحث بالاسم…"
+                    [(ngModel)]="item.searchTerm"
+                    (ngModelChange)="searchProduct(item)"
+                  />
+                  <input
+                    type="text"
+                    placeholder="أو الباركود…"
+                    [(ngModel)]="item.barcodeInput"
+                    (keydown.enter)="searchBarcode(item)"
+                  />
+                  <button type="button" class="btn-outline small" (click)="searchBarcode(item)">بحث</button>
+                </div>
+                @if (item.searchResults.length > 0) {
+                  <ul class="search-dropdown">
+                    @for (p of item.searchResults; track p.id) {
+                      <li (click)="selectProduct(item, p)">{{ p.name }}</li>
+                    }
+                  </ul>
+                }
+              }
+            </span>
+
+            <input type="number" [(ngModel)]="item.quantity" min="0" step="0.01" />
+            <input type="number" [(ngModel)]="item.unitCost" min="0" step="0.01" />
+
+            <span></span>
+          </div>
+
+          @if (item.matchedProductId && item.isBatchTracked) {
+            <div class="lines-row" style="grid-template-columns: 1fr 1fr; gap: 8px; padding-inline-start: 12px;">
+              <label class="field">
+                <span>رقم الدفعة (مطلوب)</span>
+                <input type="text" [(ngModel)]="item.newBatchNumber" placeholder="مثال: B-2026-001" />
+              </label>
+              <label class="field">
+                <span>تاريخ الصلاحية (اختياري)</span>
+                <input type="date" [(ngModel)]="item.newBatchExpiryDate" />
+              </label>
+            </div>
+          }
+        }
+      </div>
+    </div>
+  </div>
+}

@@ -112,7 +112,7 @@ app.MapBranchEndpoints();
 app.MapCatalogEndpoints();
 app.MapSupplierEndpoints();
 app.MapPurchasingEndpoints();
-app.MapInvoiceOcrEndpoints();
+app.MapPurchaseInvoiceDraftEndpoints();
 app.MapSalesEndpoints();
 app.MapReturnEndpoints();
 app.MapCashManagementEndpoints();

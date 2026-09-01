@@ -34,6 +34,23 @@ export const routes: Routes = [
         loadComponent: () => import('./features/purchasing/purchasing.component').then(m => m.PurchasingComponent)
       },
       {
+        path: 'purchases/upload-invoice',
+        canActivate: [requirePermissionGuard('Purchasing.CreateDraft')],
+        loadComponent: () =>
+          import('./features/purchasing-drafts/upload-invoice-image.component').then(m => m.UploadInvoiceImageComponent)
+      },
+      {
+        path: 'purchases/drafts',
+        canActivate: [requirePermissionGuard('Purchasing.Create')],
+        loadComponent: () => import('./features/purchasing-drafts/purchasing-drafts.component').then(m => m.PurchasingDraftsComponent)
+      },
+      {
+        path: 'purchases/drafts/:id',
+        canActivate: [requirePermissionGuard('Purchasing.Create')],
+        loadComponent: () =>
+          import('./features/purchasing-drafts/purchasing-draft-detail.component').then(m => m.PurchasingDraftDetailComponent)
+      },
+      {
         path: 'catalog',
         canActivate: [requirePermissionGuard('Catalog.Manage')],
         loadComponent: () => import('./features/catalog/catalog.component').then(m => m.CatalogComponent)

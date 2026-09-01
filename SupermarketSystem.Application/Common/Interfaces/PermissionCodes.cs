@@ -13,6 +13,8 @@ public static class PermissionCodes
     public const string ReturnsProcess = "Returns.Process";
     public const string ReturnsReview = "Returns.Review";
     public const string PurchasingCreate = "Purchasing.Create";
+    /// <summary>رفع فاتورة عبر قراءة ذكاء اصطناعي وحفظها كمسودة بانتظار مراجعة - أضعف من PurchasingCreate عمدًا (بدون موافقة/اعتماد)، يُمنح افتراضيًا حتى لدور الكاشير.</summary>
+    public const string PurchasingCreateDraft = "Purchasing.CreateDraft";
     public const string CatalogManage = "Catalog.Manage";
     public const string SuppliersManage = "Suppliers.Manage";
     public const string BranchesManage = "Branches.Manage";
@@ -31,16 +33,21 @@ public static class PermissionCodes
     public static readonly IReadOnlyList<string> All = new[]
     {
         CrossBranchAccess, SalesCreate, SalesVoid, ReturnsProcess, ReturnsReview,
-        PurchasingCreate, CatalogManage, SuppliersManage, BranchesManage,
+        PurchasingCreate, PurchasingCreateDraft, CatalogManage, SuppliersManage, BranchesManage,
         StocktakeManage, StocktakeApprove, CashClosingManage, ReportsView,
         BackupsManage, SessionsManage, NotificationsView, UsersManage, ComplimentaryIssue,
         SystemSettingsManage
     };
 
-    /// <summary>صلاحيات دور "كاشير" — شغل البيع اليومي بس، بلا أي إدارة.</summary>
+    /// <summary>
+    /// صلاحيات دور "كاشير" — شغل البيع اليومي بس، بلا أي إدارة. PurchasingCreateDraft
+    /// مضافة عمدًا: الكاشير يقدر يرفع صورة فاتورة ويحفظها كمسودة بانتظار
+    /// مراجعة، بس ما يقدر يعتمدها فعليًا (PurchasingCreate) إلا لو انضافت
+    /// له صراحة.
+    /// </summary>
     public static readonly IReadOnlyList<string> CashierDefaults = new[]
     {
-        SalesCreate, SalesVoid, ReturnsProcess, NotificationsView
+        SalesCreate, SalesVoid, ReturnsProcess, NotificationsView, PurchasingCreateDraft
     };
 
     /// <summary>
@@ -50,7 +57,7 @@ public static class PermissionCodes
     /// </summary>
     public static readonly IReadOnlyList<string> AssistantAdminDefaults = new[]
     {
-        SalesCreate, SalesVoid, ReturnsProcess, ReturnsReview, PurchasingCreate,
+        SalesCreate, SalesVoid, ReturnsProcess, ReturnsReview, PurchasingCreate, PurchasingCreateDraft,
         CatalogManage, SuppliersManage, StocktakeManage, StocktakeApprove,
         CashClosingManage, ReportsView, NotificationsView
     };

@@ -1,0 +1,113 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">المشتريات / مسودات الذكاء الاصطناعي</span>
+    <h1>مسودات فواتير الشراء (AI)</h1>
+    <span class="subtitle">صور فواتير تمت قراءتها آليًا، بانتظار مراجعة ومطابقة قبل اعتمادها كفاتورة شراء فعلية.</span>
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn-primary" (click)="openUploadModal()">إضافة عبر الذكاء الاصطناعي</button>
+  </div>
+</div>
+
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<section class="table-panel">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>المورد (كما قرأه AI)</th>
+          <th>عدد الأسطر</th>
+          <th>غير مطابَقة</th>
+          <th>المزوّد</th>
+          <th>الثقة</th>
+          <th>التاريخ</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (d of drafts(); track d.id) {
+          <tr>
+            <td>
+              {{ d.rawSupplierName || '—' }}
+              @if (d.matchedSupplierId) {
+                <span class="status-chip">مطابَق</span>
+              } @else {
+                <span class="status-chip inactive">غير مطابَق</span>
+              }
+            </td>
+            <td class="mono">{{ d.itemCount }}</td>
+            <td class="mono">
+              @if (d.unmatchedItemCount > 0) {
+                <span class="debt-chip">{{ d.unmatchedItemCount }}</span>
+              } @else {
+                <span class="paid-chip">0</span>
+              }
+            </td>
+            <td>{{ d.providerName || '—' }}</td>
+            <td>{{ d.extractionConfidence || '—' }}</td>
+            <td class="mono">{{ d.createdAtUtc | date: 'yyyy-MM-dd HH:mm' }}</td>
+            <td>
+              <button type="button" class="link-btn" (click)="openDraft(d)">مراجعة</button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (!loading() && drafts().length === 0) {
+      <div class="no-results">
+        <span class="no-results-title">لا توجد مسودات بانتظار المراجعة</span>
+        <span class="no-results-sub">اضغط "إضافة عبر الذكاء الاصطناعي" وارفع صورة فاتورة.</span>
+      </div>
+    }
+
+    @if (loading()) {
+      <div class="no-results">
+        <span class="no-results-sub">جارٍ التحميل…</span>
+      </div>
+    }
+  </div>
+</section>
+
+@if (uploadModalOpen()) {
+  <div class="modal-backdrop" (click)="closeUploadModal()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div class="modal-title-group">
+          <h2>إضافة فاتورة عبر الذكاء الاصطناعي</h2>
+          <span class="modal-hint">يقرأ الصورة آليًا ويحفظها كمسودة بانتظار مراجعتك.</span>
+        </div>
+        <button type="button" class="icon-btn" (click)="closeUploadModal()" aria-label="إغلاق">×</button>
+      </div>
+
+      @if (uploadError()) {
+        <p class="form-error">{{ uploadError() }}</p>
+      }
+
+      <div class="modal-fields">
+        <label class="field">
+          <span>الفرع</span>
+          <select [(ngModel)]="selectedBranchId">
+            @for (b of branches(); track b.id) {
+              <option [value]="b.id">{{ b.name }}</option>
+            }
+          </select>
+        </label>
+        <label class="field" style="grid-column: span 2">
+          <span>صورة الفاتورة</span>
+          <input type="file" accept="image/*" (change)="onFileSelected($event)" />
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" [disabled]="uploading()" (click)="upload()">
+          {{ uploading() ? 'جارٍ القراءة والرفع… (قد تستغرق لحظات)' : 'قراءة الفاتورة' }}
+        </button>
+        <button type="button" class="btn-ghost" (click)="closeUploadModal()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+}

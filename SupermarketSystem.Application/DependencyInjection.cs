@@ -50,6 +50,7 @@ using SupermarketSystem.Application.Purchasing.GetPurchaseInvoices;
 using SupermarketSystem.Application.Purchasing.CreateSupplier;
 using SupermarketSystem.Application.Purchasing.GetSupplierDebts;
 using SupermarketSystem.Application.Purchasing.GetSuppliers;
+using SupermarketSystem.Application.Purchasing.PurchaseInvoiceDrafts;
 using SupermarketSystem.Application.Purchasing.RecordPurchaseInvoicePayment;
 using SupermarketSystem.Application.Reviews.GetPendingReviews;
 using SupermarketSystem.Application.Reviews.MarkStockMovementReviewed;
@@ -136,6 +137,13 @@ public static class DependencyInjection
         services.AddScoped<CompletePurchaseInvoiceHandler>();
         services.AddScoped<GetPaymentMethodsHandler>();
         services.AddScoped<GetPurchaseInvoicesHandler>();
+        services.AddScoped<CreatePurchaseInvoiceDraftFromImageHandler>();
+        services.AddScoped<GetPurchaseInvoiceDraftsHandler>();
+        services.AddScoped<GetPurchaseInvoiceDraftByIdHandler>();
+        services.AddScoped<UpdatePurchaseInvoiceDraftHandler>();
+        services.AddScoped<CompletePurchaseInvoiceDraftHandler>();
+        services.AddScoped<DiscardPurchaseInvoiceDraftHandler>();
+        services.AddScoped<GetPurchaseInvoiceDraftImagePathHandler>();
 
         services.AddScoped<CompleteSaleHandler>();
         services.AddScoped<VoidSaleHandler>();

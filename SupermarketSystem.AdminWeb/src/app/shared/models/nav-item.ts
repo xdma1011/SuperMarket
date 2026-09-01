@@ -14,6 +14,8 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'returns', label: 'الإرجاعات', route: '/returns', requiredPermission: 'Returns.Process' },
   { id: 'reviews', label: 'المراجعات', route: '/reviews', requiredPermission: 'Returns.Review' },
   { id: 'purchases', label: 'المشتريات', route: '/purchases', requiredPermission: 'Purchasing.Create' },
+  { id: 'purchases-drafts', label: 'مسودات AI للمراجعة', route: '/purchases/drafts', requiredPermission: 'Purchasing.Create' },
+  { id: 'upload-invoice', label: 'رفع فاتورة (AI)', route: '/purchases/upload-invoice', requiredPermission: 'Purchasing.CreateDraft' },
   { id: 'complimentary', label: 'الضيافة', route: '/complimentary', requiredPermission: 'Inventory.ComplimentaryIssue' },
   { id: 'catalog', label: 'الكتالوج', route: '/catalog', requiredPermission: 'Catalog.Manage' },
   { id: 'current-stock', label: 'المخزون الحالي', route: '/current-stock', requiredPermission: 'Reports.View' },

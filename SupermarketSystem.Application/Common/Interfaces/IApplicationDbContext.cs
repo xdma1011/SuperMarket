@@ -65,6 +65,7 @@ public interface IApplicationDbContext
     DbSet<PurchaseInvoice> PurchaseInvoices { get; }
     DbSet<PurchaseInvoicePayment> PurchaseInvoicePayments { get; }
     DbSet<PurchaseInvoiceItem> PurchaseInvoiceItems { get; }
+    DbSet<PurchaseInvoiceDraft> PurchaseInvoiceDrafts { get; }
 
     // Sales
     DbSet<SaleInvoice> SaleInvoices { get; }

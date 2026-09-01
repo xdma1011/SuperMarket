@@ -35,8 +35,16 @@ export class ApiClient {
     });
   }
 
-  post<T>(controller: ApiController, operation: string, body: unknown = {}, routeParams?: RouteParams): Observable<T> {
-    return this.http.post<T>(this.buildUrl(controller, operation, routeParams), body);
+  post<T>(
+    controller: ApiController,
+    operation: string,
+    body: unknown = {},
+    routeParams?: RouteParams,
+    queryParams?: QueryParams
+  ): Observable<T> {
+    return this.http.post<T>(this.buildUrl(controller, operation, routeParams), body, {
+      params: this.buildHttpParams(queryParams)
+    });
   }
 
   put<T>(controller: ApiController, operation: string, body: unknown = {}, routeParams?: RouteParams): Observable<T> {

@@ -1,0 +1,37 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">المشتريات / رفع فاتورة</span>
+    <h1>رفع فاتورة عبر الذكاء الاصطناعي</h1>
+    <span class="subtitle">صوّر الفاتورة وارفعها - تُقرأ آليًا وتُحفظ كمسودة بانتظار مراجعة الإدارة واعتمادها.</span>
+  </div>
+</div>
+
+@if (successMessage()) {
+  <div class="alert-banner success">{{ successMessage() }}</div>
+}
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<section class="table-panel upload-panel">
+  <div class="modal-fields">
+    <label class="field">
+      <span>الفرع</span>
+      <select [(ngModel)]="selectedBranchId">
+        @for (b of branches(); track b.id) {
+          <option [value]="b.id">{{ b.name }}</option>
+        }
+      </select>
+    </label>
+    <label class="field" style="grid-column: span 2">
+      <span>صورة الفاتورة</span>
+      <input type="file" accept="image/*" (change)="onFileSelected($event)" />
+    </label>
+  </div>
+
+  <div class="modal-actions">
+    <button type="button" class="btn-primary" [disabled]="uploading()" (click)="upload()">
+      {{ uploading() ? 'جارٍ القراءة والرفع… (قد تستغرق لحظات)' : 'رفع وقراءة الفاتورة' }}
+    </button>
+  </div>
+</section>

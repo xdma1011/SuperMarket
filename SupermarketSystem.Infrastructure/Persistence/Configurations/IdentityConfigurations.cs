@@ -272,6 +272,14 @@ public class PermissionConfiguration : IEntityTypeConfiguration<Permission>
             Description = "View and change sensitive POS/inventory toggle settings (void/return/discount limits, etc.).",
             CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });
+        builder.HasData(new
+        {
+            Id = Guid.Parse("2a4f7c1e-9b3d-4e5a-8c6f-1d2e3a4b5c6d"),
+            Code = "Purchasing.CreateDraft",
+            Name = "Create AI-extracted purchase invoice drafts",
+            Description = "Upload a purchase invoice image, run AI extraction, and save the result as a draft pending review - does not create or approve a real purchase invoice.",
+            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+        });
     }
 }
 
@@ -413,6 +421,14 @@ public class RolePermissionConfiguration : IEntityTypeConfiguration<RolePermissi
             PermissionId = Guid.Parse("6b1f4a8d-2c77-4e0a-9c5a-1f6e0d3a7b2c")
         });
 
+        // Master Admin -> الصلاحية الجديدة (Purchasing.CreateDraft)
+        builder.HasData(new
+        {
+            Id = Guid.Parse("8f3a2c1d-6e4b-4a5c-9d7e-3b1f2a4c5d6e"),
+            RoleId = Guid.Parse("50e6125a-cac0-4d82-a0b8-9f3c6fff59d7"),
+            PermissionId = Guid.Parse("2a4f7c1e-9b3d-4e5a-8c6f-1d2e3a4b5c6d")
+        });
+
         // Seed: ربط دور كاشير بصلاحياته (PermissionCodes.CashierDefaults).
         builder.HasData(new
         {
@@ -437,6 +453,12 @@ public class RolePermissionConfiguration : IEntityTypeConfiguration<RolePermissi
             Id = Guid.Parse("a1196dff-6fd2-4dfd-b3be-7da022bb309d"),
             RoleId = Guid.Parse("f3b401c7-84f6-4a0f-9f17-b689979c5d8c"),
             PermissionId = Guid.Parse("526311ff-3ca8-4533-b4f4-5ae6f375c14c")
+        });
+        builder.HasData(new
+        {
+            Id = Guid.Parse("1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f"),
+            RoleId = Guid.Parse("f3b401c7-84f6-4a0f-9f17-b689979c5d8c"),
+            PermissionId = Guid.Parse("2a4f7c1e-9b3d-4e5a-8c6f-1d2e3a4b5c6d")
         });
 
         // Seed: ربط دور مساعد أدمن بصلاحياته (PermissionCodes.AssistantAdminDefaults).
@@ -511,6 +533,12 @@ public class RolePermissionConfiguration : IEntityTypeConfiguration<RolePermissi
             Id = Guid.Parse("055aae7f-b0f9-48b4-986a-e94a834ef7aa"),
             RoleId = Guid.Parse("5d0b3578-417e-4706-ab9b-fc9a208b6642"),
             PermissionId = Guid.Parse("526311ff-3ca8-4533-b4f4-5ae6f375c14c")
+        });
+        builder.HasData(new
+        {
+            Id = Guid.Parse("9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d"),
+            RoleId = Guid.Parse("5d0b3578-417e-4706-ab9b-fc9a208b6642"),
+            PermissionId = Guid.Parse("2a4f7c1e-9b3d-4e5a-8c6f-1d2e3a4b5c6d")
         });
     }
 }
