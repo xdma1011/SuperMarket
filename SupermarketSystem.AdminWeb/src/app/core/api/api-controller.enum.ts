@@ -21,5 +21,6 @@ export enum ApiController {
   Sales = 'sales',
   Stocktakes = 'stocktakes',
   Suppliers = 'suppliers',
+  System = 'system',
   Users = 'users'
 }

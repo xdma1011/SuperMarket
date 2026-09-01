@@ -1,0 +1,68 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">النظام / الإعدادات الحسّاسة</span>
+    <h1>إعدادات العمليات الحسّاسة</h1>
+    <span class="subtitle">تشغيل أو إيقاف عمليات مثل إلغاء البيع، الإرجاع، الخصم اليدوي، والضيافة.</span>
+  </div>
+</div>
+
+@if (actionMessage()) {
+  <div class="alert-banner success">{{ actionMessage() }}</div>
+}
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<section class="table-panel">
+  <div class="settings-list">
+    @for (setting of settings(); track setting.key) {
+      <div class="setting-row">
+        <div class="setting-label">
+          <span>{{ setting.label }}</span>
+        </div>
+
+        <div class="setting-control">
+          @if (setting.dataType === AdminSettingDataType.Boolean) {
+            <label class="switch">
+              <input
+                type="checkbox"
+                [checked]="setting.draftValue === 'True'"
+                [disabled]="setting.saving"
+                (change)="toggleBoolean(setting)"
+              />
+              <span class="slider"></span>
+            </label>
+          } @else {
+            <input
+              type="number"
+              step="0.01"
+              class="setting-number"
+              [(ngModel)]="setting.draftValue"
+              [disabled]="setting.saving"
+            />
+            <button
+              type="button"
+              class="btn-outline small"
+              [disabled]="setting.saving || !isDirty(setting)"
+              (click)="save(setting)"
+            >
+              {{ setting.saving ? 'جارٍ الحفظ…' : 'حفظ' }}
+            </button>
+          }
+        </div>
+      </div>
+    }
+
+    @if (!loading() && settings().length === 0) {
+      <div class="no-results">
+        <span class="no-results-title">لا توجد إعدادات معروضة</span>
+      </div>
+    }
+
+    @if (loading()) {
+      <div class="no-results">
+        <span class="no-results-sub">جارٍ التحميل…</span>
+      </div>
+    }
+  </div>
+</section>

@@ -13,4 +13,5 @@ export * from './reviews.operations';
 export * from './sales.operations';
 export * from './stocktakes.operations';
 export * from './suppliers.operations';
+export * from './system.operations';
 export * from './users.operations';

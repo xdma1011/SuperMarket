@@ -7,6 +7,8 @@ using SupermarketSystem.Application.Authentication.RefreshToken;
 using SupermarketSystem.Application.Authentication.RevokeSession;
 using SupermarketSystem.Application.Backups.DeleteBackup;
 using SupermarketSystem.Application.System.BootstrapAdmin;
+using SupermarketSystem.Application.System.GetAdminSettings;
+using SupermarketSystem.Application.System.UpdateAdminSetting;
 using SupermarketSystem.Application.Catalog.UpdateProduct;
 using SupermarketSystem.Application.Catalog.UpdateProductCategory;
 using SupermarketSystem.Application.Purchasing.UpdateSupplier;
@@ -96,6 +98,8 @@ public static class DependencyInjection
         services.AddScoped<LoginHandler>();
         services.AddScoped<GetMyPermissionsHandler>();
         services.AddScoped<BootstrapAdminHandler>();
+        services.AddScoped<GetAdminSettingsHandler>();
+        services.AddScoped<UpdateAdminSettingHandler>();
         services.AddScoped<CreateUserHandler>();
         services.AddScoped<UpdateUserHandler>();
         services.AddScoped<UpdateSupplierHandler>();

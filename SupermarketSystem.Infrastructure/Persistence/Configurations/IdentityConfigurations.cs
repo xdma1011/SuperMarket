@@ -264,6 +264,14 @@ public class PermissionConfiguration : IEntityTypeConfiguration<Permission>
             Description = "Issue stock as complimentary/internal consumption, with no revenue entry.",
             CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });
+        builder.HasData(new
+        {
+            Id = Guid.Parse("6b1f4a8d-2c77-4e0a-9c5a-1f6e0d3a7b2c"),
+            Code = "System.SettingsManage",
+            Name = "Manage sensitive system settings",
+            Description = "View and change sensitive POS/inventory toggle settings (void/return/discount limits, etc.).",
+            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+        });
     }
 }
 
@@ -395,6 +403,14 @@ public class RolePermissionConfiguration : IEntityTypeConfiguration<RolePermissi
             Id = Guid.Parse("4310626b-7558-43de-aef5-515bb654cb10"),
             RoleId = Guid.Parse("50e6125a-cac0-4d82-a0b8-9f3c6fff59d7"),
             PermissionId = Guid.Parse("3f90797a-d3cd-482e-acad-5187542a5326")
+        });
+
+        // Master Admin -> الصلاحية الجديدة (System.SettingsManage)
+        builder.HasData(new
+        {
+            Id = Guid.Parse("7e2c9a1b-4f6d-4a3e-8b0c-9d1e2f3a4b5c"),
+            RoleId = Guid.Parse("50e6125a-cac0-4d82-a0b8-9f3c6fff59d7"),
+            PermissionId = Guid.Parse("6b1f4a8d-2c77-4e0a-9c5a-1f6e0d3a7b2c")
         });
 
         // Seed: ربط دور كاشير بصلاحياته (PermissionCodes.CashierDefaults).
