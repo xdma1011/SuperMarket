@@ -31,6 +31,7 @@ interface BranchDto {
 interface ProductDto {
   id: string;
   name: string;
+  isBatchTracked: boolean;
 }
 
 interface ProductUnitDto {
@@ -51,6 +52,12 @@ interface DraftLine {
   units: ProductUnitDto[];
   quantity: number;
   unitCost: number;
+  // منتج "يتتبّع دفعات" (IsBatchTracked) لازم رقم دفعة جديد لكل فاتورة
+  // شراء — الباك إند يرفض السطر بلا هذا (PurchaseInvoice.BatchRequired).
+  // تاريخ الصلاحية اختياري (مو كل منتج متتبَّع له تاريخ صلاحية فعلي).
+  isBatchTracked: boolean;
+  newBatchNumber: string;
+  newBatchExpiryDate: string;
 }
 
 interface PagedResult<T> {
@@ -185,7 +192,17 @@ export class PurchasingComponent implements OnInit {
 
       this.lines = [
         ...this.lines,
-        { productId: product.id, productName: product.name, unitId: baseUnit.id, units, quantity: 1, unitCost: 0 }
+        {
+          productId: product.id,
+          productName: product.name,
+          unitId: baseUnit.id,
+          units,
+          quantity: 1,
+          unitCost: 0,
+          isBatchTracked: product.isBatchTracked,
+          newBatchNumber: '',
+          newBatchExpiryDate: ''
+        }
       ];
     } catch {
       this.formError.set('تعذّر جلب وحدات المنتج.');
@@ -215,6 +232,12 @@ export class PurchasingComponent implements OnInit {
       return;
     }
 
+    const missingBatch = this.lines.find(l => l.isBatchTracked && !l.newBatchNumber.trim());
+    if (missingBatch) {
+      this.formError.set(`الصنف "${missingBatch.productName}" يتتبّع دفعات — أدخل رقم الدفعة له.`);
+      return;
+    }
+
     this.submitting.set(true);
     this.formError.set(null);
 
@@ -230,8 +253,8 @@ export class PurchasingComponent implements OnInit {
             quantity: l.quantity,
             unitCost: l.unitCost,
             existingProductBatchId: null,
-            newBatchNumber: null,
-            newBatchExpiryDate: null
+            newBatchNumber: l.isBatchTracked ? l.newBatchNumber.trim() : null,
+            newBatchExpiryDate: l.isBatchTracked && l.newBatchExpiryDate ? l.newBatchExpiryDate : null
           }))
         })
       );

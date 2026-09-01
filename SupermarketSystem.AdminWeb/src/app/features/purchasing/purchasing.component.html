@@ -140,6 +140,18 @@
               <span class="mono">{{ lineTotal(line) | number: '1.2-2' }}</span>
               <button type="button" class="icon-btn small" (click)="removeLine(i)" aria-label="حذف السطر">×</button>
             </div>
+            @if (line.isBatchTracked) {
+              <div class="lines-row" style="grid-template-columns: 1fr 1fr; gap: 8px; padding-inline-start: 12px;">
+                <label class="field">
+                  <span>رقم الدفعة (مطلوب)</span>
+                  <input type="text" [(ngModel)]="line.newBatchNumber" placeholder="مثال: B-2026-001" />
+                </label>
+                <label class="field">
+                  <span>تاريخ الصلاحية (اختياري)</span>
+                  <input type="date" [(ngModel)]="line.newBatchExpiryDate" />
+                </label>
+              </div>
+            }
           }
           <div class="lines-total">
             <span>الإجمالي الكلي:</span>
