@@ -199,6 +199,39 @@ public sealed class ApiClient
             return false;
         }
     }
+
+    /// <summary>
+    /// POST /purchase-invoices/drafts/from-image — يحتاج صلاحية
+    /// Purchasing.CreateDraft بس (موجودة افتراضيًا لدور الكاشير بالباك
+    /// إند)، لا Purchasing.Create. الرد نفسه (مسودة كاملة) ما بيهمّنا هون
+    /// - الكاشير ما بيراجع، بس بيتأكد النجاح أو الفشل.
+    /// </summary>
+    public async Task<UploadInvoiceDraftResult> UploadPurchaseInvoiceDraftAsync(
+        Guid branchId, byte[] imageBytes, string fileName, string contentType, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            using var fileContent = new ByteArrayContent(imageBytes);
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue(string.IsNullOrWhiteSpace(contentType) ? "image/jpeg" : contentType);
+            content.Add(fileContent, "file", fileName);
+
+            var response = await _http.PostAsync($"purchase-invoices/drafts/from-image?branchId={branchId}", content, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return new UploadInvoiceDraftResult(true, null);
+            }
+
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            return new UploadInvoiceDraftResult(false, $"{(int)response.StatusCode}: {body}");
+        }
+        catch (Exception ex)
+        {
+            return new UploadInvoiceDraftResult(false, $"تعذّر الاتصال بالسيرفر: {ex.Message}");
+        }
+    }
 }
 
 public sealed record PendingSaleSendResult(bool Success, string? ErrorMessage, bool IsConnectivityFailure);
+public sealed record UploadInvoiceDraftResult(bool Success, string? ErrorMessage);

@@ -1,0 +1,45 @@
+<Window x:Class="SupermarketSystem.CashierApp.Views.UploadInvoiceWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="رفع فاتورة عبر الذكاء الاصطناعي"
+        Width="480" Height="560"
+        WindowStartupLocation="CenterOwner"
+        FlowDirection="RightToLeft">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="صوّر الفاتورة أو اختر ملفًا، بعدين ارفعها - تُقرأ آليًا وتُحفظ كمسودة بانتظار مراجعة الإدارة."
+                   TextWrapping="Wrap" FontSize="13" Foreground="#555" />
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="BrowseButton" Content="اختيار ملف" Width="140" Height="38" Margin="0,0,10,0" Click="BrowseButton_Click" />
+            <Button x:Name="ScanButton" Content="مسح ضوئي (سكانر)" Width="160" Height="38" Click="ScanButton_Click" />
+        </StackPanel>
+
+        <Border Grid.Row="4" BorderBrush="#DDD" BorderThickness="1" Background="#FAFAFA">
+            <Grid>
+                <TextBlock x:Name="NoImageText" Text="لا توجد صورة محدَّدة" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#999" />
+                <Image x:Name="PreviewImage" Stretch="Uniform" Margin="6" Visibility="Collapsed" />
+            </Grid>
+        </Border>
+
+        <TextBlock x:Name="StatusText" Grid.Row="6" TextWrapping="Wrap" FontSize="13" />
+
+        <StackPanel Grid.Row="8" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="UploadButton" Content="رفع وقراءة الفاتورة" Width="180" Height="42" Margin="0,0,10,0"
+                    IsEnabled="False" Click="UploadButton_Click" />
+            <Button x:Name="CloseButton" Content="إغلاق" Width="100" Height="42" Click="CloseButton_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

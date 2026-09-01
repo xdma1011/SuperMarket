@@ -39,6 +39,12 @@ public partial class MainWindow : Window
     /// مش إخفاء الزر (أي كاشير فضولي بيلاقيه بثانيتين)، الحماية هي
     /// الباسوورد نفسه. لو غلط، ما في أي أثر أو رسالة تكشف وجود شاشة إدارية أصلًا.
     /// </summary>
+    private void UploadInvoiceButton_Click(object sender, RoutedEventArgs e)
+    {
+        var uploadWindow = new UploadInvoiceWindow(_apiClient, _authSession) { Owner = this };
+        uploadWindow.ShowDialog();
+    }
+
     private void AdminAccessButton_Click(object sender, RoutedEventArgs e)
     {
         var passwordPrompt = new AdminPasswordWindow { Owner = this };

@@ -19,6 +19,9 @@
     <!-- لدعم ترميز Windows-1256 (عربي) على طابعات ESC/POS - .NET Core
          ما بيشمل الترميزات القديمة افتراضيًا. -->
     <PackageReference Include="System.Text.Encoding.CodePages" Version="10.0.0" />
+    <!-- مطلوبة لاستخدام dynamic مع WIA (مسح ضوئي اختياري) عبر late-bound
+         COM interop - WiaScannerService.cs. -->
+    <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
   </ItemGroup>
 
   <ItemGroup>
