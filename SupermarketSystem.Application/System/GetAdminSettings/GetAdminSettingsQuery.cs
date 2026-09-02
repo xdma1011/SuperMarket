@@ -39,7 +39,8 @@ public sealed class GetAdminSettingsHandler
         // معرَّف بـInfrastructure.Services.PendingReviewSettingsKeys - Application
         // ما بيقدر يعتمد على Infrastructure (اتجاه الاعتمادية)، فالمفتاح
         // مكرَّر هون كنص صريح عمدًا، لا استيراد.
-        ("PendingReview.EscalationThresholdDays", "عدد الأيام قبل تصعيد عنصر بانتظار المراجعة", AdminSettingDataType.Decimal)
+        ("PendingReview.EscalationThresholdDays", "عدد الأيام قبل تصعيد عنصر بانتظار المراجعة", AdminSettingDataType.Decimal),
+        (PurchasingPolicyKeys.PriceIncreaseWarningThresholdPercent, "نسبة ارتفاع سعر الشراء (%) قبل التعليم للمراجعة (مقارنة بمتوسط آخر 5 عمليات شراء)", AdminSettingDataType.Decimal)
     };
 
     private readonly IApplicationDbContext _context;

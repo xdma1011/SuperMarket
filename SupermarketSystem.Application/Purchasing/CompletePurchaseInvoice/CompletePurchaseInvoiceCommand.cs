@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Application.Common.Interfaces;
+using SupermarketSystem.Application.Common.Policies;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Domain.Common;
 using SupermarketSystem.Domain.Inventory;
@@ -108,17 +109,20 @@ public sealed class CompletePurchaseInvoiceHandler
     private readonly IDocumentNumberGenerator _documentNumberGenerator;
     private readonly ICurrentUserContext _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly ISettingsProvider _settingsProvider;
 
     public CompletePurchaseInvoiceHandler(
         IApplicationDbContext context,
         IDocumentNumberGenerator documentNumberGenerator,
         ICurrentUserContext currentUser,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        ISettingsProvider settingsProvider)
     {
         _context = context;
         _documentNumberGenerator = documentNumberGenerator;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
+        _settingsProvider = settingsProvider;
     }
 
     public async Task<Result<CompletePurchaseInvoiceResponse>> HandleAsync(
@@ -235,6 +239,32 @@ public sealed class CompletePurchaseInvoiceHandler
             }
         }
 
+        // --- "سماح مع مراجعة": سعر أعلى بنسبة ملحوظة عن متوسط آخر 5 عمليات
+        // شراء لنفس المنتج يُعلَّم للمراجعة، بلا ما يوقف الفاتورة إطلاقًا
+        // (CLAUDE.md §1.6). صنف جديد بلا تاريخ شراء = صفر مقارنة ممكنة،
+        // فما في تعليم بالتأكيد (مش "نسمح بحذر"، فعليًا ولا معنى للمقارنة).
+
+        var priceThresholdPercent = await _settingsProvider.GetDecimalAsync(
+            PurchasingPolicyKeys.PriceIncreaseWarningThresholdPercent, 15m, cancellationToken);
+
+        var averageRecentCostByProduct = new Dictionary<Guid, decimal>();
+        foreach (var productId in productIds)
+        {
+            var recentCosts = await (
+                from item in _context.PurchaseInvoiceItems.AsNoTracking()
+                join invoice in _context.PurchaseInvoices.AsNoTracking() on item.PurchaseInvoiceId equals invoice.Id
+                where item.ProductId == productId
+                orderby invoice.CreatedAtUtc descending
+                select item.UnitCost)
+                .Take(5)
+                .ToListAsync(cancellationToken);
+
+            if (recentCosts.Count > 0)
+            {
+                averageRecentCostByProduct[productId] = recentCosts.Average();
+            }
+        }
+
         // --- Reserve the invoice number (own independent commit — see class remarks) ---
 
         var invoiceNumber = await _documentNumberGenerator.GetNextNumberAsync(
@@ -263,8 +293,11 @@ public sealed class CompletePurchaseInvoiceHandler
                 productBatchId = newBatch.Id;
             }
 
+            var needsReview = averageRecentCostByProduct.TryGetValue(itemDto.ProductId, out var averageRecentCost)
+                && itemDto.UnitCost > averageRecentCost * (1 + priceThresholdPercent / 100m);
+
             var invoiceItem = purchaseInvoice.AddItem(
-                itemDto.ProductId, itemDto.ProductUnitId, productBatchId, itemDto.Quantity, itemDto.UnitCost);
+                itemDto.ProductId, itemDto.ProductUnitId, productBatchId, itemDto.Quantity, itemDto.UnitCost, needsReview);
 
             // Normalized to the product's base unit (Architecture Review
             // §12) so StockMovement/Stock stay consistent regardless of

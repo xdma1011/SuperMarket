@@ -5,7 +5,7 @@ import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { ReviewsOperation, ReturnsOperation } from '../../core/api/operations';
 
-type PendingReviewType = 1 | 2;
+type PendingReviewType = 1 | 2 | 3;
 
 interface PendingReviewItemDto {
   type: PendingReviewType;
@@ -72,19 +72,32 @@ export class ReviewsComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      if (this.isReturn(item)) {
-        await firstValueFrom(
-          this.apiClient.post(ApiController.Returns, ReturnsOperation.MarkReviewed, {}, { id: item.referenceId })
-        );
-      } else {
-        await firstValueFrom(
-          this.apiClient.post(
-            ApiController.Reviews,
-            ReviewsOperation.MarkStockMovementReviewed,
-            {},
-            { stockMovementId: item.referenceId }
-          )
-        );
+      switch (item.type) {
+        case 1:
+          await firstValueFrom(
+            this.apiClient.post(ApiController.Returns, ReturnsOperation.MarkReviewed, {}, { id: item.referenceId })
+          );
+          break;
+        case 2:
+          await firstValueFrom(
+            this.apiClient.post(
+              ApiController.Reviews,
+              ReviewsOperation.MarkStockMovementReviewed,
+              {},
+              { stockMovementId: item.referenceId }
+            )
+          );
+          break;
+        case 3:
+          await firstValueFrom(
+            this.apiClient.post(
+              ApiController.Reviews,
+              ReviewsOperation.MarkPurchaseInvoiceItemReviewed,
+              {},
+              { purchaseInvoiceItemId: item.referenceId }
+            )
+          );
+          break;
       }
 
       this.items.set(this.items().filter(i => i.referenceId !== item.referenceId));

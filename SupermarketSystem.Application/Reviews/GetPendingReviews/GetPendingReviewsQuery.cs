@@ -6,7 +6,8 @@ namespace SupermarketSystem.Application.Reviews.GetPendingReviews;
 public enum PendingReviewType
 {
     Return = 1,
-    ComplimentaryIssue = 2
+    ComplimentaryIssue = 2,
+    HighPurchasePrice = 3
 }
 
 public sealed record PendingReviewItemDto(
@@ -23,11 +24,12 @@ public sealed record GetPendingReviewsResponse(IReadOnlyList<PendingReviewItemDt
 
 /// <summary>
 /// نقطة تجميع واحدة لكل شي "بانتظار مراجعة إدارية" — نفس فلسفة
-/// AllowWithReview المطبَّقة بكل النظام. حاليًا مصدران: ReturnInvoice
-/// (كل إرجاع غير مُراجَع بعد) وStockMovement.NeedsReview (ضيافة تجاوزت
-/// الحد اليومي حاليًا، وأي نوع حركة لاحق بلا تغيير هيكلي).
+/// AllowWithReview المطبَّقة بكل النظام. ثلاثة مصادر حاليًا: ReturnInvoice
+/// (كل إرجاع غير مُراجَع بعد)، StockMovement.NeedsReview (ضيافة تجاوزت
+/// الحد اليومي)، وPurchaseInvoiceItem.NeedsReview (سعر شراء أعلى بنسبة
+/// ملحوظة عن متوسط آخر 5 عمليات شراء لنفس المنتج).
 ///
-/// إضافة مصدر ثالث لاحقًا تعني إضافة استعلام موازٍ هون بس، بلا أي تغيير
+/// إضافة مصدر رابع لاحقًا تعني إضافة استعلام موازٍ هون بس، بلا أي تغيير
 /// على شكل الرد أو الفرونت إند.
 /// </summary>
 public sealed class GetPendingReviewsHandler
@@ -68,7 +70,29 @@ public sealed class GetPendingReviewsHandler
                 x.Movement.OccurredAtUtc))
             .ToListAsync(cancellationToken);
 
-        var combined = pendingReturns.Concat(pendingComplimentary)
+        // نفس مبدأ CLAUDE.md §3.1: لا تنسيق نص (:F2) جوّا Select() مترجَم
+        // لـSQL - نجيب الحقول الخام أول، ونبني نص التفاصيل بالذاكرة.
+        var highPriceRows = await _context.PurchaseInvoiceItems.AsNoTracking()
+            .Where(i => i.NeedsReview && i.ReviewedAtUtc == null)
+            .Join(_context.PurchaseInvoices.AsNoTracking(), i => i.PurchaseInvoiceId, p => p.Id,
+                (i, p) => new { i.Id, i.UnitCost, p.InvoiceNumber, p.BranchId, p.CreatedAtUtc, i.ProductId })
+            .Join(_context.Products.AsNoTracking(), x => x.ProductId, prod => prod.Id,
+                (x, prod) => new { x.Id, x.UnitCost, x.InvoiceNumber, x.BranchId, x.CreatedAtUtc, ProductName = prod.Name })
+            .ToListAsync(cancellationToken);
+
+        var pendingHighPrices = highPriceRows
+            .Select(x => new PendingReviewItemDto(
+                PendingReviewType.HighPurchasePrice,
+                "ارتفاع سعر شراء",
+                x.Id,
+                x.ProductName,
+                $"سعر الوحدة {x.UnitCost:F2} بفاتورة {x.InvoiceNumber} - أعلى من المعتاد",
+                x.UnitCost,
+                x.BranchId,
+                x.CreatedAtUtc))
+            .ToList();
+
+        var combined = pendingReturns.Concat(pendingComplimentary).Concat(pendingHighPrices)
             .OrderByDescending(x => x.OccurredAtUtc)
             .ToList();
 

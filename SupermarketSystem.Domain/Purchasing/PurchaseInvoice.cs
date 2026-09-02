@@ -60,14 +60,15 @@ public class PurchaseInvoice : AuditableEntity, IBranchOwned, IHasRowVersion
         TotalPaidAmount = 0;
     }
 
-    public PurchaseInvoiceItem AddItem(Guid productId, Guid productUnitId, Guid? productBatchId, decimal quantity, decimal unitCost)
+    public PurchaseInvoiceItem AddItem(
+        Guid productId, Guid productUnitId, Guid? productBatchId, decimal quantity, decimal unitCost, bool needsReview = false)
     {
         if (Status != PurchaseInvoiceStatus.Draft)
         {
             throw new DomainException("Cannot add items to a purchase invoice that is not Draft.");
         }
 
-        var item = new PurchaseInvoiceItem(Id, productId, productUnitId, productBatchId, quantity, unitCost);
+        var item = new PurchaseInvoiceItem(Id, productId, productUnitId, productBatchId, quantity, unitCost, needsReview);
         _items.Add(item);
         TotalAmount += item.LineTotal;
         return item;
@@ -182,9 +183,21 @@ public class PurchaseInvoiceItem : Entity
     public decimal UnitCost { get; private set; }
     public decimal LineTotal { get; private set; }
 
+    /// <summary>
+    /// "سماح مع مراجعة" - نفس نمط StockMovement.NeedsReview بالضبط، بس
+    /// لسطر شراء سعره أعلى بنسبة ملحوظة عن متوسط آخر عمليات شراء لنفس
+    /// المنتج (راجع CompletePurchaseInvoiceHandler). لا نمنع الفاتورة،
+    /// بس نعلّم السطر ليظهر بقائمة المراجعات الموحَّدة.
+    /// </summary>
+    public bool NeedsReview { get; private set; }
+    public DateTime? ReviewedAtUtc { get; private set; }
+    public Guid? ReviewedByUserId { get; private set; }
+
     private PurchaseInvoiceItem() { } // EF Core
 
-    internal PurchaseInvoiceItem(Guid purchaseInvoiceId, Guid productId, Guid productUnitId, Guid? productBatchId, decimal quantity, decimal unitCost)
+    internal PurchaseInvoiceItem(
+        Guid purchaseInvoiceId, Guid productId, Guid productUnitId, Guid? productBatchId,
+        decimal quantity, decimal unitCost, bool needsReview = false)
     {
         if (quantity <= 0)
         {
@@ -198,6 +211,19 @@ public class PurchaseInvoiceItem : Entity
         Quantity = quantity;
         UnitCost = unitCost;
         LineTotal = quantity * unitCost;
+        NeedsReview = needsReview;
+    }
+
+    public void MarkReviewed(Guid reviewedByUserId, DateTime reviewedAtUtc)
+    {
+        if (ReviewedAtUtc is not null)
+        {
+            throw new DomainException("This item has already been reviewed.");
+        }
+
+        NeedsReview = false;
+        ReviewedByUserId = reviewedByUserId;
+        ReviewedAtUtc = reviewedAtUtc;
     }
 }
 

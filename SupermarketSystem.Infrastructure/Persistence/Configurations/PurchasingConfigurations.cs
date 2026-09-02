@@ -102,12 +102,16 @@ public class PurchaseInvoiceItemConfiguration : IEntityTypeConfiguration<Purchas
         builder.Property(i => i.Quantity).HasColumnType("decimal(18,4)").IsRequired();
         builder.Property(i => i.UnitCost).HasColumnType("decimal(18,4)").IsRequired();
         builder.Property(i => i.LineTotal).HasColumnType("decimal(18,4)").IsRequired();
+        builder.Property(i => i.NeedsReview).IsRequired();
+        builder.Property(i => i.ReviewedAtUtc).HasColumnType("datetime2");
 
         builder.HasIndex(i => i.ProductId);
+        builder.HasIndex(i => new { i.NeedsReview, i.ReviewedAtUtc });
 
         builder.HasOne<Product>().WithMany().HasForeignKey(i => i.ProductId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<ProductUnit>().WithMany().HasForeignKey(i => i.ProductUnitId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Domain.Inventory.ProductBatch>().WithMany().HasForeignKey(i => i.ProductBatchId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(i => i.ReviewedByUserId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 
