@@ -46,6 +46,11 @@ public sealed class GetAdminSettingsHandler
         (OrderingPolicyKeys.MinimumOrderAmount, "أقل مبلغ إجمالي مسموح للطلب (0 = بلا حد أدنى)", AdminSettingDataType.Decimal),
         (OrderingPolicyKeys.LoyaltyEnabled, "إظهار وتفعيل نقاط الولاء بتطبيق الزبائن", AdminSettingDataType.Boolean),
         (OrderingPolicyKeys.LoyaltyPointsPerCurrencyUnit, "عدد نقاط الولاء لكل دينار من قيمة الطلب المكتمل (0 = بلا اكتساب)", AdminSettingDataType.Decimal),
+        (OrderingPolicyKeys.VisibilityHighPriceThreshold, "الحد الفاصل الأعلى للسعر (دينار) لقاعدة إخفاء المخزون القليل بتطبيق الزبائن", AdminSettingDataType.Decimal),
+        (OrderingPolicyKeys.VisibilityLowPriceThreshold, "الحد الفاصل الأدنى للسعر (دينار) لقاعدة إخفاء المخزون القليل بتطبيق الزبائن", AdminSettingDataType.Decimal),
+        (OrderingPolicyKeys.MinVisibleStockHighPrice, "أقل كمية مخزون لإظهار منتج سعره أعلى من الحد الفاصل الأعلى", AdminSettingDataType.Decimal),
+        (OrderingPolicyKeys.MinVisibleStockMidPrice, "أقل كمية مخزون لإظهار منتج سعره بين الحدّين", AdminSettingDataType.Decimal),
+        (OrderingPolicyKeys.MinVisibleStockLowPrice, "أقل كمية مخزون لإظهار منتج سعره أقل من الحد الفاصل الأدنى", AdminSettingDataType.Decimal),
         (TelegramSettingsKeys.BotUsername, "اسم مستخدم بوت تلغرام (بدون @، للرابط العلني)", AdminSettingDataType.String),
         (OrderingPolicyKeys.DailyOrderCountAlertThreshold, "عدد طلبات نفس الزبون باليوم قبل تنبيهك (إساءة استخدام محتملة)", AdminSettingDataType.Decimal)
     };

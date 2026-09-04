@@ -76,6 +76,24 @@ public static class OrderingEndpoints
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status404NotFound);
 
+        // ⚠️ نفس تحذير PlaceOrder/GetCustomerOrders - بلا تحقق ملكية حقيقي
+        // (أي حد يعرف orderId يقدر يشوف تفاصيله). نفس GetOrderByIdHandler
+        // المستخدَم من شاشة الكاشير بالأسفل - قراءة بس، بلا فرق منطق.
+        app.MapGet("/api/v1/orders/{orderId:guid}/customer-view", async (
+            Guid orderId,
+            GetOrderByIdHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new GetOrderByIdQuery(orderId), cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithName("GetOrderByIdForCustomer")
+        .WithTags("Ordering")
+        .AllowAnonymous()
+        .WithSummary("⚠️ مؤقت بلا تحقق هوية حقيقي - تفاصيل طلب واحد لتطبيق الزبائن.")
+        .Produces<OrderDetailDto>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status404NotFound);
+
         var cashierGroup = app.MapGroup("/api/v1/orders").WithTags("Ordering").RequirePermission(PermissionCodes.SalesCreate);
 
         cashierGroup.MapGet("/", async (

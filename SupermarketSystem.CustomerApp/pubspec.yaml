@@ -1,0 +1,42 @@
+name: supermarket_customer_app
+description: تطبيق طلبات الزبائن - SupermarketSystem
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+
+  # حالة التطبيق - Provider بسيط ومباشر، بلا تعقيد إضافي غير مبرَّر لحجم التطبيق هذا.
+  provider: ^6.1.2
+
+  # نداءات HTTP لباك إند SupermarketSystem.API.
+  http: ^1.2.1
+
+  # تخزين توكن هوية الزبون بأمان (Keychain/Keystore) - لا SharedPreferences نص عادي.
+  flutter_secure_storage: ^9.2.2
+
+  # خريطة مجانية (OpenStreetMap) بلا مفتاح API - راجع نقاش صاحب المشروع.
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  geolocator: ^12.0.0
+
+  # عرض QR ثابت لهوية الزبون بالكاشير (راجع GetCustomerQrToken بالباك إند).
+  qr_flutter: ^4.1.0
+
+  # فتح رابط بوت تلغرام العميق من داخل التطبيق (t.me/...).
+  url_launcher: ^6.3.0
+
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
