@@ -20,7 +20,17 @@ public enum CashDrawerMovementType
     /// الموردين كانت ما بتنكتب بـCashDrawerLog إطلاقًا، فالتقفيل كان
     /// يظهر عجز غير مفسَّر كل مرة يصير فيها دفع كاش لمورد.
     /// </summary>
-    PurchasePaymentCashOut = 9
+    PurchasePaymentCashOut = 9,
+
+    /// <summary>
+    /// عكس دفعة كاش مسبقة لمورد (PurchasePaymentCashOut) - يصير لما
+    /// مسودة فاتورة (AI) كان عليها PaidNowAmount ثم تُجُوهلت (Discard)،
+    /// أو أي تصحيح لاحق لخطأ إدخال. الحركة الأصلية ما تُعدَّل ولا
+    /// تُحذَف أبدًا (CashDrawerLog تاريخي بحت) - بس تُكتب حركة عكسية
+    /// بنفس المبلغ باتجاه معاكس، فالأثر يظل صفر صافيًا والسجل التدقيقي
+    /// كامل.
+    /// </summary>
+    PurchasePaymentReversalCashIn = 10
 }
 
 /// <summary>

@@ -87,6 +87,7 @@ public interface IApplicationDbContext
 
     // Customers
     DbSet<Customer> Customers { get; }
+    DbSet<Complaint> Complaints { get; }
 
     // Ordering (تطبيق الزبائن - أساس، راجع نقاش صاحب المشروع)
     DbSet<Order> Orders { get; }

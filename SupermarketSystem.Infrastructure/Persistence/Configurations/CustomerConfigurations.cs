@@ -40,3 +40,23 @@ public class CustomerNoteConfiguration : IEntityTypeConfiguration<CustomerNote>
         builder.Property(n => n.Text).IsRequired().HasMaxLength(2000);
     }
 }
+
+public class ComplaintConfiguration : IEntityTypeConfiguration<Complaint>
+{
+    public void Configure(EntityTypeBuilder<Complaint> builder)
+    {
+        builder.ToTable("Complaints");
+        builder.HasKey(c => c.Id);
+
+        builder.Property(c => c.Text).IsRequired().HasMaxLength(2000);
+        builder.Property(c => c.IsResolved).IsRequired();
+        builder.Property(c => c.ResolvedAtUtc).HasColumnType("datetime2");
+        builder.Property(c => c.CreatedAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(c => c.UpdatedAtUtc).HasColumnType("datetime2");
+
+        builder.HasIndex(c => new { c.IsResolved, c.CreatedAtUtc });
+
+        builder.HasOne<Customer>().WithMany().HasForeignKey(c => c.CustomerId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<SupermarketSystem.Domain.Ordering.Order>().WithMany().HasForeignKey(c => c.OrderId).OnDelete(DeleteBehavior.Restrict);
+    }
+}

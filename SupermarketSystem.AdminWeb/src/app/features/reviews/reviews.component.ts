@@ -5,7 +5,7 @@ import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { ReviewsOperation, ReturnsOperation } from '../../core/api/operations';
 
-type PendingReviewType = 1 | 2 | 3;
+type PendingReviewType = 1 | 2 | 3 | 4;
 
 interface PendingReviewItemDto {
   type: PendingReviewType;
@@ -96,6 +96,11 @@ export class ReviewsComponent implements OnInit {
               {},
               { purchaseInvoiceItemId: item.referenceId }
             )
+          );
+          break;
+        case 4:
+          await firstValueFrom(
+            this.apiClient.post(ApiController.Reviews, ReviewsOperation.MarkComplaintReviewed, {}, { complaintId: item.referenceId })
           );
           break;
       }

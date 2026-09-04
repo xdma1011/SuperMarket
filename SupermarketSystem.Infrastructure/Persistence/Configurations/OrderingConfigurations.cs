@@ -21,6 +21,7 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(o => o.DeliveryLongitude).HasColumnType("decimal(9,6)");
         builder.Property(o => o.DecidedAtUtc).HasColumnType("datetime2");
         builder.Property(o => o.RejectionReason).HasMaxLength(500);
+        builder.Property(o => o.RatingComment).HasMaxLength(1000);
         builder.Property(o => o.CreatedAtUtc).HasColumnType("datetime2").IsRequired();
         builder.Property(o => o.UpdatedAtUtc).HasColumnType("datetime2");
 

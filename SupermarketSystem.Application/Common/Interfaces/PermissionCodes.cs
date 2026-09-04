@@ -28,6 +28,7 @@ public static class PermissionCodes
     public const string UsersManage = "Users.Manage";
     public const string ComplimentaryIssue = "Inventory.ComplimentaryIssue";
     public const string SystemSettingsManage = "System.SettingsManage";
+    public const string CustomersManage = "Customers.Manage";
 
     /// <summary>كل الرموز دفعة وحدة — يخدم seed دور "Master Admin" (كل الصلاحيات مربوطة فيه) بلا سرد يدوي معرَّض للنسيان عند إضافة رمز جديد لاحقًا.</summary>
     public static readonly IReadOnlyList<string> All = new[]
@@ -36,7 +37,7 @@ public static class PermissionCodes
         PurchasingCreate, PurchasingCreateDraft, CatalogManage, SuppliersManage, BranchesManage,
         StocktakeManage, StocktakeApprove, CashClosingManage, ReportsView,
         BackupsManage, SessionsManage, NotificationsView, UsersManage, ComplimentaryIssue,
-        SystemSettingsManage
+        SystemSettingsManage, CustomersManage
     };
 
     /// <summary>
@@ -59,6 +60,6 @@ public static class PermissionCodes
     {
         SalesCreate, SalesVoid, ReturnsProcess, ReturnsReview, PurchasingCreate, PurchasingCreateDraft,
         CatalogManage, SuppliersManage, StocktakeManage, StocktakeApprove,
-        CashClosingManage, ReportsView, NotificationsView
+        CashClosingManage, ReportsView, NotificationsView, CustomersManage
     };
 }

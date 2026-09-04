@@ -7,7 +7,8 @@ public enum PendingReviewType
 {
     Return = 1,
     ComplimentaryIssue = 2,
-    HighPurchasePrice = 3
+    HighPurchasePrice = 3,
+    Complaint = 4
 }
 
 public sealed record PendingReviewItemDto(
@@ -24,12 +25,13 @@ public sealed record GetPendingReviewsResponse(IReadOnlyList<PendingReviewItemDt
 
 /// <summary>
 /// نقطة تجميع واحدة لكل شي "بانتظار مراجعة إدارية" — نفس فلسفة
-/// AllowWithReview المطبَّقة بكل النظام. ثلاثة مصادر حاليًا: ReturnInvoice
+/// AllowWithReview المطبَّقة بكل النظام. أربعة مصادر حاليًا: ReturnInvoice
 /// (كل إرجاع غير مُراجَع بعد)، StockMovement.NeedsReview (ضيافة تجاوزت
-/// الحد اليومي)، وPurchaseInvoiceItem.NeedsReview (سعر شراء أعلى بنسبة
-/// ملحوظة عن متوسط آخر 5 عمليات شراء لنفس المنتج).
+/// الحد اليومي)، PurchaseInvoiceItem.NeedsReview (سعر شراء أعلى بنسبة
+/// ملحوظة عن متوسط آخر 5 عمليات شراء لنفس المنتج)، وComplaint (شكوى
+/// زبون عبر تطبيق الزبائن).
 ///
-/// إضافة مصدر رابع لاحقًا تعني إضافة استعلام موازٍ هون بس، بلا أي تغيير
+/// إضافة مصدر إضافي لاحقًا تعني إضافة استعلام موازٍ هون بس، بلا أي تغيير
 /// على شكل الرد أو الفرونت إند.
 /// </summary>
 public sealed class GetPendingReviewsHandler
@@ -92,7 +94,33 @@ public sealed class GetPendingReviewsHandler
                 x.CreatedAtUtc))
             .ToList();
 
-        var combined = pendingReturns.Concat(pendingComplimentary).Concat(pendingHighPrices)
+        // شكوى ممكن ما تكون مرتبطة بطلب (OrderId فاضي) - Order مافيها فرع
+        // ثابت بهالحالة، فـBranchId يضل Guid.Empty (مش مستخدَم أصلًا
+        // بواجهة صفحة المراجعات الحالية - راجع reviews.component.ts).
+        var complaintRows = await _context.Complaints.AsNoTracking()
+            .Where(c => !c.IsResolved)
+            .Join(_context.Customers.AsNoTracking(), c => c.CustomerId, cust => cust.Id,
+                (c, cust) => new { c.Id, c.Text, c.OrderId, CustomerName = cust.FullName, c.CreatedAtUtc })
+            .ToListAsync(cancellationToken);
+
+        var orderBranchByOrderId = await _context.Orders.AsNoTracking()
+            .Where(o => complaintRows.Select(c => c.OrderId).Contains(o.Id))
+            .Select(o => new { o.Id, o.BranchId })
+            .ToDictionaryAsync(o => o.Id, o => o.BranchId, cancellationToken);
+
+        var pendingComplaints = complaintRows
+            .Select(x => new PendingReviewItemDto(
+                PendingReviewType.Complaint,
+                "شكوى",
+                x.Id,
+                x.CustomerName,
+                x.Text,
+                Amount: null,
+                x.OrderId is { } orderId && orderBranchByOrderId.TryGetValue(orderId, out var branchId) ? branchId : Guid.Empty,
+                x.CreatedAtUtc))
+            .ToList();
+
+        var combined = pendingReturns.Concat(pendingComplimentary).Concat(pendingHighPrices).Concat(pendingComplaints)
             .OrderByDescending(x => x.OccurredAtUtc)
             .ToList();
 

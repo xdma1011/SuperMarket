@@ -1,6 +1,7 @@
 using SupermarketSystem.API.Common;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Reviews.GetPendingReviews;
+using SupermarketSystem.Application.Reviews.MarkComplaintReviewed;
 using SupermarketSystem.Application.Reviews.MarkPurchaseInvoiceItemReviewed;
 using SupermarketSystem.Application.Reviews.MarkStockMovementReviewed;
 
@@ -51,6 +52,20 @@ public static class ReviewsEndpoints
         })
         .WithName("MarkPurchaseInvoiceItemReviewed")
         .WithSummary("يعلّم سطر فاتورة شراء (سعر مرتفع بشكل ملحوظ) كمُراجَع.")
+        .Produces(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status404NotFound)
+        .ProducesProblem(StatusCodes.Status409Conflict);
+
+        group.MapPost("/complaints/{complaintId:guid}/mark-reviewed", async (
+            Guid complaintId,
+            MarkComplaintReviewedHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new MarkComplaintReviewedCommand(complaintId), cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithName("MarkComplaintReviewed")
+        .WithSummary("يعلّم شكوى زبون كمحلولة.")
         .Produces(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status404NotFound)
         .ProducesProblem(StatusCodes.Status409Conflict);

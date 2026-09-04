@@ -23,7 +23,9 @@ public sealed record OrderDetailDto(
     Guid? ResultingSaleInvoiceId,
     IReadOnlyList<OrderItemDetailDto> Items,
     DateTime CreatedAtUtc,
-    DateTime? DecidedAtUtc);
+    DateTime? DecidedAtUtc,
+    int? Rating,
+    string? RatingComment);
 
 public sealed class GetOrderByIdHandler
 {
@@ -83,6 +85,8 @@ public sealed class GetOrderByIdHandler
             order.ResultingSaleInvoiceId,
             items,
             order.CreatedAtUtc,
-            order.DecidedAtUtc));
+            order.DecidedAtUtc,
+            order.Rating,
+            order.RatingComment));
     }
 }

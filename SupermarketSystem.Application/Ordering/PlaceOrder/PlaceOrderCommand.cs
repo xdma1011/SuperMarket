@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Application.Common.Interfaces;
+using SupermarketSystem.Application.Common.Policies;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Domain.Customers;
 using SupermarketSystem.Domain.Ordering;
@@ -75,10 +76,18 @@ public static class PlaceOrderValidator
 public sealed class PlaceOrderHandler
 {
     private readonly IApplicationDbContext _context;
+    private readonly ISettingsProvider _settingsProvider;
+    private readonly INotificationDispatcher _notificationDispatcher;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public PlaceOrderHandler(IApplicationDbContext context)
+    public PlaceOrderHandler(
+        IApplicationDbContext context, ISettingsProvider settingsProvider,
+        INotificationDispatcher notificationDispatcher, IDateTimeProvider dateTimeProvider)
     {
         _context = context;
+        _settingsProvider = settingsProvider;
+        _notificationDispatcher = notificationDispatcher;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<Result<PlaceOrderResponse>> HandleAsync(PlaceOrderCommand command, CancellationToken cancellationToken)
@@ -87,6 +96,13 @@ public sealed class PlaceOrderHandler
         if (validationError is not null)
         {
             return Result.Failure<PlaceOrderResponse>(validationError);
+        }
+
+        var orderingEnabled = await _settingsProvider.GetBoolAsync(OrderingPolicyKeys.Enabled, defaultValue: true, cancellationToken);
+        if (!orderingEnabled)
+        {
+            return Result.Failure<PlaceOrderResponse>(
+                Error.BusinessRule("Order.OrderingDisabled", "استقبال الطلبات متوقّف مؤقتًا - جرّب لاحقًا."));
         }
 
         var branchExists = await _context.Branches.AsNoTracking().AnyAsync(b => b.Id == command.BranchId, cancellationToken);
@@ -144,8 +160,33 @@ public sealed class PlaceOrderHandler
             estimatedTotal += itemDto.Quantity * productBranch.SellingPrice;
         }
 
+        var minimumOrderAmount = await _settingsProvider.GetDecimalAsync(OrderingPolicyKeys.MinimumOrderAmount, defaultValue: 0m, cancellationToken);
+        if (minimumOrderAmount > 0 && estimatedTotal < minimumOrderAmount)
+        {
+            return Result.Failure<PlaceOrderResponse>(Error.Validation(
+                "Order.BelowMinimumAmount", $"أقل مبلغ مسموح للطلب {minimumOrderAmount:F2} - إجمالي طلبك الحالي {estimatedTotal:F2}."));
+        }
+
         _context.Orders.Add(order);
         await _context.SaveChangesAsync(cancellationToken);
+
+        // مؤشر إساءة استخدام محتملة - تنبيه لصاحب المشروع بس، ما بيمنع
+        // الطلب إطلاقًا (نفس فلسفة النظام "سماح مع مراجعة").
+        var alertThreshold = await _settingsProvider.GetDecimalAsync(OrderingPolicyKeys.DailyOrderCountAlertThreshold, defaultValue: 5m, cancellationToken);
+        if (alertThreshold > 0)
+        {
+            var todayUtc = DateOnly.FromDateTime(_dateTimeProvider.UtcNow);
+            var todaysOrderCount = await _context.Orders.AsNoTracking()
+                .CountAsync(o => o.CustomerId == customer.Id && o.CreatedAtUtc.Date == todayUtc.ToDateTime(TimeOnly.MinValue), cancellationToken);
+
+            if (todaysOrderCount >= alertThreshold)
+            {
+                await _notificationDispatcher.NotifyAsync(
+                    "تكرار طلبات مرتفع",
+                    $"الزبون '{customer.FullName}' ({command.CustomerPhone}) قدّم {todaysOrderCount} طلب اليوم - راجع نشاطه.",
+                    cancellationToken);
+            }
+        }
 
         return Result.Success(new PlaceOrderResponse(order.Id, estimatedTotal));
     }

@@ -99,6 +99,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
 
     // Customers
     public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<Complaint> Complaints => Set<Complaint>();
 
     // Ordering
     public DbSet<Order> Orders => Set<Order>();

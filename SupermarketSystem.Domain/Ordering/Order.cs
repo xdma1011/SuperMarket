@@ -46,6 +46,9 @@ public class Order : AuditableEntity, IBranchOwned
 
     public Guid? ResultingSaleInvoiceId { get; private set; }
 
+    public int? Rating { get; private set; }
+    public string? RatingComment { get; private set; }
+
     private readonly List<OrderItem> _items = new();
     public IReadOnlyCollection<OrderItem> Items => _items.AsReadOnly();
 
@@ -112,6 +115,27 @@ public class Order : AuditableEntity, IBranchOwned
 
         Status = OrderStatus.Completed;
         ResultingSaleInvoiceId = resultingSaleInvoiceId;
+    }
+
+    public void Rate(int rating, string? comment)
+    {
+        if (Status != OrderStatus.Completed)
+        {
+            throw new DomainException("Only a Completed order can be rated.");
+        }
+
+        if (Rating is not null)
+        {
+            throw new DomainException("This order has already been rated.");
+        }
+
+        if (rating is < 1 or > 5)
+        {
+            throw new DomainException("Rating must be between 1 and 5.");
+        }
+
+        Rating = rating;
+        RatingComment = comment;
     }
 }
 

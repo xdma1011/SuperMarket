@@ -53,6 +53,7 @@ using SupermarketSystem.Application.Purchasing.GetSuppliers;
 using SupermarketSystem.Application.Purchasing.PurchaseInvoiceDrafts;
 using SupermarketSystem.Application.Purchasing.RecordPurchaseInvoicePayment;
 using SupermarketSystem.Application.Reviews.GetPendingReviews;
+using SupermarketSystem.Application.Reviews.MarkComplaintReviewed;
 using SupermarketSystem.Application.Reviews.MarkPurchaseInvoiceItemReviewed;
 using SupermarketSystem.Application.Reviews.MarkStockMovementReviewed;
 using SupermarketSystem.Application.Reporting.GetBestCashiers;
@@ -60,12 +61,17 @@ using SupermarketSystem.Application.Reporting.GetCurrentCapitalValue;
 using SupermarketSystem.Application.Reporting.GetBestCustomers;
 using SupermarketSystem.Application.Reporting.GetManualDiscounts;
 using SupermarketSystem.Application.Reporting.GetNegativeStock;
+using SupermarketSystem.Application.Customers.BlockCustomer;
+using SupermarketSystem.Application.Customers.FileComplaint;
+using SupermarketSystem.Application.Customers.GetCustomers;
+using SupermarketSystem.Application.Customers.UnblockCustomer;
 using SupermarketSystem.Application.Ordering.AcceptOrder;
 using SupermarketSystem.Application.Ordering.CompleteOrder;
 using SupermarketSystem.Application.Ordering.GetCustomerOrders;
 using SupermarketSystem.Application.Ordering.GetOrderById;
 using SupermarketSystem.Application.Ordering.GetPendingOrders;
 using SupermarketSystem.Application.Ordering.PlaceOrder;
+using SupermarketSystem.Application.Ordering.RateOrder;
 using SupermarketSystem.Application.Ordering.RejectOrder;
 using SupermarketSystem.Application.Sales.CompleteSale;
 using SupermarketSystem.Application.Sales.GetSaleInvoiceById;
@@ -143,6 +149,7 @@ public static class DependencyInjection
         services.AddScoped<GetPendingReviewsHandler>();
         services.AddScoped<MarkStockMovementReviewedHandler>();
         services.AddScoped<MarkPurchaseInvoiceItemReviewedHandler>();
+        services.AddScoped<MarkComplaintReviewedHandler>();
         services.AddScoped<CompletePurchaseInvoiceHandler>();
         services.AddScoped<GetPaymentMethodsHandler>();
         services.AddScoped<GetPurchaseInvoicesHandler>();
@@ -156,6 +163,11 @@ public static class DependencyInjection
 
         services.AddScoped<CompleteSaleHandler>();
 
+        services.AddScoped<GetCustomersHandler>();
+        services.AddScoped<BlockCustomerHandler>();
+        services.AddScoped<UnblockCustomerHandler>();
+        services.AddScoped<FileComplaintHandler>();
+
         services.AddScoped<PlaceOrderHandler>();
         services.AddScoped<GetPendingOrdersHandler>();
         services.AddScoped<GetOrderByIdHandler>();
@@ -163,6 +175,7 @@ public static class DependencyInjection
         services.AddScoped<AcceptOrderHandler>();
         services.AddScoped<RejectOrderHandler>();
         services.AddScoped<CompleteOrderHandler>();
+        services.AddScoped<RateOrderHandler>();
         services.AddScoped<VoidSaleHandler>();
         services.AddScoped<GetSaleInvoicesHandler>();
         services.AddScoped<GetSaleInvoiceByIdHandler>();

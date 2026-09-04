@@ -280,6 +280,14 @@ public class PermissionConfiguration : IEntityTypeConfiguration<Permission>
             Description = "Upload a purchase invoice image, run AI extraction, and save the result as a draft pending review - does not create or approve a real purchase invoice.",
             CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });
+        builder.HasData(new
+        {
+            Id = Guid.Parse("3b5e8d2f-ac4e-4f6b-9d70-2e3f4a5b6c7d"),
+            Code = "Customers.Manage",
+            Name = "Manage customers",
+            Description = "List customers and block/unblock a customer from placing new orders through the customer app.",
+            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+        });
     }
 }
 
@@ -429,6 +437,14 @@ public class RolePermissionConfiguration : IEntityTypeConfiguration<RolePermissi
             PermissionId = Guid.Parse("2a4f7c1e-9b3d-4e5a-8c6f-1d2e3a4b5c6d")
         });
 
+        // Master Admin -> الصلاحية الجديدة (Customers.Manage)
+        builder.HasData(new
+        {
+            Id = Guid.Parse("4c6f9e3a-bd5f-4a7c-8e91-3f4a5b6c7d8e"),
+            RoleId = Guid.Parse("50e6125a-cac0-4d82-a0b8-9f3c6fff59d7"),
+            PermissionId = Guid.Parse("3b5e8d2f-ac4e-4f6b-9d70-2e3f4a5b6c7d")
+        });
+
         // Seed: ربط دور كاشير بصلاحياته (PermissionCodes.CashierDefaults).
         builder.HasData(new
         {
@@ -539,6 +555,12 @@ public class RolePermissionConfiguration : IEntityTypeConfiguration<RolePermissi
             Id = Guid.Parse("9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d"),
             RoleId = Guid.Parse("5d0b3578-417e-4706-ab9b-fc9a208b6642"),
             PermissionId = Guid.Parse("2a4f7c1e-9b3d-4e5a-8c6f-1d2e3a4b5c6d")
+        });
+        builder.HasData(new
+        {
+            Id = Guid.Parse("5d7fa04b-ce6a-4b8d-af02-4a5b6c7d8e9f"),
+            RoleId = Guid.Parse("5d0b3578-417e-4706-ab9b-fc9a208b6642"),
+            PermissionId = Guid.Parse("3b5e8d2f-ac4e-4f6b-9d70-2e3f4a5b6c7d")
         });
     }
 }

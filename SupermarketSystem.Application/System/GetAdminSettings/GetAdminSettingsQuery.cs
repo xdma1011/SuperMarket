@@ -40,7 +40,11 @@ public sealed class GetAdminSettingsHandler
         // ما بيقدر يعتمد على Infrastructure (اتجاه الاعتمادية)، فالمفتاح
         // مكرَّر هون كنص صريح عمدًا، لا استيراد.
         ("PendingReview.EscalationThresholdDays", "عدد الأيام قبل تصعيد عنصر بانتظار المراجعة", AdminSettingDataType.Decimal),
-        (PurchasingPolicyKeys.PriceIncreaseWarningThresholdPercent, "نسبة ارتفاع سعر الشراء (%) قبل التعليم للمراجعة (مقارنة بمتوسط آخر 5 عمليات شراء)", AdminSettingDataType.Decimal)
+        (PurchasingPolicyKeys.PriceIncreaseWarningThresholdPercent, "نسبة ارتفاع سعر الشراء (%) قبل التعليم للمراجعة (مقارنة بمتوسط آخر 5 عمليات شراء)", AdminSettingDataType.Decimal),
+        (OrderingPolicyKeys.Enabled, "استقبال طلبات تطبيق الزبائن مفعَّل", AdminSettingDataType.Boolean),
+        (OrderingPolicyKeys.MinimumOrderAmount, "أقل مبلغ إجمالي مسموح للطلب (0 = بلا حد أدنى)", AdminSettingDataType.Decimal),
+        (OrderingPolicyKeys.LoyaltyEnabled, "إظهار وتفعيل نقاط الولاء بتطبيق الزبائن", AdminSettingDataType.Boolean),
+        (OrderingPolicyKeys.DailyOrderCountAlertThreshold, "عدد طلبات نفس الزبون باليوم قبل تنبيهك (إساءة استخدام محتملة)", AdminSettingDataType.Decimal)
     };
 
     private readonly IApplicationDbContext _context;

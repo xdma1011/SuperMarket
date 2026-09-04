@@ -7,6 +7,7 @@ using SupermarketSystem.Application.Ordering.GetCustomerOrders;
 using SupermarketSystem.Application.Ordering.GetOrderById;
 using SupermarketSystem.Application.Ordering.GetPendingOrders;
 using SupermarketSystem.Application.Ordering.PlaceOrder;
+using SupermarketSystem.Application.Ordering.RateOrder;
 using SupermarketSystem.Application.Ordering.RejectOrder;
 using SupermarketSystem.Domain.Ordering;
 
@@ -57,6 +58,23 @@ public static class OrderingEndpoints
         .AllowAnonymous()
         .WithSummary("⚠️ مؤقت بلا تحقق هوية حقيقي - سجل طلبات زبون واحد.")
         .Produces<PagedResult<OrderListItemDto>>(StatusCodes.Status200OK);
+
+        app.MapPost("/api/v1/orders/{orderId:guid}/rate", async (
+            Guid orderId,
+            RateOrderRequest request,
+            RateOrderHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new RateOrderCommand(orderId, request.Rating, request.Comment), cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithName("RateOrder")
+        .WithTags("Ordering")
+        .AllowAnonymous()
+        .WithSummary("⚠️ مؤقت بلا تحقق هوية حقيقي - يسجّل تقييم (1-5) لطلب مكتمل، مرة واحدة بس.")
+        .Produces(StatusCodes.Status204NoContent)
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status404NotFound);
 
         var cashierGroup = app.MapGroup("/api/v1/orders").WithTags("Ordering").RequirePermission(PermissionCodes.SalesCreate);
 
@@ -141,4 +159,6 @@ public static class OrderingEndpoints
 
     public sealed record CompleteOrderRequest(
         IReadOnlyList<Application.Ordering.CompleteOrder.CompleteOrderPaymentDto> Payments, Guid ClientRequestId);
+
+    public sealed record RateOrderRequest(int Rating, string? Comment);
 }
