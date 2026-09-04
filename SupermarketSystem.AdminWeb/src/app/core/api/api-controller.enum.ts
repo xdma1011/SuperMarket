@@ -14,6 +14,7 @@ export enum ApiController {
   Products = 'products',
   PurchaseInvoices = 'purchase-invoices',
   Notifications = 'notifications',
+  Orders = 'orders',
   PaymentMethods = 'payment-methods',
   Reports = 'reports',
   Returns = 'returns',

@@ -9,6 +9,7 @@ using SupermarketSystem.Domain.Customers;
 using SupermarketSystem.Domain.Identity;
 using SupermarketSystem.Domain.Inventory;
 using SupermarketSystem.Domain.Notifications;
+using SupermarketSystem.Domain.Ordering;
 using SupermarketSystem.Domain.Payments;
 using SupermarketSystem.Domain.Purchasing;
 using SupermarketSystem.Domain.Sales;
@@ -86,6 +87,10 @@ public interface IApplicationDbContext
 
     // Customers
     DbSet<Customer> Customers { get; }
+
+    // Ordering (تطبيق الزبائن - أساس، راجع نقاش صاحب المشروع)
+    DbSet<Order> Orders { get; }
+    DbSet<OrderItem> OrderItems { get; }
 
     // Settings
     DbSet<SystemSetting> SystemSettings { get; }

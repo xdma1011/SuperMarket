@@ -69,6 +69,12 @@ public class BranchOwnedPurchaseInvoiceConfiguration : IEntityTypeConfiguration<
         builder.HasOne<Branch>().WithMany().HasForeignKey(e => e.BranchId).OnDelete(DeleteBehavior.Restrict);
 }
 
+public class BranchOwnedOrderConfiguration : IEntityTypeConfiguration<Domain.Ordering.Order>
+{
+    public void Configure(EntityTypeBuilder<Domain.Ordering.Order> builder) =>
+        builder.HasOne<Branch>().WithMany().HasForeignKey(e => e.BranchId).OnDelete(DeleteBehavior.Restrict);
+}
+
 public class BranchOwnedPurchaseInvoiceDraftConfiguration : IEntityTypeConfiguration<PurchaseInvoiceDraft>
 {
     public void Configure(EntityTypeBuilder<PurchaseInvoiceDraft> builder) =>

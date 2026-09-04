@@ -14,6 +14,7 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(c => c.FullName).IsRequired().HasMaxLength(200);
         builder.Property(c => c.Phone).HasMaxLength(30);
         builder.Property(c => c.Email).HasMaxLength(256);
+        builder.Property(c => c.IsBlocked).IsRequired();
         builder.Property(c => c.RowVersion).IsRowVersion();
         builder.Property(c => c.CreatedAtUtc).HasColumnType("datetime2").IsRequired();
         builder.Property(c => c.UpdatedAtUtc).HasColumnType("datetime2");

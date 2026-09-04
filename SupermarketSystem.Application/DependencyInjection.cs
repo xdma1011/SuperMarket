@@ -60,6 +60,13 @@ using SupermarketSystem.Application.Reporting.GetCurrentCapitalValue;
 using SupermarketSystem.Application.Reporting.GetBestCustomers;
 using SupermarketSystem.Application.Reporting.GetManualDiscounts;
 using SupermarketSystem.Application.Reporting.GetNegativeStock;
+using SupermarketSystem.Application.Ordering.AcceptOrder;
+using SupermarketSystem.Application.Ordering.CompleteOrder;
+using SupermarketSystem.Application.Ordering.GetCustomerOrders;
+using SupermarketSystem.Application.Ordering.GetOrderById;
+using SupermarketSystem.Application.Ordering.GetPendingOrders;
+using SupermarketSystem.Application.Ordering.PlaceOrder;
+using SupermarketSystem.Application.Ordering.RejectOrder;
 using SupermarketSystem.Application.Sales.CompleteSale;
 using SupermarketSystem.Application.Sales.GetSaleInvoiceById;
 using SupermarketSystem.Application.Sales.GetSaleInvoices;
@@ -148,6 +155,14 @@ public static class DependencyInjection
         services.AddScoped<GetPurchaseInvoiceDraftImagePathHandler>();
 
         services.AddScoped<CompleteSaleHandler>();
+
+        services.AddScoped<PlaceOrderHandler>();
+        services.AddScoped<GetPendingOrdersHandler>();
+        services.AddScoped<GetOrderByIdHandler>();
+        services.AddScoped<GetCustomerOrdersHandler>();
+        services.AddScoped<AcceptOrderHandler>();
+        services.AddScoped<RejectOrderHandler>();
+        services.AddScoped<CompleteOrderHandler>();
         services.AddScoped<VoidSaleHandler>();
         services.AddScoped<GetSaleInvoicesHandler>();
         services.AddScoped<GetSaleInvoiceByIdHandler>();

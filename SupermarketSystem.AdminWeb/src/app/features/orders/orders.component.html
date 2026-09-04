@@ -1,0 +1,122 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">الطلبات</span>
+    <h1>طلبات الزبائن</h1>
+    <span class="subtitle">بانتظار القبول أو قيد التجهيز - أساس تطبيق الزبائن.</span>
+  </div>
+</div>
+
+@if (actionMessage()) {
+  <div class="alert-banner success">{{ actionMessage() }}</div>
+}
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<section class="table-panel">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>الزبون</th>
+          <th>الهاتف</th>
+          <th>عدد الأصناف</th>
+          <th>الإجمالي التقديري</th>
+          <th>الحالة</th>
+          <th>ملاحظة التوصيل</th>
+          <th>التاريخ</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (o of orders(); track o.id) {
+          <tr>
+            <td>{{ o.customerName }}</td>
+            <td class="mono">{{ o.customerPhone || '—' }}</td>
+            <td class="mono">{{ o.itemCount }}</td>
+            <td class="mono">{{ o.estimatedTotal | number: '1.2-2' }}</td>
+            <td>
+              <span class="status-chip" [class.inactive]="o.status === 4">{{ statusLabel(o.status) }}</span>
+            </td>
+            <td>{{ o.deliveryNote || '—' }}</td>
+            <td class="mono">{{ o.createdAtUtc | date: 'yyyy-MM-dd HH:mm' }}</td>
+            <td>
+              @if (o.status === 1) {
+                <button type="button" class="link-btn" [disabled]="processingId() === o.id" (click)="accept(o)">قبول</button>
+                <button type="button" class="link-btn danger" [disabled]="processingId() === o.id" (click)="openRejectModal(o)">رفض</button>
+              }
+              @if (o.status === 2) {
+                <button type="button" class="link-btn" [disabled]="processingId() === o.id" (click)="openCompleteModal(o)">إكمال (تم التسليم)</button>
+                <button type="button" class="link-btn danger" [disabled]="processingId() === o.id" (click)="openRejectModal(o)">رفض</button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (!loading() && orders().length === 0) {
+      <div class="no-results">
+        <span class="no-results-title">لا توجد طلبات حاليًا</span>
+      </div>
+    }
+
+    @if (loading()) {
+      <div class="no-results">
+        <span class="no-results-sub">جارٍ التحميل…</span>
+      </div>
+    }
+  </div>
+</section>
+
+@if (rejectModalOpen()) {
+  <div class="modal-backdrop" (click)="closeRejectModal()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <h2>رفض الطلب</h2>
+        <button type="button" class="icon-btn" (click)="closeRejectModal()" aria-label="إغلاق">×</button>
+      </div>
+
+      <label class="field">
+        <span>سبب الرفض (إلزامي)</span>
+        <textarea rows="3" [(ngModel)]="rejectReason"></textarea>
+      </label>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" (click)="confirmReject()">تأكيد الرفض</button>
+        <button type="button" class="btn-ghost" (click)="closeRejectModal()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (completeModalOpen()) {
+  <div class="modal-backdrop" (click)="closeCompleteModal()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <h2>إكمال الطلب - تسجيل الدفعة</h2>
+        <button type="button" class="icon-btn" (click)="closeCompleteModal()" aria-label="إغلاق">×</button>
+      </div>
+
+      <div class="modal-fields">
+        <label class="field">
+          <span>المبلغ المستلَم</span>
+          <input type="number" min="0.01" step="0.01" [(ngModel)]="completeAmount" />
+        </label>
+        <label class="field">
+          <span>طريقة الدفع</span>
+          <select [(ngModel)]="completePaymentMethodId">
+            @for (m of paymentMethods(); track m.id) {
+              <option [value]="m.id">{{ m.name }}</option>
+            }
+          </select>
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" (click)="confirmComplete()">تأكيد الإكمال</button>
+        <button type="button" class="btn-ghost" (click)="closeCompleteModal()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+}

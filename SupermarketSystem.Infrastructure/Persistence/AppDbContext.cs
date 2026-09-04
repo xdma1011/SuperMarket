@@ -11,6 +11,7 @@ using SupermarketSystem.Domain.Customers;
 using SupermarketSystem.Domain.Identity;
 using SupermarketSystem.Domain.Inventory;
 using SupermarketSystem.Domain.Notifications;
+using SupermarketSystem.Domain.Ordering;
 using SupermarketSystem.Domain.Payments;
 using SupermarketSystem.Domain.Purchasing;
 using SupermarketSystem.Domain.Sales;
@@ -98,6 +99,10 @@ public class AppDbContext : DbContext, IApplicationDbContext
 
     // Customers
     public DbSet<Customer> Customers => Set<Customer>();
+
+    // Ordering
+    public DbSet<Order> Orders => Set<Order>();
+    public DbSet<OrderItem> OrderItems => Set<OrderItem>();
 
     // Settings
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();

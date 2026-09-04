@@ -114,6 +114,7 @@ app.MapSupplierEndpoints();
 app.MapPurchasingEndpoints();
 app.MapPurchaseInvoiceDraftEndpoints();
 app.MapSalesEndpoints();
+app.MapOrderingEndpoints();
 app.MapReturnEndpoints();
 app.MapCashManagementEndpoints();
 app.MapStocktakeEndpoints();

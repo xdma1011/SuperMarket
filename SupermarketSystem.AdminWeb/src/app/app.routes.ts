@@ -24,6 +24,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/sales/sales.component').then(m => m.SalesComponent)
       },
       {
+        path: 'orders',
+        canActivate: [requirePermissionGuard('Sales.Create')],
+        loadComponent: () => import('./features/orders/orders.component').then(m => m.OrdersComponent)
+      },
+      {
         path: 'returns',
         canActivate: [requirePermissionGuard('Returns.Process')],
         loadComponent: () => import('./features/returns/returns.component').then(m => m.ReturnsComponent)

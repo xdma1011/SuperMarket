@@ -11,6 +11,7 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { id: 'home', label: 'الرئيسية', route: '/', requiredPermission: null },
   { id: 'sales', label: 'المبيعات', route: '/sales', requiredPermission: 'Sales.Create' },
+  { id: 'orders', label: 'طلبات الزبائن', route: '/orders', requiredPermission: 'Sales.Create' },
   { id: 'returns', label: 'الإرجاعات', route: '/returns', requiredPermission: 'Returns.Process' },
   { id: 'reviews', label: 'المراجعات', route: '/reviews', requiredPermission: 'Returns.Review' },
   { id: 'purchases', label: 'المشتريات', route: '/purchases', requiredPermission: 'Purchasing.Create' },

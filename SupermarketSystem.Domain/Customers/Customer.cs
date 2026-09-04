@@ -14,6 +14,10 @@ public class Customer : AuditableEntity, ISoftDeletable, IHasRowVersion
     public string? Phone { get; private set; }
     public string? Email { get; private set; }
     public bool IsDeleted { get; private set; }
+
+    /// <summary>حظر يمنع تقديم طلبات جديدة عبر تطبيق الزبائن - لا يمنع بيع POS عادي له، ولا يحذف تاريخه. راجع نقاش "حظر رقم متلاعب".</summary>
+    public bool IsBlocked { get; private set; }
+
     public byte[]? RowVersion { get; private set; }
 
     private readonly List<CustomerNote> _notes = new();
@@ -37,6 +41,9 @@ public class Customer : AuditableEntity, ISoftDeletable, IHasRowVersion
 
     public void MarkDeleted() => IsDeleted = true;
     public void Restore() => IsDeleted = false;
+
+    public void Block() => IsBlocked = true;
+    public void Unblock() => IsBlocked = false;
 }
 
 public class CustomerNote : Entity
