@@ -8,7 +8,8 @@ namespace SupermarketSystem.Application.System.GetAdminSettings;
 public enum AdminSettingDataType
 {
     Boolean = 1,
-    Decimal = 2
+    Decimal = 2,
+    String = 3
 }
 
 public sealed record AdminSettingDto(string Key, string Label, string Value, AdminSettingDataType DataType);
@@ -44,6 +45,8 @@ public sealed class GetAdminSettingsHandler
         (OrderingPolicyKeys.Enabled, "استقبال طلبات تطبيق الزبائن مفعَّل", AdminSettingDataType.Boolean),
         (OrderingPolicyKeys.MinimumOrderAmount, "أقل مبلغ إجمالي مسموح للطلب (0 = بلا حد أدنى)", AdminSettingDataType.Decimal),
         (OrderingPolicyKeys.LoyaltyEnabled, "إظهار وتفعيل نقاط الولاء بتطبيق الزبائن", AdminSettingDataType.Boolean),
+        (OrderingPolicyKeys.LoyaltyPointsPerCurrencyUnit, "عدد نقاط الولاء لكل دينار من قيمة الطلب المكتمل (0 = بلا اكتساب)", AdminSettingDataType.Decimal),
+        (TelegramSettingsKeys.BotUsername, "اسم مستخدم بوت تلغرام (بدون @، للرابط العلني)", AdminSettingDataType.String),
         (OrderingPolicyKeys.DailyOrderCountAlertThreshold, "عدد طلبات نفس الزبون باليوم قبل تنبيهك (إساءة استخدام محتملة)", AdminSettingDataType.Decimal)
     };
 

@@ -8,7 +8,18 @@ using SupermarketSystem.Application.Authentication.RevokeSession;
 using SupermarketSystem.Application.Backups.DeleteBackup;
 using SupermarketSystem.Application.System.BootstrapAdmin;
 using SupermarketSystem.Application.System.GetAdminSettings;
+using SupermarketSystem.Application.System.GetSecretSettings;
+using SupermarketSystem.Application.System.UpdateSecretSetting;
 using SupermarketSystem.Application.System.UpdateAdminSetting;
+using SupermarketSystem.Application.CustomerAuth.RequestCustomerOtp;
+using SupermarketSystem.Application.CustomerAuth.VerifyCustomerOtp;
+using SupermarketSystem.Application.CustomerAuth.LinkTelegramContact;
+using SupermarketSystem.Application.Customers.GetCustomerLoyaltyBalance;
+using SupermarketSystem.Application.Customers.GetCustomerQrToken;
+using SupermarketSystem.Application.Customers.RedeemLoyaltyPoints;
+using SupermarketSystem.Application.Customers.RegisterCustomerDeviceToken;
+using SupermarketSystem.Application.Customers.ResolveCustomerQrToken;
+using SupermarketSystem.Application.Common.Services;
 using SupermarketSystem.Application.Catalog.UpdateProduct;
 using SupermarketSystem.Application.Catalog.UpdateProductCategory;
 using SupermarketSystem.Application.Purchasing.UpdateSupplier;
@@ -114,6 +125,8 @@ public static class DependencyInjection
         services.AddScoped<GetMyPermissionsHandler>();
         services.AddScoped<BootstrapAdminHandler>();
         services.AddScoped<GetAdminSettingsHandler>();
+        services.AddScoped<GetSecretSettingsHandler>();
+        services.AddScoped<UpdateSecretSettingHandler>();
         services.AddScoped<UpdateAdminSettingHandler>();
         services.AddScoped<CreateUserHandler>();
         services.AddScoped<UpdateUserHandler>();
@@ -167,6 +180,10 @@ public static class DependencyInjection
         services.AddScoped<BlockCustomerHandler>();
         services.AddScoped<UnblockCustomerHandler>();
         services.AddScoped<FileComplaintHandler>();
+        services.AddScoped<GetCustomerQrTokenHandler>();
+        services.AddScoped<ResolveCustomerQrTokenHandler>();
+        services.AddScoped<GetCustomerLoyaltyBalanceHandler>();
+        services.AddScoped<RedeemLoyaltyPointsHandler>();
 
         services.AddScoped<PlaceOrderHandler>();
         services.AddScoped<GetPendingOrdersHandler>();
@@ -176,6 +193,10 @@ public static class DependencyInjection
         services.AddScoped<RejectOrderHandler>();
         services.AddScoped<CompleteOrderHandler>();
         services.AddScoped<RateOrderHandler>();
+
+        services.AddScoped<RequestCustomerOtpHandler>();
+        services.AddScoped<VerifyCustomerOtpHandler>();
+        services.AddScoped<LinkTelegramContactHandler>();
         services.AddScoped<VoidSaleHandler>();
         services.AddScoped<GetSaleInvoicesHandler>();
         services.AddScoped<GetSaleInvoiceByIdHandler>();
@@ -217,6 +238,8 @@ public static class DependencyInjection
         services.AddScoped<DeleteBackupHandler>();
 
         services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
+        services.AddScoped<ICustomerPushNotifier, CustomerPushNotifier>();
+        services.AddScoped<RegisterCustomerDeviceTokenHandler>();
 
         return services;
     }

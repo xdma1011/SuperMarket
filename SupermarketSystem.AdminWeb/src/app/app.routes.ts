@@ -119,6 +119,11 @@ export const routes: Routes = [
         path: 'admin-settings',
         canActivate: [requirePermissionGuard('System.SettingsManage')],
         loadComponent: () => import('./features/admin-settings/admin-settings.component').then(m => m.AdminSettingsComponent)
+      },
+      {
+        path: 'admin-secrets',
+        canActivate: [requirePermissionGuard('System.SettingsManage')],
+        loadComponent: () => import('./features/admin-secrets/admin-secrets.component').then(m => m.AdminSecretsComponent)
       }
     ]
   },

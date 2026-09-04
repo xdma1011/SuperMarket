@@ -78,6 +78,9 @@ public sealed class UpdateAdminSettingHandler
                     ? decimalValue.ToString(CultureInfo.InvariantCulture)
                     : null;
 
+            case AdminSettingDataType.String:
+                return rawValue;
+
             default:
                 return null;
         }

@@ -14,4 +14,7 @@ public static class OrderingPolicyKeys
 
     /// <summary>عدد طلبات نفس الزبون بنفس اليوم اللي فوقه يُرسَل تنبيه لصاحب المشروع - مؤشر إساءة استخدام محتملة، لا يمنع الطلب.</summary>
     public const string DailyOrderCountAlertThreshold = "Ordering.DailyOrderCountAlertThreshold";
+
+    /// <summary>عدد نقاط الولاء المكتسبة لكل وحدة عملة من إجمالي الطلب المكتمل - 0 يعطّل الاكتساب كليًا حتى لو LoyaltyEnabled=true.</summary>
+    public const string LoyaltyPointsPerCurrencyUnit = "Loyalty.PointsPerCurrencyUnit";
 }

@@ -16,12 +16,18 @@ public sealed class AcceptOrderHandler
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserContext _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly ICustomerPushNotifier _pushNotifier;
 
-    public AcceptOrderHandler(IApplicationDbContext context, ICurrentUserContext currentUser, IDateTimeProvider dateTimeProvider)
+    public AcceptOrderHandler(
+        IApplicationDbContext context,
+        ICurrentUserContext currentUser,
+        IDateTimeProvider dateTimeProvider,
+        ICustomerPushNotifier pushNotifier)
     {
         _context = context;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
+        _pushNotifier = pushNotifier;
     }
 
     public async Task<Result> HandleAsync(AcceptOrderCommand command, CancellationToken cancellationToken)
@@ -45,6 +51,11 @@ public sealed class AcceptOrderHandler
         }
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // فشل إرسال الإشعار ما يفشّل قبول الطلب - راجع تعليق ICustomerPushNotifier.
+        await _pushNotifier.NotifyOrderStatusChangedAsync(
+            order.CustomerId, "تم قبول طلبك ✅", "جاري تجهيز طلبك الآن.", cancellationToken);
+
         return Result.Success();
     }
 }

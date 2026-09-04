@@ -60,3 +60,78 @@ public class ComplaintConfiguration : IEntityTypeConfiguration<Complaint>
         builder.HasOne<SupermarketSystem.Domain.Ordering.Order>().WithMany().HasForeignKey(c => c.OrderId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+public class TelegramChatLinkConfiguration : IEntityTypeConfiguration<TelegramChatLink>
+{
+    public void Configure(EntityTypeBuilder<TelegramChatLink> builder)
+    {
+        builder.ToTable("TelegramChatLinks");
+        builder.HasKey(l => l.Id);
+
+        builder.Property(l => l.Phone).IsRequired().HasMaxLength(30);
+        builder.Property(l => l.ChatId).IsRequired().HasMaxLength(50);
+        builder.Property(l => l.LinkedAtUtc).HasColumnType("datetime2").IsRequired();
+
+        // رقم واحد = ربط فعّال واحد (Relink بيحدّث نفس السطر، لا يضيف سطر جديد).
+        builder.HasIndex(l => l.Phone).IsUnique();
+    }
+}
+
+public class CustomerDeviceTokenConfiguration : IEntityTypeConfiguration<CustomerDeviceToken>
+{
+    public void Configure(EntityTypeBuilder<CustomerDeviceToken> builder)
+    {
+        builder.ToTable("CustomerDeviceTokens");
+        builder.HasKey(t => t.Id);
+
+        builder.Property(t => t.Token).IsRequired().HasMaxLength(500);
+        builder.Property(t => t.Platform).IsRequired().HasConversion<int>();
+        builder.Property(t => t.RegisteredAtUtc).HasColumnType("datetime2").IsRequired();
+
+        // نفس رقم التوكن ممكن يتسجّل لزبونين مختلفين بالتتابع (جهاز مشترك،
+        // إعادة تثبيت) - فريد على مستوى Token نفسه لا (CustomerId, Token)،
+        // فيمنع تراكم أشباح لتوكن أُعيد استخدامه.
+        builder.HasIndex(t => t.Token).IsUnique();
+        builder.HasIndex(t => t.CustomerId);
+
+        builder.HasOne<Customer>().WithMany().HasForeignKey(t => t.CustomerId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public class CustomerLoyaltyPointsEntryConfiguration : IEntityTypeConfiguration<CustomerLoyaltyPointsEntry>
+{
+    public void Configure(EntityTypeBuilder<CustomerLoyaltyPointsEntry> builder)
+    {
+        builder.ToTable("CustomerLoyaltyPointsEntries");
+        builder.HasKey(e => e.Id);
+
+        builder.Property(e => e.Points).IsRequired();
+        builder.Property(e => e.Reason).IsRequired().HasConversion<int>();
+        builder.Property(e => e.CreatedAtUtc).HasColumnType("datetime2").IsRequired();
+
+        // الرصيد الحالي = SUM(Points) لكل زبون - هذا الفهرس هو اللي بيخلي
+        // ذاك الاستعلام سريع بلا Migration لعمود رصيد منفصل.
+        builder.HasIndex(e => e.CustomerId);
+
+        builder.HasOne<Customer>().WithMany().HasForeignKey(e => e.CustomerId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<SupermarketSystem.Domain.Ordering.Order>().WithMany().HasForeignKey(e => e.OrderId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class CustomerOtpCodeConfiguration : IEntityTypeConfiguration<CustomerOtpCode>
+{
+    public void Configure(EntityTypeBuilder<CustomerOtpCode> builder)
+    {
+        builder.ToTable("CustomerOtpCodes");
+        builder.HasKey(o => o.Id);
+
+        builder.Property(o => o.Phone).IsRequired().HasMaxLength(30);
+        builder.Property(o => o.CodeHash).IsRequired().HasMaxLength(100);
+        builder.Property(o => o.ExpiresAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(o => o.CreatedAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(o => o.IsUsed).IsRequired();
+
+        // آخر كود فعّال لرقم معيّن - يُقرأ Descending بالإنشاء لجلب الأحدث.
+        builder.HasIndex(o => new { o.Phone, o.CreatedAtUtc });
+    }
+}

@@ -100,6 +100,10 @@ public class AppDbContext : DbContext, IApplicationDbContext
     // Customers
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Complaint> Complaints => Set<Complaint>();
+    public DbSet<TelegramChatLink> TelegramChatLinks => Set<TelegramChatLink>();
+    public DbSet<CustomerOtpCode> CustomerOtpCodes => Set<CustomerOtpCode>();
+    public DbSet<CustomerDeviceToken> CustomerDeviceTokens => Set<CustomerDeviceToken>();
+    public DbSet<CustomerLoyaltyPointsEntry> CustomerLoyaltyPointsEntries => Set<CustomerLoyaltyPointsEntry>();
 
     // Ordering
     public DbSet<Order> Orders => Set<Order>();

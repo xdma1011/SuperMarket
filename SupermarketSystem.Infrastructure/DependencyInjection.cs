@@ -70,6 +70,16 @@ public static class DependencyInjection
         // ثابت (الرابط الكامل يُبنى بالتوكن جوّا SendAsync نفسها).
         services.AddHttpClient<INotificationSender, TelegramNotificationSender>();
 
+        // بوت تلغرام لتسجيل دخول الزبائن (OTP) — منفصل عن بوت تنبيهات
+        // الإدارة أعلاه (راجع تعليق TelegramBotClient).
+        services.AddHttpClient<ITelegramBotClient, TelegramBotClient>();
+
+        // Firebase Push Notifications - typed HttpClient قياسي (بلا Singleton
+        // مخصص لتفادي تعقيد دورة حياة HttpClientFactory - تخزين access
+        // token المؤقت بالذاكرة يعمل ضمن نطاق كل طلب، راجع تعليق
+        // FirebasePushNotificationSender).
+        services.AddHttpClient<IPushNotificationSender, FirebasePushNotificationSender>();
+
         services.AddScoped<IBackupService, SqlServerBackupService>();
         services.AddHostedService<DailyBackupBackgroundService>();
         services.AddHostedService<PendingReviewEscalationBackgroundService>();
@@ -96,6 +106,13 @@ public static class DependencyInjection
         // === المصادقة ===
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
         services.AddSingleton<ITokenService, JwtTokenService>();
+
+        // توكن هوية الزبون (بعد نجاح OTP) — يعيد استخدام نفس مفتاح التوقيع،
+        // بلا حالة، Singleton كافٍ (راجع تعليق CustomerAuthTokenService).
+        services.AddSingleton<ICustomerAuthTokenService, CustomerAuthTokenService>();
+
+        // توكن QR ثابت لهوية الزبون (منع تلاعب رقم هاتف يدوي بالكاشير).
+        services.AddSingleton<IQrTokenService, QrTokenService>();
 
         var jwtOptions = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 

@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Application.Common.Interfaces;
+using SupermarketSystem.Application.Common.Policies;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Application.Sales.CompleteSale;
+using SupermarketSystem.Domain.Customers;
 using SupermarketSystem.Domain.Ordering;
 
 namespace SupermarketSystem.Application.Ordering.CompleteOrder;
@@ -22,11 +24,22 @@ public sealed class CompleteOrderHandler
 {
     private readonly IApplicationDbContext _context;
     private readonly CompleteSaleHandler _completeSaleHandler;
+    private readonly ICustomerPushNotifier _pushNotifier;
+    private readonly ISettingsProvider _settingsProvider;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public CompleteOrderHandler(IApplicationDbContext context, CompleteSaleHandler completeSaleHandler)
+    public CompleteOrderHandler(
+        IApplicationDbContext context,
+        CompleteSaleHandler completeSaleHandler,
+        ICustomerPushNotifier pushNotifier,
+        ISettingsProvider settingsProvider,
+        IDateTimeProvider dateTimeProvider)
     {
         _context = context;
         _completeSaleHandler = completeSaleHandler;
+        _pushNotifier = pushNotifier;
+        _settingsProvider = settingsProvider;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<Result<CompleteSaleResponse>> HandleAsync(CompleteOrderCommand command, CancellationToken cancellationToken)
@@ -94,7 +107,23 @@ public sealed class CompleteOrderHandler
         }
 
         order.Complete(saleResult.Value.SaleInvoiceId);
+
+        var loyaltyEnabled = await _settingsProvider.GetBoolAsync(OrderingPolicyKeys.LoyaltyEnabled, false, cancellationToken);
+        if (loyaltyEnabled)
+        {
+            var pointsPerUnit = await _settingsProvider.GetDecimalAsync(OrderingPolicyKeys.LoyaltyPointsPerCurrencyUnit, 0m, cancellationToken);
+            var earnedPoints = (int)Math.Floor(saleResult.Value.TotalAmount * pointsPerUnit);
+            if (earnedPoints > 0)
+            {
+                _context.CustomerLoyaltyPointsEntries.Add(new CustomerLoyaltyPointsEntry(
+                    order.CustomerId, earnedPoints, LoyaltyPointsReason.EarnedFromOrder, order.Id, _dateTimeProvider.UtcNow));
+            }
+        }
+
         await _context.SaveChangesAsync(cancellationToken);
+
+        await _pushNotifier.NotifyOrderStatusChangedAsync(
+            order.CustomerId, "تم تسليم طلبك 🎉", "شكرًا لطلبك، بانتظار طلبك القادم.", cancellationToken);
 
         return saleResult;
     }

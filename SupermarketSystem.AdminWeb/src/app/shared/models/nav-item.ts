@@ -27,5 +27,6 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'notifications', label: 'الإشعارات', route: '/notifications', badge: '5', requiredPermission: 'Notifications.View' },
   { id: 'users', label: 'المستخدمون', route: '/users', requiredPermission: 'Users.Manage' },
   { id: 'sessions', label: 'الجلسات', route: '/sessions', requiredPermission: 'Sessions.Manage' },
-  { id: 'admin-settings', label: 'إعدادات حسّاسة', route: '/admin-settings', requiredPermission: 'System.SettingsManage' }
+  { id: 'admin-settings', label: 'إعدادات حسّاسة', route: '/admin-settings', requiredPermission: 'System.SettingsManage' },
+  { id: 'admin-secrets', label: 'مفاتيح التكاملات', route: '/admin-secrets', requiredPermission: 'System.SettingsManage' }
 ];

@@ -32,6 +32,21 @@
               />
               <span class="slider"></span>
             </label>
+          } @else if (setting.dataType === AdminSettingDataType.String) {
+            <input
+              type="text"
+              class="setting-number"
+              [(ngModel)]="setting.draftValue"
+              [disabled]="setting.saving"
+            />
+            <button
+              type="button"
+              class="btn-outline small"
+              [disabled]="setting.saving || !isDirty(setting)"
+              (click)="save(setting)"
+            >
+              {{ setting.saving ? 'جارٍ الحفظ…' : 'حفظ' }}
+            </button>
           } @else {
             <input
               type="number"

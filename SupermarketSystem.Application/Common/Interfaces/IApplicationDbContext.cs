@@ -88,6 +88,10 @@ public interface IApplicationDbContext
     // Customers
     DbSet<Customer> Customers { get; }
     DbSet<Complaint> Complaints { get; }
+    DbSet<TelegramChatLink> TelegramChatLinks { get; }
+    DbSet<CustomerOtpCode> CustomerOtpCodes { get; }
+    DbSet<CustomerDeviceToken> CustomerDeviceTokens { get; }
+    DbSet<CustomerLoyaltyPointsEntry> CustomerLoyaltyPointsEntries { get; }
 
     // Ordering (تطبيق الزبائن - أساس، راجع نقاش صاحب المشروع)
     DbSet<Order> Orders { get; }

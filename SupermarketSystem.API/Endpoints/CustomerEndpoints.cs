@@ -3,7 +3,13 @@ using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Pagination;
 using SupermarketSystem.Application.Customers.BlockCustomer;
 using SupermarketSystem.Application.Customers.FileComplaint;
+using SupermarketSystem.Application.Customers.GetCustomerQrToken;
+using SupermarketSystem.Application.Customers.GetCustomerLoyaltyBalance;
 using SupermarketSystem.Application.Customers.GetCustomers;
+using SupermarketSystem.Application.Customers.RedeemLoyaltyPoints;
+using SupermarketSystem.Application.Customers.RegisterCustomerDeviceToken;
+using SupermarketSystem.Application.Customers.ResolveCustomerQrToken;
+using SupermarketSystem.Domain.Customers;
 using SupermarketSystem.Application.Customers.UnblockCustomer;
 
 namespace SupermarketSystem.API.Endpoints;
@@ -27,6 +33,93 @@ public static class CustomerEndpoints
         .WithSummary("⚠️ مؤقت بلا تحقق هوية حقيقي - يسجّل شكوى زبون، مرتبطة بطلب أو عامة.")
         .Produces<FileComplaintResponse>(StatusCodes.Status201Created)
         .ProducesProblem(StatusCodes.Status400BadRequest);
+
+        // ⚠️ نفس تحذير OrderingEndpoints.cs - بلا تحقق هوية حقيقي بعد.
+        app.MapGet("/api/v1/customers/{customerId:guid}/qr-token", async (
+            Guid customerId,
+            GetCustomerQrTokenHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new GetCustomerQrTokenQuery(customerId), cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithName("GetCustomerQrToken")
+        .WithTags("Customers")
+        .AllowAnonymous()
+        .WithSummary("⚠️ مؤقت بلا تحقق هوية حقيقي - يولّد توكن QR ثابت لهوية الزبون يعرضه تطبيق الطلبات.")
+        .Produces<GetCustomerQrTokenResponse>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status404NotFound);
+
+        // صلاحية الكاشير (Sales.Create) لا صلاحية إدارة الزبائن - عمدًا
+        // برّا مجموعة CustomersManage تحتها (CLAUDE.md §3.4، تفادي فخ AND).
+        app.MapPost("/api/v1/customers/resolve-qr", async (
+            ResolveCustomerQrTokenRequest request,
+            ResolveCustomerQrTokenHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new ResolveCustomerQrTokenQuery(request.QrToken), cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithName("ResolveCustomerQrToken")
+        .WithTags("Customers")
+        .RequirePermission(PermissionCodes.SalesCreate)
+        .WithSummary("الكاشير يمسح باركود الزبون فيرجّع هويته الفعلية - يمنع تلاعب رقم هاتف يُكتب يدويًا.")
+        .Produces<ResolveCustomerQrTokenResponse>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status404NotFound);
+
+        // ⚠️ نفس تحذير OrderingEndpoints.cs - بلا تحقق هوية حقيقي بعد.
+        app.MapPost("/api/v1/customers/{customerId:guid}/device-tokens", async (
+            Guid customerId,
+            RegisterCustomerDeviceTokenRequest request,
+            RegisterCustomerDeviceTokenHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(
+                new RegisterCustomerDeviceTokenCommand(customerId, request.Token, request.Platform), cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithName("RegisterCustomerDeviceToken")
+        .WithTags("Customers")
+        .AllowAnonymous()
+        .WithSummary("⚠️ مؤقت بلا تحقق هوية حقيقي - يسجّل توكن جهاز FCM لتفعيل إشعارات Push لتطبيق الطلبات.")
+        .Produces(StatusCodes.Status204NoContent)
+        .ProducesProblem(StatusCodes.Status404NotFound);
+
+        // ⚠️ نفس تحذير OrderingEndpoints.cs - بلا تحقق هوية حقيقي بعد.
+        app.MapGet("/api/v1/customers/{customerId:guid}/loyalty-balance", async (
+            Guid customerId,
+            GetCustomerLoyaltyBalanceHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new GetCustomerLoyaltyBalanceQuery(customerId), cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithName("GetCustomerLoyaltyBalance")
+        .WithTags("Customers")
+        .AllowAnonymous()
+        .WithSummary("⚠️ مؤقت بلا تحقق هوية حقيقي - رصيد نقاط الولاء الحالي (محسوب حيًّا، راجع تعليق CustomerLoyaltyPointsEntry).")
+        .Produces<GetCustomerLoyaltyBalanceResponse>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status404NotFound);
+
+        // صلاحية الكاشير - تسجيل استبدال نقاط عملية يدوية بالكاشير، لا
+        // ربط تلقائي بخصم فاتورة بعد (راجع تعليق RedeemLoyaltyPointsHandler).
+        app.MapPost("/api/v1/customers/{customerId:guid}/loyalty/redeem", async (
+            Guid customerId,
+            RedeemLoyaltyPointsRequest request,
+            RedeemLoyaltyPointsHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new RedeemLoyaltyPointsCommand(customerId, request.Points), cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithName("RedeemLoyaltyPoints")
+        .WithTags("Customers")
+        .RequirePermission(PermissionCodes.SalesCreate)
+        .WithSummary("يسجّل استبدال نقاط ولاء بسطر دفتر سالب - لا يخصم تلقائيًا من فاتورة (راجع التحذير بالكود).")
+        .Produces(StatusCodes.Status204NoContent)
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status404NotFound);
 
         // مجموعة إدارة الزبائن - عمدًا برّا المجموعة الأعلى (RequirePermission
         // على مستوى المجموعة، راجع CLAUDE.md §3.4) - الشكوى فوق ما تنحط
@@ -74,4 +167,8 @@ public static class CustomerEndpoints
 
         return app;
     }
+
+    public sealed record ResolveCustomerQrTokenRequest(string QrToken);
+    public sealed record RegisterCustomerDeviceTokenRequest(string Token, DevicePlatform Platform);
+    public sealed record RedeemLoyaltyPointsRequest(int Points);
 }

@@ -2,7 +2,9 @@ using SupermarketSystem.API.Common;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.System.BootstrapAdmin;
 using SupermarketSystem.Application.System.GetAdminSettings;
+using SupermarketSystem.Application.System.GetSecretSettings;
 using SupermarketSystem.Application.System.UpdateAdminSetting;
+using SupermarketSystem.Application.System.UpdateSecretSetting;
 
 namespace SupermarketSystem.API.Endpoints;
 
@@ -53,8 +55,37 @@ public static class SystemEndpoints
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
 
+        app.MapGet("/api/v1/system/secrets", async (
+            GetSecretSettingsHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(cancellationToken);
+            return Results.Ok(result);
+        })
+        .WithName("GetSecretSettings")
+        .WithTags("System")
+        .RequirePermission(PermissionCodes.SystemSettingsManage)
+        .WithSummary("يجلب حالة المفاتيح السرّية (مُعدّ/غير مُعدّ فقط - القيمة نفسها لا ترجع أبدًا).")
+        .Produces<GetSecretSettingsResponse>(StatusCodes.Status200OK);
+
+        app.MapPut("/api/v1/system/secrets", async (
+            UpdateSecretSettingRequest request,
+            UpdateSecretSettingHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new UpdateSecretSettingCommand(request.Key, request.Value), cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithName("UpdateSecretSetting")
+        .WithTags("System")
+        .RequirePermission(PermissionCodes.SystemSettingsManage)
+        .WithSummary("يحدّث قيمة مفتاح سرّي واحد (Key ضمن whitelist صريحة فقط).")
+        .Produces(StatusCodes.Status204NoContent)
+        .ProducesProblem(StatusCodes.Status400BadRequest);
+
         return app;
     }
 
     public sealed record UpdateAdminSettingRequest(string Key, string Value);
+    public sealed record UpdateSecretSettingRequest(string Key, string Value);
 }

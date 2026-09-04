@@ -8,7 +8,8 @@ import { SystemOperation } from '../../core/api/operations';
 
 enum AdminSettingDataType {
   Boolean = 1,
-  Decimal = 2
+  Decimal = 2,
+  String = 3
 }
 
 interface AdminSettingDto {
