@@ -101,6 +101,19 @@ public class RoleConfiguration : IEntityTypeConfiguration<Role>
             IsActive = true,
             CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });
+
+        // Seed: دور "سائق" — صلاحية Orders.Deliver وحدها، بلا أي صلاحية
+        // أخرى عمدًا (راجع تعليق PermissionCodes.OrdersDeliver - الواجهة
+        // بتوجّهه مباشرة لصفحة التوصيل الوحيدة بناءً على غياب أي صلاحية
+        // ثانية، لا على اسم الدور نفسه).
+        builder.HasData(new
+        {
+            Id = Guid.Parse("6e8f9a1b-2c3d-4e5f-8a9b-1c2d3e4f5a6b"),
+            Name = "سائق",
+            Description = "يشوف الطلبات المسندة له للتوصيل بس، ويؤكد التسليم والدفع.",
+            IsActive = true,
+            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+        });
     }
 }
 
@@ -288,6 +301,14 @@ public class PermissionConfiguration : IEntityTypeConfiguration<Permission>
             Description = "List customers and block/unblock a customer from placing new orders through the customer app.",
             CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });
+        builder.HasData(new
+        {
+            Id = Guid.Parse("e1d2c3b4-a5f6-4a7b-8c9d-0e1f2a3b4c5d"),
+            Code = "Orders.Deliver",
+            Name = "Deliver orders",
+            Description = "View orders assigned to the current driver and confirm delivery/payment.",
+            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+        });
     }
 }
 
@@ -443,6 +464,22 @@ public class RolePermissionConfiguration : IEntityTypeConfiguration<RolePermissi
             Id = Guid.Parse("4c6f9e3a-bd5f-4a7c-8e91-3f4a5b6c7d8e"),
             RoleId = Guid.Parse("50e6125a-cac0-4d82-a0b8-9f3c6fff59d7"),
             PermissionId = Guid.Parse("3b5e8d2f-ac4e-4f6b-9d70-2e3f4a5b6c7d")
+        });
+
+        // Master Admin -> الصلاحية الجديدة (Orders.Deliver)
+        builder.HasData(new
+        {
+            Id = Guid.Parse("c9d8e7f6-2b3c-4d5e-9f0a-2b3c4d5e6f70"),
+            RoleId = Guid.Parse("50e6125a-cac0-4d82-a0b8-9f3c6fff59d7"),
+            PermissionId = Guid.Parse("e1d2c3b4-a5f6-4a7b-8c9d-0e1f2a3b4c5d")
+        });
+
+        // Seed: ربط دور سائق بصلاحيته الوحيدة (Orders.Deliver).
+        builder.HasData(new
+        {
+            Id = Guid.Parse("d0e1f2a3-3c4d-4e5f-a0b1-3c4d5e6f7081"),
+            RoleId = Guid.Parse("6e8f9a1b-2c3d-4e5f-8a9b-1c2d3e4f5a6b"),
+            PermissionId = Guid.Parse("e1d2c3b4-a5f6-4a7b-8c9d-0e1f2a3b4c5d")
         });
 
         // Seed: ربط دور كاشير بصلاحياته (PermissionCodes.CashierDefaults).

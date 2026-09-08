@@ -30,6 +30,9 @@ public static class PermissionCodes
     public const string SystemSettingsManage = "System.SettingsManage";
     public const string CustomersManage = "Customers.Manage";
 
+    /// <summary>صفحة السائق (طلبات مسندة له + تأكيد التسليم والدفع) - عمدًا صلاحية وحيدة بلا أي صلاحية أخرى بدور "سائق"، ليخلي صفحته الوحيدة اللي يشوفها بعد الدخول.</summary>
+    public const string OrdersDeliver = "Orders.Deliver";
+
     /// <summary>كل الرموز دفعة وحدة — يخدم seed دور "Master Admin" (كل الصلاحيات مربوطة فيه) بلا سرد يدوي معرَّض للنسيان عند إضافة رمز جديد لاحقًا.</summary>
     public static readonly IReadOnlyList<string> All = new[]
     {
@@ -37,7 +40,7 @@ public static class PermissionCodes
         PurchasingCreate, PurchasingCreateDraft, CatalogManage, SuppliersManage, BranchesManage,
         StocktakeManage, StocktakeApprove, CashClosingManage, ReportsView,
         BackupsManage, SessionsManage, NotificationsView, UsersManage, ComplimentaryIssue,
-        SystemSettingsManage, CustomersManage
+        SystemSettingsManage, CustomersManage, OrdersDeliver
     };
 
     /// <summary>

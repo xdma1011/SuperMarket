@@ -124,6 +124,11 @@ export const routes: Routes = [
         path: 'admin-secrets',
         canActivate: [requirePermissionGuard('System.SettingsManage')],
         loadComponent: () => import('./features/admin-secrets/admin-secrets.component').then(m => m.AdminSecretsComponent)
+      },
+      {
+        path: 'driver',
+        canActivate: [requirePermissionGuard('Orders.Deliver')],
+        loadComponent: () => import('./features/driver/driver.component').then(m => m.DriverComponent)
       }
     ]
   },

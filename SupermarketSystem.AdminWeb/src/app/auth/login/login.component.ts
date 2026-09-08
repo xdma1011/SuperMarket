@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { AuthService, PublicBranchDto } from '../../core/services/auth.service';
+import { PermissionsService } from '../../core/services/permissions.service';
 
 @Component({
   selector: 'app-login',
@@ -22,6 +23,7 @@ export class LoginComponent implements OnInit {
 
   constructor(
     private readonly authService: AuthService,
+    private readonly permissionsService: PermissionsService,
     private readonly router: Router,
     private readonly route: ActivatedRoute
   ) {}
@@ -59,7 +61,17 @@ export class LoginComponent implements OnInit {
     this.isSubmitting.set(false);
 
     if (result.success) {
-      this.router.navigateByUrl('/');
+      // سائق (Orders.Deliver بلا Sales.Create) يُوجَّه مباشرة لصفحته
+      // الوحيدة - لا للوحة الرئيسية العادية. تحميل الصلاحيات هون (لا
+      // بانتظار ShellComponent) عشان نعرف الوجهة قبل أول تنقّل.
+      this.permissionsService.reset();
+      await this.permissionsService.load();
+
+      if (this.permissionsService.has('Orders.Deliver') && !this.permissionsService.has('Sales.Create')) {
+        this.router.navigateByUrl('/driver');
+      } else {
+        this.router.navigateByUrl('/');
+      }
     } else {
       this.errorMessage.set(result.message);
       this.password = '';

@@ -118,6 +118,7 @@ app.MapOrderingEndpoints();
 app.MapCustomerEndpoints();
 app.MapCustomerAuthEndpoints();
 app.MapPublicCatalogEndpoints();
+app.MapDriverEndpoints();
 app.MapReturnEndpoints();
 app.MapCashManagementEndpoints();
 app.MapStocktakeEndpoints();

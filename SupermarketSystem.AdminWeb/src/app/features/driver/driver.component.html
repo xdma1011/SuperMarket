@@ -1,0 +1,88 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">التوصيل</span>
+    <h1>طلباتي</h1>
+    <span class="subtitle">الطلبات المسندة لك للتوصيل - أكّد الاستلام والدفع بعد التسليم.</span>
+  </div>
+</div>
+
+@if (actionMessage()) {
+  <div class="alert-banner success">{{ actionMessage() }}</div>
+}
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+@if (loading()) {
+  <div class="no-results">
+    <span class="no-results-sub">جارٍ التحميل…</span>
+  </div>
+} @else if (deliveries().length === 0) {
+  <div class="no-results">
+    <span class="no-results-title">لا يوجد طلبات مسندة لك حاليًا</span>
+  </div>
+} @else {
+  <div class="delivery-list">
+    @for (d of deliveries(); track d.orderId) {
+      <div class="delivery-card">
+        <div class="delivery-row">
+          <span class="delivery-customer">{{ d.customerName }}</span>
+          <span class="delivery-total mono">{{ d.estimatedTotal | number: '1.2-2' }} د.أ</span>
+        </div>
+
+        <div class="delivery-row">
+          <span class="mono">{{ d.customerPhone || '—' }}</span>
+          <span>{{ d.itemCount }} صنف</span>
+        </div>
+
+        @if (d.deliveryNote) {
+          <div class="delivery-note">{{ d.deliveryNote }}</div>
+        }
+
+        @if (mapUrl(d); as url) {
+          <a [href]="url" target="_blank" rel="noopener" class="link-btn">📍 فتح الموقع بالخريطة</a>
+        }
+
+        <button
+          type="button"
+          class="btn-primary"
+          [disabled]="processingId() === d.orderId"
+          (click)="openPayModal(d)"
+        >
+          دفع ✓ تم التسليم
+        </button>
+      </div>
+    }
+  </div>
+}
+
+@if (payModalOpen()) {
+  <div class="modal-backdrop" (click)="closePayModal()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <h2>تأكيد التسليم والدفعة</h2>
+        <button type="button" class="icon-btn" (click)="closePayModal()" aria-label="إغلاق">×</button>
+      </div>
+
+      <div class="modal-fields">
+        <label class="field">
+          <span>المبلغ المستلَم</span>
+          <input type="number" min="0.01" step="0.01" [(ngModel)]="payAmount" />
+        </label>
+        <label class="field">
+          <span>طريقة الدفع</span>
+          <select [(ngModel)]="payPaymentMethodId">
+            @for (m of paymentMethods(); track m.id) {
+              <option [value]="m.id">{{ m.name }}</option>
+            }
+          </select>
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" (click)="confirmPay()">تأكيد</button>
+        <button type="button" class="btn-ghost" (click)="closePayModal()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+}

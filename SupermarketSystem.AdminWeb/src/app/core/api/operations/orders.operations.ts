@@ -4,5 +4,7 @@ export enum OrdersOperation {
   GetById = '{orderId}',
   Accept = '{orderId}/accept',
   Reject = '{orderId}/reject',
-  Complete = '{orderId}/complete'
+  Complete = '{orderId}/complete',
+  AssignDriver = '{orderId}/assign-driver',
+  GetDrivers = 'drivers'
 }

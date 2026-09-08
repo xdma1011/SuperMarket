@@ -17,7 +17,9 @@ public sealed record OrderListItemDto(
     string? DeliveryNote,
     decimal EstimatedTotal,
     int ItemCount,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    Guid? DriverId,
+    string? DriverName);
 
 public sealed class GetPendingOrdersHandler
 {
@@ -47,27 +49,26 @@ public sealed class GetPendingOrdersHandler
 
         var totalCount = await orders.CountAsync(cancellationToken);
 
-        var items = await orders
-            .Skip(paging.Skip)
-            .Take(paging.PageSize)
-            .Join(_context.Customers.AsNoTracking(), o => o.CustomerId, c => c.Id,
-                (o, c) => new
-                {
-                    Order = o,
-                    CustomerName = c.FullName,
-                    CustomerPhone = c.Phone
-                })
-            .Select(x => new OrderListItemDto(
-                x.Order.Id,
-                x.Order.CustomerId,
-                x.CustomerName,
-                x.CustomerPhone,
-                x.Order.BranchId,
-                (int)x.Order.Status,
-                x.Order.DeliveryNote,
-                x.Order.Items.Sum(i => i.Quantity * i.EstimatedUnitPrice),
-                x.Order.Items.Count,
-                x.Order.CreatedAtUtc))
+        var page = orders.Skip(paging.Skip).Take(paging.PageSize);
+
+        var items = await (
+            from order in page
+            join customer in _context.Customers.AsNoTracking() on order.CustomerId equals customer.Id
+            join driver in _context.Users.AsNoTracking() on order.DriverId equals driver.Id into driverJoin
+            from driver in driverJoin.DefaultIfEmpty()
+            select new OrderListItemDto(
+                order.Id,
+                order.CustomerId,
+                customer.FullName,
+                customer.Phone,
+                order.BranchId,
+                (int)order.Status,
+                order.DeliveryNote,
+                order.Items.Sum(i => i.Quantity * i.EstimatedUnitPrice),
+                order.Items.Count,
+                order.CreatedAtUtc,
+                order.DriverId,
+                driver == null ? null : driver.FullName))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<OrderListItemDto>(items, totalCount, paging.PageNumber, paging.PageSize);

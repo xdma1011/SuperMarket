@@ -44,6 +44,10 @@ public class Order : AuditableEntity, IBranchOwned
     public DateTime? DecidedAtUtc { get; private set; }
     public string? RejectionReason { get; private set; }
 
+    /// <summary>السائق المسؤول عن توصيل الطلب - يُسند بعد القبول، ويُستخدم لحصر صفحة السائق على طلباته هو فقط (راجع CompleteDeliveryHandler).</summary>
+    public Guid? DriverId { get; private set; }
+    public DateTime? DriverAssignedAtUtc { get; private set; }
+
     public Guid? ResultingSaleInvoiceId { get; private set; }
 
     public int? Rating { get; private set; }
@@ -104,6 +108,18 @@ public class Order : AuditableEntity, IBranchOwned
         DecidedByUserId = decidedByUserId;
         DecidedAtUtc = decidedAtUtc;
         RejectionReason = reason;
+    }
+
+    /// <summary>يُسمح إسناد سائق فقط بعد القبول (Accepted) - قبل هيك الطلب لسا مو مؤكَّد أصلًا، وما في داعي توصيل. يسمح بإعادة الإسناد لسائق آخر ما دام الطلب لسا Accepted (لم يُكمَّل بعد).</summary>
+    public void AssignDriver(Guid driverId, DateTime assignedAtUtc)
+    {
+        if (Status != OrderStatus.Accepted)
+        {
+            throw new DomainException($"Cannot assign a driver to an order with status '{Status}'.");
+        }
+
+        DriverId = driverId;
+        DriverAssignedAtUtc = assignedAtUtc;
     }
 
     public void Complete(Guid resultingSaleInvoiceId)

@@ -1,0 +1,43 @@
+.delivery-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.delivery-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 10px;
+  background: var(--card-bg, #fff);
+}
+
+.delivery-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.delivery-customer {
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.delivery-total {
+  font-weight: bold;
+  color: #16a34a;
+}
+
+.delivery-note {
+  font-size: 13px;
+  color: var(--text-muted, #6b7280);
+  background: var(--muted-bg, #f9fafb);
+  padding: 8px;
+  border-radius: 6px;
+}

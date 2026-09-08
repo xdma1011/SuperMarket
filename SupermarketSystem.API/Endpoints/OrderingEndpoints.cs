@@ -2,8 +2,10 @@ using SupermarketSystem.API.Common;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Pagination;
 using SupermarketSystem.Application.Ordering.AcceptOrder;
+using SupermarketSystem.Application.Ordering.AssignOrderDriver;
 using SupermarketSystem.Application.Ordering.CompleteOrder;
 using SupermarketSystem.Application.Ordering.GetCustomerOrders;
+using SupermarketSystem.Application.Ordering.GetDrivers;
 using SupermarketSystem.Application.Ordering.GetOrderById;
 using SupermarketSystem.Application.Ordering.GetPendingOrders;
 using SupermarketSystem.Application.Ordering.PlaceOrder;
@@ -170,6 +172,32 @@ public static class OrderingEndpoints
         .ProducesProblem(StatusCodes.Status404NotFound)
         .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
 
+        cashierGroup.MapPost("/{orderId:guid}/assign-driver", async (
+            Guid orderId,
+            AssignOrderDriverRequest request,
+            AssignOrderDriverHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new AssignOrderDriverCommand(orderId, request.DriverId), cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithName("AssignOrderDriver")
+        .WithSummary("يسند سائقًا لطلب مقبول (Accepted) - راجع تعليق Order.AssignDriver.")
+        .Produces(StatusCodes.Status204NoContent)
+        .ProducesProblem(StatusCodes.Status404NotFound)
+        .ProducesProblem(StatusCodes.Status409Conflict);
+
+        cashierGroup.MapGet("/drivers", async (
+            GetDriversHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(cancellationToken);
+            return Results.Ok(result);
+        })
+        .WithName("GetDrivers")
+        .WithSummary("قائمة السائقين الفعّالين - تعبّي قائمة اختيار السائق لحظة إسناد طلب.")
+        .Produces<IReadOnlyList<DriverDto>>(StatusCodes.Status200OK);
+
         return app;
     }
 
@@ -179,4 +207,6 @@ public static class OrderingEndpoints
         IReadOnlyList<Application.Ordering.CompleteOrder.CompleteOrderPaymentDto> Payments, Guid ClientRequestId);
 
     public sealed record RateOrderRequest(int Rating, string? Comment);
+
+    public sealed record AssignOrderDriverRequest(Guid DriverId);
 }

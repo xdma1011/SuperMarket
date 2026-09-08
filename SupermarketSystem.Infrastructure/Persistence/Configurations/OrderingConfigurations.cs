@@ -22,14 +22,17 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(o => o.DecidedAtUtc).HasColumnType("datetime2");
         builder.Property(o => o.RejectionReason).HasMaxLength(500);
         builder.Property(o => o.RatingComment).HasMaxLength(1000);
+        builder.Property(o => o.DriverAssignedAtUtc).HasColumnType("datetime2");
         builder.Property(o => o.CreatedAtUtc).HasColumnType("datetime2").IsRequired();
         builder.Property(o => o.UpdatedAtUtc).HasColumnType("datetime2");
 
         builder.HasIndex(o => new { o.BranchId, o.Status, o.CreatedAtUtc });
         builder.HasIndex(o => new { o.CustomerId, o.CreatedAtUtc });
+        builder.HasIndex(o => new { o.DriverId, o.Status });
 
         builder.HasOne<Customer>().WithMany().HasForeignKey(o => o.CustomerId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(o => o.DecidedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(o => o.DriverId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<SaleInvoice>().WithMany().HasForeignKey(o => o.ResultingSaleInvoiceId).OnDelete(DeleteBehavior.Restrict);
         // Branch FK (Restrict) configured on the Branches side.
 

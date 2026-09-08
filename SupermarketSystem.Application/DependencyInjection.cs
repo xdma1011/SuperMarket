@@ -16,6 +16,10 @@ using SupermarketSystem.Application.CustomerAuth.VerifyCustomerOtp;
 using SupermarketSystem.Application.CustomerAuth.LinkTelegramContact;
 using SupermarketSystem.Application.Catalog.GetPublicCatalog;
 using SupermarketSystem.Application.Catalog.GetPublicCatalogCategories;
+using SupermarketSystem.Application.Ordering.AssignOrderDriver;
+using SupermarketSystem.Application.Ordering.GetMyDeliveries;
+using SupermarketSystem.Application.Ordering.CompleteDelivery;
+using SupermarketSystem.Application.Ordering.GetDrivers;
 using SupermarketSystem.Application.Customers.GetCustomerLoyaltyBalance;
 using SupermarketSystem.Application.Customers.GetCustomerQrToken;
 using SupermarketSystem.Application.Customers.RedeemLoyaltyPoints;
@@ -188,6 +192,11 @@ public static class DependencyInjection
         services.AddScoped<RedeemLoyaltyPointsHandler>();
         services.AddScoped<GetPublicCatalogHandler>();
         services.AddScoped<GetPublicCatalogCategoriesHandler>();
+
+        services.AddScoped<AssignOrderDriverHandler>();
+        services.AddScoped<GetMyDeliveriesHandler>();
+        services.AddScoped<CompleteDeliveryHandler>();
+        services.AddScoped<GetDriversHandler>();
 
         services.AddScoped<PlaceOrderHandler>();
         services.AddScoped<GetPendingOrdersHandler>();

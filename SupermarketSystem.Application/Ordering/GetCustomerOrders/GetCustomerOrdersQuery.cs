@@ -42,7 +42,9 @@ public sealed class GetCustomerOrdersHandler
                 x.Order.DeliveryNote,
                 x.Order.Items.Sum(i => i.Quantity * i.EstimatedUnitPrice),
                 x.Order.Items.Count,
-                x.Order.CreatedAtUtc))
+                x.Order.CreatedAtUtc,
+                null,
+                null))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<OrderListItemDto>(items, totalCount, paging.PageNumber, paging.PageSize);

@@ -17,6 +17,13 @@ interface OrderListItemDto {
   estimatedTotal: number;
   itemCount: number;
   createdAtUtc: string;
+  driverId: string | null;
+  driverName: string | null;
+}
+
+interface DriverDto {
+  id: string;
+  fullName: string;
 }
 
 interface PagedResult<T> {
@@ -45,6 +52,7 @@ interface PaymentMethodDto {
 export class OrdersComponent implements OnInit {
   readonly orders = signal<OrderListItemDto[]>([]);
   readonly paymentMethods = signal<PaymentMethodDto[]>([]);
+  readonly drivers = signal<DriverDto[]>([]);
   readonly loading = signal(true);
   readonly errorMessage = signal<string | null>(null);
   readonly actionMessage = signal<string | null>(null);
@@ -52,9 +60,11 @@ export class OrdersComponent implements OnInit {
 
   readonly rejectModalOpen = signal(false);
   readonly completeModalOpen = signal(false);
+  readonly assignDriverModalOpen = signal(false);
   rejectReason = '';
   completeAmount: number | null = null;
   completePaymentMethodId = '';
+  selectedDriverId = '';
   private targetOrder: OrderListItemDto | null = null;
 
   constructor(private readonly apiClient: ApiClient) {}
@@ -68,15 +78,17 @@ export class OrdersComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const [ordersResult, paymentMethodsResult] = await Promise.all([
+      const [ordersResult, paymentMethodsResult, driversResult] = await Promise.all([
         firstValueFrom(
           this.apiClient.get<PagedResult<OrderListItemDto>>(ApiController.Orders, OrdersOperation.List, undefined, { pageSize: 100 })
         ),
-        firstValueFrom(this.apiClient.get<PaymentMethodDto[]>(ApiController.PaymentMethods, PaymentMethodsOperation.List))
+        firstValueFrom(this.apiClient.get<PaymentMethodDto[]>(ApiController.PaymentMethods, PaymentMethodsOperation.List)),
+        firstValueFrom(this.apiClient.get<DriverDto[]>(ApiController.Orders, OrdersOperation.GetDrivers))
       ]);
 
       this.orders.set(ordersResult.items);
       this.paymentMethods.set(paymentMethodsResult);
+      this.drivers.set(driversResult);
       if (paymentMethodsResult.length > 0) this.completePaymentMethodId = paymentMethodsResult[0].id;
     } catch {
       this.errorMessage.set('تعذّر تحميل الطلبات.');
@@ -186,6 +198,45 @@ export class OrdersComponent implements OnInit {
           ? (err as { error?: { detail?: string } }).error?.detail
           : null;
       this.errorMessage.set(message ?? 'تعذّر إكمال الطلب.');
+    } finally {
+      this.processingId.set(null);
+    }
+  }
+
+  openAssignDriverModal(order: OrderListItemDto): void {
+    this.targetOrder = order;
+    this.selectedDriverId = order.driverId ?? (this.drivers().length > 0 ? this.drivers()[0].id : '');
+    this.assignDriverModalOpen.set(true);
+  }
+
+  closeAssignDriverModal(): void {
+    this.assignDriverModalOpen.set(false);
+    this.targetOrder = null;
+  }
+
+  async confirmAssignDriver(): Promise<void> {
+    if (!this.targetOrder || !this.selectedDriverId) {
+      this.errorMessage.set('اختر سائقًا.');
+      return;
+    }
+
+    this.processingId.set(this.targetOrder.id);
+    this.errorMessage.set(null);
+
+    try {
+      await firstValueFrom(
+        this.apiClient.post(
+          ApiController.Orders,
+          OrdersOperation.AssignDriver,
+          { driverId: this.selectedDriverId },
+          { orderId: this.targetOrder.id }
+        )
+      );
+      this.actionMessage.set('تم إسناد السائق.');
+      this.closeAssignDriverModal();
+      await this.loadAll();
+    } catch {
+      this.errorMessage.set('تعذّر إسناد السائق.');
     } finally {
       this.processingId.set(null);
     }

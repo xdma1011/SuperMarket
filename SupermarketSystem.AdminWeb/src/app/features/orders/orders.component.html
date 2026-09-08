@@ -23,6 +23,7 @@
           <th>عدد الأصناف</th>
           <th>الإجمالي التقديري</th>
           <th>الحالة</th>
+          <th>السائق</th>
           <th>ملاحظة التوصيل</th>
           <th>التاريخ</th>
           <th></th>
@@ -38,6 +39,7 @@
             <td>
               <span class="status-chip" [class.inactive]="o.status === 4">{{ statusLabel(o.status) }}</span>
             </td>
+            <td>{{ o.driverName || '—' }}</td>
             <td>{{ o.deliveryNote || '—' }}</td>
             <td class="mono">{{ o.createdAtUtc | date: 'yyyy-MM-dd HH:mm' }}</td>
             <td>
@@ -46,6 +48,7 @@
                 <button type="button" class="link-btn danger" [disabled]="processingId() === o.id" (click)="openRejectModal(o)">رفض</button>
               }
               @if (o.status === 2) {
+                <button type="button" class="link-btn" [disabled]="processingId() === o.id" (click)="openAssignDriverModal(o)">{{ o.driverName ? 'تغيير السائق' : 'إسناد سائق' }}</button>
                 <button type="button" class="link-btn" [disabled]="processingId() === o.id" (click)="openCompleteModal(o)">إكمال (تم التسليم)</button>
                 <button type="button" class="link-btn danger" [disabled]="processingId() === o.id" (click)="openRejectModal(o)">رفض</button>
               }
@@ -116,6 +119,35 @@
       <div class="modal-actions">
         <button type="button" class="btn-primary" (click)="confirmComplete()">تأكيد الإكمال</button>
         <button type="button" class="btn-ghost" (click)="closeCompleteModal()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (assignDriverModalOpen()) {
+  <div class="modal-backdrop" (click)="closeAssignDriverModal()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <h2>إسناد سائق</h2>
+        <button type="button" class="icon-btn" (click)="closeAssignDriverModal()" aria-label="إغلاق">×</button>
+      </div>
+
+      @if (drivers().length === 0) {
+        <p class="no-results-sub">لا يوجد مستخدمون بدور "سائق" حاليًا - أضف واحدًا من صفحة المستخدمين أولًا.</p>
+      } @else {
+        <label class="field">
+          <span>السائق</span>
+          <select [(ngModel)]="selectedDriverId">
+            @for (d of drivers(); track d.id) {
+              <option [value]="d.id">{{ d.fullName }}</option>
+            }
+          </select>
+        </label>
+      }
+
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" [disabled]="drivers().length === 0" (click)="confirmAssignDriver()">تأكيد الإسناد</button>
+        <button type="button" class="btn-ghost" (click)="closeAssignDriverModal()">إلغاء</button>
       </div>
     </div>
   </div>
