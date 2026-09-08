@@ -48,7 +48,6 @@ using SupermarketSystem.Application.Inventory.GetStocktakes;
 using SupermarketSystem.Application.Inventory.RecordStocktakeCount;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Notifications;
-using SupermarketSystem.Application.Common.Services;
 using SupermarketSystem.Application.CashManagement.CompleteCashClosing;
 using SupermarketSystem.Application.Branches.GetBranches;
 using SupermarketSystem.Application.Catalog.CreateProduct;

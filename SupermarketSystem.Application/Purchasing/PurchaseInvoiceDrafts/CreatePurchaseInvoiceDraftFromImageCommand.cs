@@ -131,7 +131,7 @@ public sealed class CreatePurchaseInvoiceDraftFromImageHandler
             if (matched is not null)
             {
                 matchedProductUnitId = await _context.ProductUnits.AsNoTracking()
-                    .Where(u => u.ProductId == matched.Id && u.IsBaseUnit)
+                    .Where(u => u.ProductId == matched.Value.Id && u.IsBaseUnit)
                     .Select(u => (Guid?)u.Id)
                     .FirstOrDefaultAsync(cancellationToken);
             }

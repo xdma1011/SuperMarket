@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Results;
@@ -75,5 +76,5 @@ public sealed class RequestCustomerOtpHandler
     }
 
     private static string HashCode(string code)
-        => Convert.ToBase64String(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(code)));
+        => Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(code)));
 }
