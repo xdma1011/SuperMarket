@@ -4,6 +4,12 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- تحذيرات ثغرات NuGet استشارية (SixLabors.ImageSharp عبر تبعية غير
+         مباشرة) - ليست أخطاء بناء، بس Package Manager Console بـVisual
+         Studio (ErrorActionPreference=Stop افتراضيًا) بيعاملها كأنها
+         تُوقف الأمر حتى بعد "Build succeeded" فعليًا. مسكوتة هون صراحة
+         بدل تحديث رقم إصدار حزمة بلا نقاش (راجع CLAUDE.md §1.2). -->
+    <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

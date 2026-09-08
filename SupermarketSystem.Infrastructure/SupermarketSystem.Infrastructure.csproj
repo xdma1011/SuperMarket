@@ -4,6 +4,11 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- نفس تعليق SupermarketSystem.API.csproj - تحذيرات NuGet استشارية
+         (SixLabors.ImageSharp، System.Security.Cryptography.Xml عبر
+         تبعية غير مباشرة)، لا أخطاء بناء، بس Package Manager Console
+         بيوقف الأمر بسببها. مسكوتة هون بدل تحديث رقم إصدار حزمة بلا نقاش. -->
+    <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
