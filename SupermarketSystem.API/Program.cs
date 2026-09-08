@@ -80,11 +80,12 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+// بلا شرط IsDevelopment() عمدًا: المشروع كله محلي على جهازك (SQL Server
+// محلي، بلا نشر سحابي أو بيئة إنتاج فعلية - راجع CLAUDE.md)، فمافي داعي
+// شرط بيئة كان بيسبب لخبطة "وين الـSwagger" كل ما ASPNETCORE_ENVIRONMENT
+// ما يكون مضبوط بالضبط بالطريقة اللي تشغّل فيها المشروع.
+app.UseSwagger();
+app.UseSwaggerUI();
 
 // Order matters: correlation id first, so the exception handler's logs
 // already carry it.
