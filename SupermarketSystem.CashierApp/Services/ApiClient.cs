@@ -191,7 +191,12 @@ public sealed class ApiClient
             using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
-            var response = await _http.GetAsync("health", linkedCts.Token);
+            // مسار مطلق من جذر الدومين (/health) عمدًا - لا health/ نسبي:
+            // _http.BaseAddress منتهٍ بـ/api/v1/، بينما endpoint الصحة
+            // بالباك إند مسجَّل على /health مباشرة (بلا بادئة api/v1، راجع
+            // Program.cs) - نسبي كان بيطلب /api/v1/health (404) دائمًا،
+            // ويعرض "بلا اتصال" حتى لو السيرفر شغّال فعليًا.
+            var response = await _http.GetAsync("/health", linkedCts.Token);
             return response.IsSuccessStatusCode;
         }
         catch
