@@ -29,5 +29,8 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'sessions', label: 'الجلسات', route: '/sessions', requiredPermission: 'Sessions.Manage' },
   { id: 'admin-settings', label: 'إعدادات حسّاسة', route: '/admin-settings', requiredPermission: 'System.SettingsManage' },
   { id: 'admin-secrets', label: 'مفاتيح التكاملات', route: '/admin-secrets', requiredPermission: 'System.SettingsManage' },
-  { id: 'driver', label: 'طلباتي (توصيل)', route: '/driver', requiredPermission: 'Orders.Deliver' }
+  { id: 'driver', label: 'طلباتي (توصيل)', route: '/driver', requiredPermission: 'Orders.Deliver' },
+  { id: 'branches', label: 'الفروع', route: '/branches', requiredPermission: 'Branches.Manage' },
+  { id: 'customers', label: 'الزبائن', route: '/customers', requiredPermission: 'Customers.Manage' },
+  { id: 'cash-closings', label: 'تقفيل الصندوق', route: '/cash-closings', requiredPermission: 'CashClosing.Manage' }
 ];

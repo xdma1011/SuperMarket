@@ -39,7 +39,21 @@ public partial class App : Application
         var backgroundSync = new BackgroundSyncService(apiClient, dbPath, config.SyncIntervalSeconds, config.CatalogSyncPageSize);
         var receiptPrinter = new Services.Printing.ReceiptPrinterService(config);
 
+        // Fire-and-forget: اسم المحل تفصيلة تجميلية بالفاتورة، ما تستاهل
+        // تأخير فتح شاشة تسجيل الدخول لحد ما تجاوب السيرفر. لو فشل (بلا
+        // نت لحظة الإقلاع)، يضل يستخدم آخر نسخة مخزَّنة محليًا (أو لا شي).
+        _ = RefreshStoreBrandingCacheAsync(apiClient, dataDir);
+
         var loginWindow = new LoginWindow(apiClient, authSession, dbPath, backgroundSync, receiptPrinter, config.AdminScreenPassword);
         loginWindow.Show();
+    }
+
+    private static async Task RefreshStoreBrandingCacheAsync(ApiClient apiClient, string dataDir)
+    {
+        var branding = await apiClient.GetStoreBrandingAsync(CancellationToken.None);
+        if (branding is not null)
+        {
+            StoreBrandingCache.WriteStoreName(dataDir, branding.StoreName);
+        }
     }
 }

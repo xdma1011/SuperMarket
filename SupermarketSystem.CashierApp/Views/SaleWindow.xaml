@@ -87,7 +87,7 @@
             <DataGrid x:Name="CartGrid" AutoGenerateColumns="False" IsReadOnly="True"
                       HeadersVisibility="Column" GridLinesVisibility="Horizontal" BorderThickness="0"
                       Background="Transparent" RowBackground="White" AlternatingRowBackground="#FAF9F7"
-                      Focusable="False" IsHitTestVisible="True">
+                      Focusable="False" IsHitTestVisible="True" LoadingRow="CartGrid_LoadingRow">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="الصنف" Binding="{Binding ProductName}" Width="*" />
                     <DataGridTextColumn Header="الدفعة" Binding="{Binding BatchNumber}" Width="90" />
@@ -95,6 +95,7 @@
                     <DataGridTextColumn Header="الكمية" Binding="{Binding Quantity}" Width="80" />
                     <DataGridTextColumn Header="السعر" Binding="{Binding UnitPrice, StringFormat={}{0:0.00}}" Width="90" />
                     <DataGridTextColumn Header="الإجمالي" Binding="{Binding LineTotal, StringFormat={}{0:0.00}}" Width="100" />
+                    <DataGridTextColumn Header="" Binding="{Binding ReviewMark}" Width="90" />
                 </DataGrid.Columns>
             </DataGrid>
         </Border>

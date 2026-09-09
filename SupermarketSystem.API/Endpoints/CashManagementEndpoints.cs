@@ -1,6 +1,8 @@
 using SupermarketSystem.API.Common;
 using SupermarketSystem.Application.Common.Interfaces;
+using SupermarketSystem.Application.Common.Pagination;
 using SupermarketSystem.Application.CashManagement.CompleteCashClosing;
+using SupermarketSystem.Application.CashManagement.GetCashClosings;
 
 namespace SupermarketSystem.API.Endpoints;
 
@@ -25,6 +27,19 @@ public static class CashManagementEndpoints
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status404NotFound)
         .ProducesProblem(StatusCodes.Status409Conflict);
+
+        group.MapGet("/", async (
+            int? pageNumber, int? pageSize, string? sortBy, string? sortDirection, Guid? branchId,
+            GetCashClosingsHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var paging = PagingBinder.Build(pageNumber, pageSize, search: null, sortBy, sortDirection);
+            var result = await handler.HandleAsync(new GetCashClosingsQuery(paging, branchId), cancellationToken);
+            return Results.Ok(result);
+        })
+        .WithName("GetCashClosings")
+        .WithSummary("قائمة تقفيلات الصندوق السابقة، مع فرز حسب اليوم التجاري وفلترة اختيارية بالفرع.")
+        .Produces<PagedResult<CashClosingListItemDto>>(StatusCodes.Status200OK);
 
         return app;
     }

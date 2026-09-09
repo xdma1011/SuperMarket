@@ -6,6 +6,7 @@ using SupermarketSystem.Application.Catalog.CreateProductCategory;
 using SupermarketSystem.Application.Catalog.GetProductCategories;
 using SupermarketSystem.Application.Catalog.GetProducts;
 using SupermarketSystem.Application.Catalog.AddProductUnit;
+using SupermarketSystem.Application.Catalog.UpdateProductUnitBarcode;
 using SupermarketSystem.Application.Catalog.GetProductBranches;
 using SupermarketSystem.Application.Catalog.GetProductByBarcode;
 using SupermarketSystem.Application.Catalog.GetProductUnits;
@@ -156,6 +157,23 @@ public static class CatalogEndpoints
         .WithSummary("وحدات منتج معيّن - أساس ربط سطر فاتورة شراء أو بيع بالوحدة الصحيحة.")
         .Produces<IReadOnlyList<ProductUnitDto>>(StatusCodes.Status200OK);
 
+        products.MapPut("/{productId:guid}/units/{unitId:guid}/barcode", async (
+            Guid productId,
+            Guid unitId,
+            UpdateProductUnitBarcodeRequest request,
+            UpdateProductUnitBarcodeHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(
+                new UpdateProductUnitBarcodeCommand(productId, unitId, request.BarcodeValue), cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithName("UpdateProductUnitBarcode")
+        .WithSummary("يعدّل أو يحذف باركود وحدة موجودة أصلًا - كان بلا أي طريقة تصحيح بعد الإنشاء.")
+        .Produces(StatusCodes.Status204NoContent)
+        .ProducesProblem(StatusCodes.Status404NotFound)
+        .ProducesProblem(StatusCodes.Status409Conflict);
+
         products.MapPost("/{productId:guid}/complimentary-allowed", async (
             Guid productId,
             SetProductComplimentaryAllowedRequest request,
@@ -212,4 +230,5 @@ public static class CatalogEndpoints
     public sealed record UpdateProductCategoryRequest(string Name);
     public sealed record UpdateProductRequest(string Name, Guid CategoryId, decimal? SuggestedRetailPrice, int? ExpectedShelfLifeDays);
     public sealed record AddProductUnitRequest(string UnitName, decimal ConversionFactorToBase, string? BarcodeValue);
+    public sealed record UpdateProductUnitBarcodeRequest(string? BarcodeValue);
 }

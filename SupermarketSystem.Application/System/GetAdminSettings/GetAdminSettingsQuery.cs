@@ -52,6 +52,7 @@ public sealed class GetAdminSettingsHandler
         (OrderingPolicyKeys.MinVisibleStockMidPrice, "أقل كمية مخزون لإظهار منتج سعره بين الحدّين", AdminSettingDataType.Decimal),
         (OrderingPolicyKeys.MinVisibleStockLowPrice, "أقل كمية مخزون لإظهار منتج سعره أقل من الحد الفاصل الأدنى", AdminSettingDataType.Decimal),
         (TelegramSettingsKeys.BotUsername, "اسم مستخدم بوت تلغرام (بدون @، للرابط العلني)", AdminSettingDataType.String),
+        (StoreBrandingKeys.StoreName, "اسم المحل (يُطبع بأعلى فاتورة الكاشير)", AdminSettingDataType.String),
         (OrderingPolicyKeys.DailyOrderCountAlertThreshold, "عدد طلبات نفس الزبون باليوم قبل تنبيهك (إساءة استخدام محتملة)", AdminSettingDataType.Decimal)
     };
 

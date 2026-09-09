@@ -31,6 +31,7 @@ interface ProductUnitDto {
   unitName: string;
   conversionFactorToBase: number;
   isBaseUnit: boolean;
+  barcodeValue: string | null;
 }
 
 interface ProductBranchItemDto {
@@ -234,6 +235,8 @@ export class CatalogComponent implements OnInit {
     this.productBranches.set([]);
     this.addBranchFormOpen.set(false);
     this.newBranchPrice = null;
+    this.editingUnitBarcodeId = '';
+    this.editingUnitBarcodeValue = '';
   }
 
   async submitProduct(): Promise<void> {
@@ -456,6 +459,48 @@ export class CatalogComponent implements OnInit {
       this.addUnitError.set(message ?? 'تعذّر إضافة الوحدة.');
     } finally {
       this.addUnitSubmitting.set(false);
+    }
+  }
+
+  // === تعديل باركود وحدة موجودة (كانت غير قابلة للعرض/التعديل بعد الإنشاء) ===
+
+  editingUnitBarcodeId = '';
+  editingUnitBarcodeValue = '';
+  readonly unitBarcodeSaving = signal(false);
+  readonly unitBarcodeError = signal<string | null>(null);
+
+  startEditUnitBarcode(unit: ProductUnitDto): void {
+    this.editingUnitBarcodeId = unit.id;
+    this.editingUnitBarcodeValue = unit.barcodeValue ?? '';
+    this.unitBarcodeError.set(null);
+  }
+
+  cancelEditUnitBarcode(): void {
+    this.editingUnitBarcodeId = '';
+    this.editingUnitBarcodeValue = '';
+  }
+
+  async saveUnitBarcode(unit: ProductUnitDto): Promise<void> {
+    this.unitBarcodeSaving.set(true);
+    this.unitBarcodeError.set(null);
+
+    try {
+      await firstValueFrom(
+        this.apiClient.put(ApiController.Products, ProductsOperation.UpdateUnitBarcode, {
+          barcodeValue: this.editingUnitBarcodeValue.trim() || null
+        }, { productId: this.editingProductId, unitId: unit.id })
+      );
+
+      this.editingUnitBarcodeId = '';
+      await this.loadProductUnits(this.editingProductId);
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === 'object' && 'error' in err
+          ? (err as { error?: { detail?: string } }).error?.detail
+          : null;
+      this.unitBarcodeError.set(message ?? 'تعذّر تحديث الباركود.');
+    } finally {
+      this.unitBarcodeSaving.set(false);
     }
   }
 

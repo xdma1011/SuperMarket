@@ -21,6 +21,8 @@ public sealed record CatalogSyncProductDto(
 
 public sealed record PagedResultDto<T>(List<T> Items, int TotalCount, int PageNumber, int PageSize);
 
+public sealed record StoreBrandingDto(string? StoreName);
+
 /// <summary>يطابق ClientAppType بالباك إند حرفيًا (Cashier = 1, Admin = 2) - قيمة الـenum لازم تبقى مطابقة، لأنها بتُسلسَل كرقم بالـJSON.</summary>
 public enum ClientAppType
 {
@@ -122,6 +124,19 @@ public sealed class ApiClient
         {
             // فشل الاتصال (نت مقطوع) - يرجع null، الطالب (CatalogSyncService)
             // بيتعامل معها كـ"تخطَّ هالدورة"، لا خطأ يوقف التطبيق.
+            return null;
+        }
+    }
+
+    public async Task<StoreBrandingDto?> GetStoreBrandingAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<StoreBrandingDto>("cashier-sync/store-branding", cancellationToken);
+        }
+        catch
+        {
+            // بلا اتصال - الطالب بيرجع للنسخة المخزَّنة محليًا (راجع StoreBrandingCache).
             return null;
         }
     }

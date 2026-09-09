@@ -43,7 +43,7 @@
       class="table-search"
       [ngModel]="searchQuery()"
       (ngModelChange)="onSearchChange($event)"
-      placeholder="بحث برقم الفاتورة…"
+      placeholder="بحث برقم الفاتورة أو اسم/هاتف الزبون…"
     />
   </div>
 
@@ -52,6 +52,7 @@
       <thead>
         <tr>
           <th>رقم الفاتورة</th>
+          <th>الزبون</th>
           <th>الإجمالي</th>
           <th>المرتجَع</th>
           <th>الحالة</th>
@@ -62,6 +63,13 @@
         @for (row of invoices(); track row.id) {
           <tr>
             <td class="mono">{{ row.invoiceNumber }}</td>
+            <td>
+              @if (row.customerName) {
+                {{ row.customerName }} <span class="mono">{{ row.customerPhone }}</span>
+              } @else {
+                —
+              }
+            </td>
             <td class="mono">{{ row.totalAmount | number: '1.2-2' }}</td>
             <td class="mono">{{ row.totalReturnedAmount | number: '1.2-2' }}</td>
             <td>

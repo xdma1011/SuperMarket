@@ -129,6 +129,21 @@ export const routes: Routes = [
         path: 'driver',
         canActivate: [requirePermissionGuard('Orders.Deliver')],
         loadComponent: () => import('./features/driver/driver.component').then(m => m.DriverComponent)
+      },
+      {
+        path: 'branches',
+        canActivate: [requirePermissionGuard('Branches.Manage')],
+        loadComponent: () => import('./features/branches/branches.component').then(m => m.BranchesComponent)
+      },
+      {
+        path: 'customers',
+        canActivate: [requirePermissionGuard('Customers.Manage')],
+        loadComponent: () => import('./features/customers/customers.component').then(m => m.CustomersComponent)
+      },
+      {
+        path: 'cash-closings',
+        canActivate: [requirePermissionGuard('CashClosing.Manage')],
+        loadComponent: () => import('./features/cash-closings/cash-closings.component').then(m => m.CashClosingsComponent)
       }
     ]
   },

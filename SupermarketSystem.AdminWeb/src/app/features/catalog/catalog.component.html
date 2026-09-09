@@ -175,6 +175,9 @@
           </div>
 
           <div class="units-list">
+            @if (unitBarcodeError()) {
+              <p class="form-error">{{ unitBarcodeError() }}</p>
+            }
             @for (u of productUnits(); track u.id) {
               <div class="unit-row">
                 <span class="unit-name">{{ u.unitName }}</span>
@@ -182,6 +185,23 @@
                   <span class="unit-base-chip">أساسية</span>
                 } @else {
                   <span class="unit-factor mono">= {{ u.conversionFactorToBase }} من الوحدة الأساسية</span>
+                }
+
+                @if (editingUnitBarcodeId === u.id) {
+                  <input
+                    type="text"
+                    class="unit-barcode-input mono"
+                    [(ngModel)]="editingUnitBarcodeValue"
+                    placeholder="بلا باركود"
+                    [disabled]="unitBarcodeSaving()"
+                  />
+                  <button type="button" class="link-btn" [disabled]="unitBarcodeSaving()" (click)="saveUnitBarcode(u)">
+                    {{ unitBarcodeSaving() ? 'جارٍ الحفظ…' : 'حفظ' }}
+                  </button>
+                  <button type="button" class="link-btn" [disabled]="unitBarcodeSaving()" (click)="cancelEditUnitBarcode()">إلغاء</button>
+                } @else {
+                  <span class="unit-barcode mono">{{ u.barcodeValue || 'بلا باركود' }}</span>
+                  <button type="button" class="link-btn" (click)="startEditUnitBarcode(u)">تعديل الباركود</button>
                 }
               </div>
             }

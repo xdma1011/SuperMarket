@@ -1,5 +1,7 @@
 /** ApiController.Branches */
 export enum BranchesOperation {
   Create = '',
-  List = ''
+  List = '',
+  Update = '{branchId}',
+  SetActive = '{branchId}/active'
 }

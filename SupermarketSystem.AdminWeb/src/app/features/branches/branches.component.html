@@ -1,0 +1,114 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">الإعدادات / الفروع</span>
+    <h1>الفروع</h1>
+    <span class="subtitle">إدارة فروع المحل - إضافة فرع جديد أو تعديل بياناته.</span>
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn-primary" (click)="openCreateForm()">فرع جديد</button>
+  </div>
+</div>
+
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<section class="table-panel">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>الاسم</th>
+          <th>الكود</th>
+          <th>الهاتف</th>
+          <th>الحالة</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (b of branches(); track b.id) {
+          <tr>
+            <td>{{ b.name }}</td>
+            <td class="mono">{{ b.code }}</td>
+            <td class="mono">{{ b.phoneNumber || '—' }}</td>
+            <td>
+              <span class="status-chip" [class.inactive]="!b.isActive">
+                {{ b.isActive ? 'فعّال' : 'موقَف' }}
+              </span>
+            </td>
+            <td>
+              <button type="button" class="link-btn" (click)="openEditForm(b)">تعديل</button>
+              <button type="button" class="link-btn" [disabled]="togglingId() === b.id" (click)="toggleActive(b)">
+                {{ b.isActive ? 'إيقاف' : 'تفعيل' }}
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (!loading() && branches().length === 0) {
+      <div class="no-results">
+        <span class="no-results-title">لا يوجد فروع بعد</span>
+        <span class="no-results-sub">ابدأ بإضافة أول فرع عبر الزر أعلاه.</span>
+      </div>
+    }
+
+    @if (loading()) {
+      <div class="no-results">
+        <span class="no-results-sub">جارٍ التحميل…</span>
+      </div>
+    }
+  </div>
+
+  @if (totalCount() > 0) {
+    <app-pagination
+      [pageNumber]="pageNumber()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (changed)="onPageChanged($event)"
+    ></app-pagination>
+  }
+</section>
+
+@if (formOpen()) {
+  <div class="modal-backdrop" (click)="closeForm()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div class="modal-title-group">
+          <h2>{{ isEditMode() ? 'تعديل فرع' : 'فرع جديد' }}</h2>
+          <span class="modal-hint">{{ isEditMode() ? 'الكود غير قابل للتعديل.' : 'الاسم والكود مطلوبان.' }}</span>
+        </div>
+        <button type="button" class="icon-btn" (click)="closeForm()" aria-label="إغلاق">×</button>
+      </div>
+
+      @if (formError()) {
+        <p class="form-error">{{ formError() }}</p>
+      }
+
+      <div class="modal-fields">
+        <label class="field" style="grid-column: span 2">
+          <span>اسم الفرع</span>
+          <input type="text" [(ngModel)]="name" placeholder="مثلاً: فرع دابوق" />
+        </label>
+        @if (!isEditMode()) {
+          <label class="field">
+            <span>كود الفرع</span>
+            <input type="text" [(ngModel)]="code" placeholder="MAIN2" />
+          </label>
+        }
+        <label class="field">
+          <span>الهاتف</span>
+          <input type="text" [(ngModel)]="phoneNumber" placeholder="07xxxxxxxx" />
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" [disabled]="submitting()" (click)="submit()">
+          {{ submitting() ? 'جارٍ الحفظ…' : (isEditMode() ? 'حفظ التعديلات' : 'إنشاء الفرع') }}
+        </button>
+        <button type="button" class="btn-ghost" (click)="closeForm()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+}

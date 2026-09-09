@@ -1,0 +1,80 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">الزبائن</span>
+    <h1>الزبائن</h1>
+    <span class="subtitle">قائمة زبائن تطبيق الطلبات - بحث بالاسم أو الهاتف، حظر/رفع حظر عن تقديم طلبات جديدة.</span>
+  </div>
+</div>
+
+<div class="search-row">
+  <input
+    type="text"
+    class="search-input"
+    placeholder="بحث بالاسم أو الهاتف…"
+    [ngModel]="searchQuery()"
+    (ngModelChange)="onSearchChange($event)"
+  />
+</div>
+
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<section class="table-panel">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>الاسم</th>
+          <th>الهاتف</th>
+          <th>البريد الإلكتروني</th>
+          <th>تاريخ التسجيل</th>
+          <th>الحالة</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (c of customers(); track c.id) {
+          <tr>
+            <td>{{ c.fullName }}</td>
+            <td class="mono">{{ c.phone || '—' }}</td>
+            <td>{{ c.email || '—' }}</td>
+            <td class="mono">{{ c.createdAtUtc | date: 'yyyy-MM-dd' }}</td>
+            <td>
+              <span class="status-chip" [class.inactive]="c.isBlocked">
+                {{ c.isBlocked ? 'محظور' : 'فعّال' }}
+              </span>
+            </td>
+            <td>
+              <button type="button" class="link-btn" [disabled]="togglingId() === c.id" (click)="toggleBlock(c)">
+                {{ c.isBlocked ? 'رفع الحظر' : 'حظر' }}
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (!loading() && customers().length === 0) {
+      <div class="no-results">
+        <span class="no-results-title">لا يوجد زبائن</span>
+        <span class="no-results-sub">لم يسجّل أي زبون عبر تطبيق الطلبات بعد.</span>
+      </div>
+    }
+
+    @if (loading()) {
+      <div class="no-results">
+        <span class="no-results-sub">جارٍ التحميل…</span>
+      </div>
+    }
+  </div>
+
+  @if (totalCount() > 0) {
+    <app-pagination
+      [pageNumber]="pageNumber()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (changed)="onPageChanged($event)"
+    ></app-pagination>
+  }
+</section>

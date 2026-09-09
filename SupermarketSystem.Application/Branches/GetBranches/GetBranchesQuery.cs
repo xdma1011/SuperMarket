@@ -6,7 +6,7 @@ namespace SupermarketSystem.Application.Branches.GetBranches;
 
 public sealed record GetBranchesQuery(PagedRequest Paging);
 
-public sealed record BranchListItemDto(Guid Id, string Name, string Code, bool IsActive);
+public sealed record BranchListItemDto(Guid Id, string Name, string Code, bool IsActive, string? PhoneNumber);
 
 public sealed class GetBranchesHandler
 {
@@ -38,7 +38,7 @@ public sealed class GetBranchesHandler
         var items = await branches
             .Skip(paging.Skip)
             .Take(paging.PageSize)
-            .Select(b => new BranchListItemDto(b.Id, b.Name, b.Code, b.IsActive))
+            .Select(b => new BranchListItemDto(b.Id, b.Name, b.Code, b.IsActive, b.PhoneNumber))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<BranchListItemDto>(items, totalCount, paging.PageNumber, paging.PageSize);

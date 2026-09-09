@@ -6,7 +6,8 @@ public sealed record ReceiptLine(string ProductName, string UnitName, decimal Qu
 
 public sealed record ReceiptData(
     string InvoiceNumber, DateTime CreatedAtLocal, string CashierName,
-    IReadOnlyList<ReceiptLine> Lines, decimal Total, string PaymentMethodName);
+    IReadOnlyList<ReceiptLine> Lines, decimal Total, string PaymentMethodName,
+    string? StoreName = null);
 
 /// <summary>
 /// يبني أوامر ESC/POS خام (بايتات) بدل نص عادي — طابعات الإيصالات
@@ -33,6 +34,10 @@ public static class EscPosReceiptBuilder
         SelectArabicCodePage(bytes);
 
         SetAlignCenter(bytes);
+        if (!string.IsNullOrWhiteSpace(data.StoreName))
+        {
+            WriteLine(bytes, data.StoreName);
+        }
         WriteLine(bytes, "فاتورة بيع");
         WriteLine(bytes, $"رقم: {data.InvoiceNumber}");
         WriteLine(bytes, data.CreatedAtLocal.ToString("yyyy-MM-dd HH:mm"));

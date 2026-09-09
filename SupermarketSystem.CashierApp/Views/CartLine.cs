@@ -11,4 +11,14 @@ public sealed class CartLine
     public decimal Quantity { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal LineTotal => Quantity * UnitPrice;
+
+    /// <summary>
+    /// الكمية المطلوبة تجاوزت الرصيد المحلي المخزَّن آخر مزامنة لهذه
+    /// الدفعة - سماح مع مراجعة (CLAUDE.md §1.6)، لا منع: السيرفر هو
+    /// الحكم الفعلي (AllowNegativeStock + SucceededWentNegative)، هذا
+    /// مجرد تنبيه بصري للكاشير إنه احتمال البضاعة وصلت فعليًا ولسه ما
+    /// انزامنت محليًا.
+    /// </summary>
+    public bool NeedsReview { get; set; }
+    public string ReviewMark => NeedsReview ? "⚠ مراجعة" : "";
 }

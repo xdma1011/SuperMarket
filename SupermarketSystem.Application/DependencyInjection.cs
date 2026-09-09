@@ -37,6 +37,8 @@ using SupermarketSystem.Application.Backups.GetBackupById;
 using SupermarketSystem.Application.Backups.GetBackups;
 using SupermarketSystem.Application.Backups.TriggerBackup;
 using SupermarketSystem.Application.Branches.CreateBranch;
+using SupermarketSystem.Application.Branches.UpdateBranch;
+using SupermarketSystem.Application.Branches.SetBranchActive;
 using SupermarketSystem.Application.Branches.GetPublicBranches;
 using SupermarketSystem.Application.Inventory.ApproveStocktake;
 using SupermarketSystem.Application.Inventory.GetCurrentStock;
@@ -49,10 +51,12 @@ using SupermarketSystem.Application.Inventory.RecordStocktakeCount;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Notifications;
 using SupermarketSystem.Application.CashManagement.CompleteCashClosing;
+using SupermarketSystem.Application.CashManagement.GetCashClosings;
 using SupermarketSystem.Application.Branches.GetBranches;
 using SupermarketSystem.Application.Catalog.CreateProduct;
 using SupermarketSystem.Application.Catalog.CreateProductBranch;
 using SupermarketSystem.Application.Catalog.AddProductUnit;
+using SupermarketSystem.Application.Catalog.UpdateProductUnitBarcode;
 using SupermarketSystem.Application.Catalog.GetProductBranches;
 using SupermarketSystem.Application.Catalog.GetProductByBarcode;
 using SupermarketSystem.Application.Catalog.GetProductUnits;
@@ -148,6 +152,8 @@ public static class DependencyInjection
         services.AddScoped<CreateBranchHandler>();
         services.AddScoped<GetPublicBranchesHandler>();
         services.AddScoped<GetBranchesHandler>();
+        services.AddScoped<UpdateBranchHandler>();
+        services.AddScoped<SetBranchActiveHandler>();
 
         services.AddScoped<CreateProductCategoryHandler>();
         services.AddScoped<GetProductCategoriesHandler>();
@@ -158,6 +164,7 @@ public static class DependencyInjection
         services.AddScoped<GetProductByBarcodeHandler>();
         services.AddScoped<GetProductBranchesHandler>();
         services.AddScoped<AddProductUnitHandler>();
+        services.AddScoped<UpdateProductUnitBarcodeHandler>();
         services.AddScoped<SetProductComplimentaryAllowedHandler>();
 
         services.AddScoped<CreateSupplierHandler>();
@@ -216,6 +223,7 @@ public static class DependencyInjection
         services.AddScoped<MarkReturnReviewedHandler>();
 
         services.AddScoped<CompleteCashClosingHandler>();
+        services.AddScoped<GetCashClosingsHandler>();
 
         services.AddScoped<CreateStocktakeHandler>();
         services.AddScoped<RecordStocktakeCountHandler>();

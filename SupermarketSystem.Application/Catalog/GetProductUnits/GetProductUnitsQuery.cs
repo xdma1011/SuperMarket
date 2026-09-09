@@ -5,7 +5,7 @@ namespace SupermarketSystem.Application.Catalog.GetProductUnits;
 
 public sealed record GetProductUnitsQuery(Guid ProductId);
 
-public sealed record ProductUnitDto(Guid Id, string UnitName, decimal ConversionFactorToBase, bool IsBaseUnit);
+public sealed record ProductUnitDto(Guid Id, string UnitName, decimal ConversionFactorToBase, bool IsBaseUnit, string? BarcodeValue);
 
 public sealed class GetProductUnitsHandler
 {
@@ -21,7 +21,16 @@ public sealed class GetProductUnitsHandler
         return await _context.ProductUnits.AsNoTracking()
             .Where(u => u.ProductId == query.ProductId)
             .OrderByDescending(u => u.IsBaseUnit)
-            .Select(u => new ProductUnitDto(u.Id, u.UnitName, u.ConversionFactorToBase, u.IsBaseUnit))
+            .Select(u => new ProductUnitDto(
+                u.Id,
+                u.UnitName,
+                u.ConversionFactorToBase,
+                u.IsBaseUnit,
+                _context.ProductBarcodes.AsNoTracking()
+                    .Where(b => b.ProductUnitId == u.Id)
+                    .OrderBy(b => b.Id)
+                    .Select(b => b.BarcodeValue)
+                    .FirstOrDefault()))
             .ToListAsync(cancellationToken);
     }
 }

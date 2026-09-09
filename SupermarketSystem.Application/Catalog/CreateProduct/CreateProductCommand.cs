@@ -183,6 +183,23 @@ public sealed class CreateProductHandler
 
         _context.Products.Add(product);
 
+        // منتج بلا SuggestedRetailPrice ما إله سعر يُنزَّل فيه على الفروع
+        // آليًا - يضل بحاجة خطوة "الفروع والأسعار" اليدوية (CLAUDE.md §1.8).
+        // لو موجود، ننزّله على كل الفروع الفعّالة بنفس السعر فورًا - يبقى
+        // خيار تعديل السعر لكل فرع لحاله متاح بعدين من نفس القسم.
+        if (command.SuggestedRetailPrice is { } suggestedPrice)
+        {
+            var activeBranchIds = await _context.Branches.AsNoTracking()
+                .Where(b => b.IsActive)
+                .Select(b => b.Id)
+                .ToListAsync(cancellationToken);
+
+            foreach (var branchId in activeBranchIds)
+            {
+                _context.ProductBranches.Add(new ProductBranch(product.Id, branchId, suggestedPrice));
+            }
+        }
+
         await _context.SaveChangesAsync(cancellationToken);
         await _catalogVersionService.IncrementVersionAsync(cancellationToken);
 

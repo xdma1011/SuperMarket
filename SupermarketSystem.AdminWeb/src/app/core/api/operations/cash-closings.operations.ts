@@ -1,4 +1,5 @@
 /** ApiController.CashClosings */
 export enum CashClosingsOperation {
-  Complete = ''
+  Complete = '',
+  List = ''
 }

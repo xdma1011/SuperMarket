@@ -15,6 +15,8 @@ interface SaleInvoiceListItemDto {
   totalAmount: number;
   totalReturnedAmount: number;
   createdAtUtc: string;
+  customerName: string | null;
+  customerPhone: string | null;
 }
 
 interface PagedResult<T> {

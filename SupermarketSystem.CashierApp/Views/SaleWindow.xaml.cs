@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
@@ -19,6 +20,9 @@ public partial class SaleWindow : Window
 
     private readonly ObservableCollection<CartLine> _cart = new();
     private List<PaymentMethodDto> _paymentMethods = new();
+
+    /// <summary>آخر سطر انضاف للسلة - يُفحص بـCartGrid_LoadingRow لتمييزه بصريًا (وميض خلفية) لحظة توليد صفّه فعليًا بالـDataGrid.</summary>
+    private CartLine? _lastAddedLine;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -235,7 +239,7 @@ public partial class SaleWindow : Window
         }
         else
         {
-            _cart.Add(new CartLine
+            var newLine = new CartLine
             {
                 ProductId = product.ProductId,
                 ProductUnitId = unit.UnitId,
@@ -243,7 +247,9 @@ public partial class SaleWindow : Window
                 UnitName = unit.UnitName,
                 Quantity = 1,
                 UnitPrice = product.SellingPrice
-            });
+            };
+            _lastAddedLine = newLine;
+            _cart.Add(newLine);
         }
 
         UpdateTotal();
@@ -252,9 +258,9 @@ public partial class SaleWindow : Window
     /// <summary>
     /// FIFO حسب تاريخ الصلاحية الأقرب — دفعات بلا تاريخ صلاحية (خام/غير
     /// منتهية الصلاحية بطبيعتها) تُستخدم أخيرًا (DateOnly.MaxValue
-    /// بالترتيب). لو نفس الدفعة أصلًا بالسلة، بنزيد كميتها بس بحدود
-    /// رصيدها المتوفر فعليًا — منع بيع أكتر من الموجود محليًا، قبل حتى
-    /// ما يوصل الطلب للسيرفر (فحص إضافي، لا بديل عن فحص السيرفر نفسه).
+    /// بالترتيب). تجاوز الرصيد المحلي المعروض ما يمنع البيع — سماح مع
+    /// مراجعة (CLAUDE.md §1.6): البضاعة ممكن تكون وصلت فعليًا ولسه ما
+    /// انزامنت محليًا؛ الحكم الفعلي عند السيرفر (AllowNegativeStock).
     /// </summary>
     private void AddBatchTrackedItem(LocalDbContext db, LocalProduct product, LocalProductUnit unit)
     {
@@ -263,33 +269,47 @@ public partial class SaleWindow : Window
         if (existingLine is not null)
         {
             var currentBatch = db.ProductBatches.FirstOrDefault(b => b.BatchId == existingLine.ProductBatchId);
-            if (currentBatch is not null && existingLine.Quantity + 1 <= currentBatch.QuantityAvailable)
+            existingLine.Quantity += 1;
+
+            // تجاوز الرصيد المحلي المعروض - سماح مع مراجعة، لا منع (راجع
+            // تعليق CartLine.NeedsReview). السيرفر هو الحكم الفعلي.
+            if (currentBatch is null || existingLine.Quantity > currentBatch.QuantityAvailable)
             {
-                existingLine.Quantity += 1;
-                FlashAddedSuccess();
-                CartGrid.Items.Refresh();
-                UpdateTotal();
-                return;
+                existingLine.NeedsReview = true;
             }
 
-            ShowError($"الكمية المطلوبة تتجاوز الرصيد المتوفر لدفعة '{existingLine.BatchNumber}' ({currentBatch?.QuantityAvailable ?? 0}).");
+            FlashAddedSuccess();
+            CartGrid.Items.Refresh();
+            UpdateTotal();
             return;
         }
 
+        // أولوية للدفعات اللي فيها رصيد محلي معروض؛ لو ما لقينا، نرجع لأي
+        // دفعة فعلية للمنتج (حتى لو رصيدها المحلي صفر أو قديم) بدل ما نمنع
+        // البيع بالكامل - البضاعة ممكن تكون وصلت فعليًا وما زامنت لسه.
         var batch = db.ProductBatches
             .Where(b => b.ProductId == product.ProductId && b.QuantityAvailable >= 1)
             .OrderBy(b => b.ExpiryDate ?? DateOnly.MaxValue)
             .FirstOrDefault();
 
+        var needsReview = batch is null;
         if (batch is null)
         {
-            ShowError($"لا يوجد رصيد متوفر لهذا الصنف بأي دفعة محليًا - '{product.Name}'.");
+            batch = db.ProductBatches
+                .Where(b => b.ProductId == product.ProductId)
+                .OrderBy(b => b.ExpiryDate ?? DateOnly.MaxValue)
+                .FirstOrDefault();
+        }
+
+        if (batch is null)
+        {
+            ShowError($"لا يوجد أي دفعة مسجّلة لهذا الصنف محليًا - '{product.Name}'. راجع الإدارة قبل البيع.");
             return;
         }
 
         FlashAddedSuccess();
 
-        _cart.Add(new CartLine
+        var newBatchLine = new CartLine
         {
             ProductId = product.ProductId,
             ProductUnitId = unit.UnitId,
@@ -298,8 +318,11 @@ public partial class SaleWindow : Window
             ProductName = product.Name,
             UnitName = unit.UnitName,
             Quantity = 1,
-            UnitPrice = product.SellingPrice
-        });
+            UnitPrice = product.SellingPrice,
+            NeedsReview = needsReview
+        };
+        _lastAddedLine = newBatchLine;
+        _cart.Add(newBatchLine);
 
         UpdateTotal();
     }
@@ -410,7 +433,8 @@ public partial class SaleWindow : Window
             Lines: _cart.Select(l => new Services.Printing.ReceiptLine(
                 l.ProductName, l.UnitName, l.Quantity, l.UnitPrice, l.LineTotal)).ToList(),
             Total: total,
-            PaymentMethodName: selectedMethod.Name);
+            PaymentMethodName: selectedMethod.Name,
+            StoreName: StoreBrandingCache.ReadStoreName(Path.GetDirectoryName(_dbPath) ?? ""));
 
         var printResult = await _receiptPrinter.PrintAsync(receiptData, CancellationToken.None);
 
@@ -564,6 +588,40 @@ public partial class SaleWindow : Window
     {
         HideError();
         FlashBarcodeBox(System.Windows.Media.Brushes.PaleGreen);
+    }
+
+    /// <summary>
+    /// يُطلَق كل ما DataGrid يولّد صفًّا (سطر جديد أو إعادة استخدام صف
+    /// موجود عند التمرير) - بنفحص إذا كان هذا بالضبط آخر سطر انضاف
+    /// للسلة (_lastAddedLine)، ولو أه نشغّل أنيميشن وميض خلفية عليه
+    /// (Storyboard حقيقي على الصف نفسه، لا بس على مربع الباركود) - تمييز
+    /// بصري إضافي وأوضح إنه الصنف انضاف فعليًا، خصوصًا بسلة فيها أصناف كثيرة.
+    /// </summary>
+    private void CartGrid_LoadingRow(object sender, System.Windows.Controls.DataGridRowEventArgs e)
+    {
+        if (_lastAddedLine is null || !ReferenceEquals(e.Row.Item, _lastAddedLine))
+        {
+            return;
+        }
+
+        _lastAddedLine = null;
+
+        var row = e.Row;
+        var flashBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.PaleGreen);
+        row.Background = flashBrush;
+
+        var animation = new System.Windows.Media.Animation.ColorAnimation
+        {
+            To = System.Windows.Media.Colors.White,
+            Duration = TimeSpan.FromMilliseconds(600),
+            FillBehavior = System.Windows.Media.Animation.FillBehavior.HoldEnd
+        };
+        // بعد ما الأنيميشن توصل للأبيض، نصفّر القيمة المحلية بالكامل -
+        // يرجّع الصف يتبع تلوين DataGrid العادي (أبيض/رمادي فاتح متبادل)
+        // بدل ما يعلق أبيض دائمًا حتى لو صار Row متبادل اللون لاحقًا.
+        animation.Completed += (_, _) => row.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
+
+        flashBrush.BeginAnimation(System.Windows.Media.SolidColorBrush.ColorProperty, animation);
     }
 
     /// <summary>

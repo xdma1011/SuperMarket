@@ -1,0 +1,129 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">الصندوق / تقفيل</span>
+    <h1>تقفيل الصندوق</h1>
+    <span class="subtitle">تقفيل يومي/وردية يقارن الكاش المتوقع (حسب النظام) بالمعدود فعليًا بالدرج.</span>
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn-primary" (click)="openForm()">تقفيل جديد</button>
+  </div>
+</div>
+
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<div class="filter-row">
+  <select [(ngModel)]="filterBranchId" (ngModelChange)="onFilterBranchChange()">
+    <option value="">كل الفروع</option>
+    @for (b of branches(); track b.id) {
+      <option [value]="b.id">{{ b.name }}</option>
+    }
+  </select>
+</div>
+
+<section class="table-panel">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>الفرع</th>
+          <th>اليوم التجاري</th>
+          <th>وقت التقفيل</th>
+          <th>الكاش المتوقع</th>
+          <th>الكاش المعدود</th>
+          <th>الفرق</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (c of closings(); track c.id) {
+          <tr>
+            <td>{{ c.branchName }}</td>
+            <td class="mono">{{ c.businessDate }}</td>
+            <td class="mono">{{ c.closedAtUtc | date: 'yyyy-MM-dd HH:mm' }}</td>
+            <td class="mono">{{ c.expectedCash | number: '1.2-2' }}</td>
+            <td class="mono">{{ c.countedCash | number: '1.2-2' }}</td>
+            <td class="mono">
+              <span class="status-chip" [class.inactive]="varianceTone(c.variance) === 'red'">
+                {{ c.variance | number: '1.2-2' }}
+              </span>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (!loading() && closings().length === 0) {
+      <div class="no-results">
+        <span class="no-results-title">لا يوجد تقفيلات بعد</span>
+        <span class="no-results-sub">ابدأ بأول تقفيل صندوق عبر الزر أعلاه.</span>
+      </div>
+    }
+
+    @if (loading()) {
+      <div class="no-results">
+        <span class="no-results-sub">جارٍ التحميل…</span>
+      </div>
+    }
+  </div>
+
+  @if (totalCount() > 0) {
+    <app-pagination
+      [pageNumber]="pageNumber()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (changed)="onPageChanged($event)"
+    ></app-pagination>
+  }
+</section>
+
+@if (formOpen()) {
+  <div class="modal-backdrop" (click)="closeForm()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div class="modal-title-group">
+          <h2>تقفيل صندوق جديد</h2>
+          <span class="modal-hint">عدّ اختياري لأي طريقة دفع غير الكاش (فيزا/CliQ) — اتركها فاضية لو ما تم عدّها.</span>
+        </div>
+        <button type="button" class="icon-btn" (click)="closeForm()" aria-label="إغلاق">×</button>
+      </div>
+
+      @if (formError()) {
+        <p class="form-error">{{ formError() }}</p>
+      }
+
+      <div class="modal-fields">
+        <label class="field">
+          <span>الفرع</span>
+          <select [(ngModel)]="selectedBranchId">
+            @for (b of branches(); track b.id) {
+              <option [value]="b.id">{{ b.name }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span>اليوم التجاري</span>
+          <input type="date" [(ngModel)]="businessDate" />
+        </label>
+        <label class="field" style="grid-column: span 2">
+          <span>الكاش المعدود فعليًا بالدرج</span>
+          <input type="number" min="0" step="0.01" [(ngModel)]="countedCash" placeholder="0.00" />
+        </label>
+
+        @for (d of countedDetails(); track d.paymentMethodId) {
+          <label class="field">
+            <span>{{ d.paymentMethodName }} (اختياري)</span>
+            <input type="number" min="0" step="0.01" [(ngModel)]="d.countedAmount" placeholder="—" />
+          </label>
+        }
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" [disabled]="submitting()" (click)="submit()">
+          {{ submitting() ? 'جارٍ الحفظ…' : 'إتمام التقفيل' }}
+        </button>
+        <button type="button" class="btn-ghost" (click)="closeForm()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+}

@@ -1,6 +1,8 @@
 using SupermarketSystem.API.Common;
 using SupermarketSystem.Application.Branches.CreateBranch;
 using SupermarketSystem.Application.Branches.GetBranches;
+using SupermarketSystem.Application.Branches.SetBranchActive;
+using SupermarketSystem.Application.Branches.UpdateBranch;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Pagination;
 
@@ -52,11 +54,38 @@ public static class BranchEndpoints
         .WithName("GetBranches")
         .Produces<PagedResult<BranchListItemDto>>(StatusCodes.Status200OK);
 
-        // NOTE: no authorization is applied yet — authentication is not
-        // implemented (PlaceholderCurrentUserContext). Every endpoint added
-        // from here must gain .RequireAuthorization(...) with the appropriate
-        // permission before this system is exposed beyond local development.
+        group.MapPut("/{branchId:guid}", async (
+            Guid branchId,
+            UpdateBranchRequest request,
+            UpdateBranchHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new UpdateBranchCommand(branchId, request.Name, request.PhoneNumber), cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithName("UpdateBranch")
+        .WithSummary("يعدّل اسم/هاتف فرع موجود - الكود (Code) غير قابل للتعديل (مستخدَم بترقيم مستندات سابقة).")
+        .Produces(StatusCodes.Status204NoContent)
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status404NotFound);
+
+        group.MapPost("/{branchId:guid}/active", async (
+            Guid branchId,
+            SetBranchActiveRequest request,
+            SetBranchActiveHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new SetBranchActiveCommand(branchId, request.IsActive), cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithName("SetBranchActive")
+        .WithSummary("يفعّل/يوقف فرع - بلا حذف فعلي (راجع تعليق Branch.cs).")
+        .Produces(StatusCodes.Status204NoContent)
+        .ProducesProblem(StatusCodes.Status404NotFound);
 
         return app;
     }
+
+    public sealed record UpdateBranchRequest(string Name, string? PhoneNumber);
+    public sealed record SetBranchActiveRequest(bool IsActive);
 }

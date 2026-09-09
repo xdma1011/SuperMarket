@@ -41,6 +41,19 @@ public static class CashierSyncEndpoints
         .WithSummary("صفحة من الكتالوج الكامل لمزامنة الكاشير المحلي.")
         .Produces<PagedResult<CatalogSyncProductDto>>(StatusCodes.Status200OK);
 
+        group.MapGet("/store-branding", async (
+            ISettingsProvider settingsProvider,
+            CancellationToken cancellationToken) =>
+        {
+            var storeName = await settingsProvider.GetStringAsync(StoreBrandingKeys.StoreName, null, cancellationToken);
+            return Results.Ok(new StoreBrandingResponse(storeName));
+        })
+        .WithName("GetStoreBranding")
+        .WithSummary("اسم المحل ليُطبع بأعلى فاتورة الكاشير الحرارية - يُخزَّن محليًا بالكاشير للطباعة أوفلاين.")
+        .Produces<StoreBrandingResponse>(StatusCodes.Status200OK);
+
         return app;
     }
+
+    public sealed record StoreBrandingResponse(string? StoreName);
 }

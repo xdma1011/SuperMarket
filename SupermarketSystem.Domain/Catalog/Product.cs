@@ -114,6 +114,12 @@ public class Product : AuditableEntity, ISoftDeletable, IHasRowVersion
         return barcode;
     }
 
+    /// <summary>يحذف باركود من هذا المنتج - يُستخدم لما يُصفَّر باركود وحدة (يصير الصنف بلا باركود لتلك الوحدة، لا خطأ).</summary>
+    public void RemoveBarcode(Guid barcodeId)
+    {
+        _barcodes.RemoveAll(b => b.Id == barcodeId);
+    }
+
     public ProductImage AddImage(string url, bool isPrimary, int sortOrder)
     {
         var image = new ProductImage(Id, url, isPrimary, sortOrder);
@@ -173,6 +179,8 @@ public class ProductBarcode : Entity
         BarcodeValue = barcodeValue;
         ProductUnitId = productUnitId;
     }
+
+    public void ChangeValue(string barcodeValue) => BarcodeValue = barcodeValue;
 }
 
 public class ProductImage : Entity

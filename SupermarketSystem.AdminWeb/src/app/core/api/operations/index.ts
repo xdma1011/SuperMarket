@@ -3,6 +3,7 @@ export * from './backups.operations';
 export * from './branches.operations';
 export * from './cash-closings.operations';
 export * from './catalog.operations';
+export * from './customers.operations';
 export * from './driver.operations';
 export * from './inventory.operations';
 export * from './notifications.operations';

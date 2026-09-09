@@ -33,4 +33,12 @@ public class Branch : AuditableEntity, ISoftDeletable, IHasRowVersion
     public void Activate() => IsActive = true;
     public void MarkDeleted() => IsDeleted = true;
     public void Restore() => IsDeleted = false;
+
+    /// <summary>الكود (Code) عمدًا غير قابل للتعديل هون - مستخدَم بتوليد أرقام مستندات (راجع DocumentNumberGenerator)، تغييره بأثر رجعي يكسر ترقيم فواتير سابقة.</summary>
+    public void UpdateDetails(string name, string? phoneNumber, Address? address)
+    {
+        Name = name;
+        PhoneNumber = phoneNumber;
+        Address = address;
+    }
 }
