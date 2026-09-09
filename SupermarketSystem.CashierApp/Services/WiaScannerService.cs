@@ -1,3 +1,5 @@
+using System.IO;
+
 namespace SupermarketSystem.CashierApp.Services;
 
 public sealed record ScanResult(bool Success, byte[]? ImageBytes, string? FileName, string? ErrorMessage);

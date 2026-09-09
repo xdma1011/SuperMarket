@@ -7,6 +7,11 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>SupermarketSystem.CashierApp</RootNamespace>
+    <!-- نفس تعليق SupermarketSystem.API.csproj - تحذيرات NuGet استشارية
+         (SQLitePCLRaw عبر تبعية SQLite غير مباشرة) وتحذيرات pruning
+         (الحزم أصلًا متوفرة بالـshared framework)، لا أخطاء بناء، بس
+         Package Manager Console بيوقف الأمر بسببها. -->
+    <NoWarn>$(NoWarn);NU1510;NU1902;NU1903</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

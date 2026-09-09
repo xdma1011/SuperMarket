@@ -43,10 +43,10 @@ public partial class SaleWindow : Window
 
         CartGrid.ItemsSource = _cart;
         Loaded += SaleWindow_Loaded;
-        Closed += (_, _) => _connectivityTimer.Stop();
 
         _connectivityTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
         _connectivityTimer.Tick += async (_, _) => await RefreshConnectivityStateAsync();
+        Closed += (_, _) => _connectivityTimer.Stop();
     }
 
     private async void SaleWindow_Loaded(object sender, RoutedEventArgs e)
