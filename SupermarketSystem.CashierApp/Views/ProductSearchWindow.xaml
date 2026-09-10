@@ -1,0 +1,119 @@
+<Window x:Class="SupermarketSystem.CashierApp.Views.ProductSearchWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="بحث عن صنف"
+        Width="1000" Height="700"
+        WindowStartupLocation="CenterScreen"
+        FlowDirection="RightToLeft"
+        WindowState="Maximized"
+        Background="{StaticResource Surface2Brush}"
+        KeyDown="Window_KeyDown">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="10" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="10" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- عنوان الشاشة + وضعها (إضافة للفاتورة أو معرفة سعر فقط) -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0">
+                <TextBlock x:Name="TitleText" Text="بحث عن صنف" FontSize="22" FontWeight="Bold"
+                           Foreground="{StaticResource InkBrush}" />
+                <TextBlock x:Name="ModeHintText" FontSize="13" Foreground="{StaticResource Ink2Brush}"
+                           Margin="0,4,0,0" />
+            </StackPanel>
+
+            <Button x:Name="CloseButton" Grid.Column="1" Width="42" Height="42" Content="×" FontSize="18"
+                    Style="{StaticResource SecondaryButton}" Click="CloseButton_Click" />
+        </Grid>
+
+        <!-- صندوق البحث - بالاسم أو جزء من الباركود معًا -->
+        <TextBox x:Name="SearchBox" Grid.Row="2" Height="46" FontSize="16" Padding="12,0"
+                 VerticalContentAlignment="Center" Background="White"
+                 TextChanged="SearchBox_TextChanged" KeyDown="SearchBox_KeyDown" />
+
+        <!-- نتائج البحث - تنقّل كامل بالكيبورد (أسهم فوق/تحت، Enter، Escape، PageUp/PageDown للصفحات) -->
+        <Border Grid.Row="4" Background="White" CornerRadius="10" BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1">
+            <Grid>
+                <ListBox x:Name="ResultsList" BorderThickness="0" Background="Transparent"
+                         KeyDown="ResultsList_KeyDown" MouseDoubleClick="ResultsList_MouseDoubleClick">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="10,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="140" />
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="110" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{Binding ProductName}" FontSize="15" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Text="{Binding MatchedBarcode}" FontSize="12"
+                                           Foreground="{StaticResource Ink2Brush}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="2" Text="{Binding UnitName}" FontSize="13"
+                                           Foreground="{StaticResource Ink2Brush}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="3" Text="{Binding Price, StringFormat={}{0:0.00}}" FontSize="16"
+                                           FontWeight="Bold" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <TextBlock x:Name="NoResultsText" Text="لا يوجد نتائج مطابقة." FontSize="15"
+                           Foreground="{StaticResource Ink2Brush}" HorizontalAlignment="Center"
+                           VerticalAlignment="Center" Visibility="Collapsed" />
+            </Grid>
+        </Border>
+
+        <!-- معرفة السعر فقط: يظهر تفاصيل آخر صنف اتفحص هون، بدل ما يقفل الشاشة -->
+        <Border x:Name="PriceCheckPanel" Grid.Row="4" Background="{StaticResource AccentSoftBrush}"
+                CornerRadius="10" BorderBrush="{StaticResource AccentBrush}" BorderThickness="2"
+                Visibility="Collapsed" Panel.ZIndex="5">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock x:Name="PriceCheckProductText" FontSize="26" FontWeight="Bold"
+                           Foreground="{StaticResource InkBrush}" HorizontalAlignment="Center" />
+                <TextBlock x:Name="PriceCheckUnitText" FontSize="15" Foreground="{StaticResource Ink2Brush}"
+                           HorizontalAlignment="Center" Margin="0,6,0,0" />
+                <TextBlock x:Name="PriceCheckPriceText" FontSize="48" FontWeight="Bold"
+                           Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" Margin="0,10,0,0" />
+                <TextBlock Text="اضغط Escape للعودة للبحث" FontSize="12" Foreground="{StaticResource Ink2Brush}"
+                           HorizontalAlignment="Center" Margin="0,16,0,0" />
+            </StackPanel>
+        </Border>
+
+        <!-- ترقيم الصفحات + تلميح مفاتيح التنقّل -->
+        <Grid Grid.Row="6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0" VerticalAlignment="Center" FontSize="12"
+                       Foreground="{StaticResource Ink2Brush}"
+                       Text="↑↓ تنقّل بين النتائج · Enter اختيار · PageUp/PageDown تغيير الصفحة · Escape إغلاق" />
+
+            <Button x:Name="PrevPageButton" Grid.Column="1" Width="90" Height="36" Content="◀ السابقة"
+                    Style="{StaticResource SecondaryButton}" Click="PrevPageButton_Click" />
+
+            <TextBlock x:Name="PageInfoText" Grid.Column="3" VerticalAlignment="Center" FontSize="13"
+                       Foreground="{StaticResource InkBrush}" Text="صفحة 1 من 1" />
+
+            <Button x:Name="NextPageButton" Grid.Column="5" Width="90" Height="36" Content="التالية ▶"
+                    Style="{StaticResource SecondaryButton}" Click="NextPageButton_Click" />
+        </Grid>
+    </Grid>
+</Window>

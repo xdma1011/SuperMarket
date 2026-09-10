@@ -171,50 +171,43 @@ public partial class SaleWindow : Window
     /// <summary>
     /// بحث محلي بس (SQLite) — بلا أي استدعاء API هون، هذا بالضبط سبب
     /// وجود الكتالوج المحلي أصلًا: البيع يشتغل حتى لو النت مقطوع كليًا.
+    /// باركود غير مطابق - أو حقل فاضي أصلًا - ما يمنع البيع، بيفتح شاشة
+    /// البحث الكاملة بدلًا من مجرد رسالة خطأ (راجع ProductSearchWindow).
     /// </summary>
     private void AddScannedItem()
     {
+        var barcodeValue = BarcodeBox.Text.Trim();
+        BarcodeBox.Clear();
+
         try
         {
-            var barcodeValue = BarcodeBox.Text.Trim();
-            BarcodeBox.Clear();
-
-            if (string.IsNullOrWhiteSpace(barcodeValue))
-            {
-                return;
-            }
-
             using var db = new LocalDbContext(_dbPath);
 
-            var barcode = db.ProductBarcodes.FirstOrDefault(b => b.BarcodeValue == barcodeValue);
-            if (barcode is null)
+            if (!string.IsNullOrWhiteSpace(barcodeValue))
             {
-                ShowError($"الباركود '{barcodeValue}' غير موجود بالكتالوج المحلي.");
-                return;
+                var barcode = db.ProductBarcodes.FirstOrDefault(b => b.BarcodeValue == barcodeValue);
+                if (barcode is not null)
+                {
+                    var unit = db.ProductUnits.FirstOrDefault(u => u.UnitId == barcode.ProductUnitId);
+                    if (unit is null)
+                    {
+                        ShowError("خطأ داخلي - الوحدة المرتبطة بالباركود غير موجودة.");
+                        return;
+                    }
+
+                    var product = db.Products.FirstOrDefault(p => p.ProductId == unit.ProductId);
+                    if (product is null || !product.IsAvailableForSale)
+                    {
+                        ShowError("هذا الصنف غير متوفر للبيع حاليًا.");
+                        return;
+                    }
+
+                    AddResolvedItem(db, product, unit);
+                    return;
+                }
             }
 
-            var unit = db.ProductUnits.FirstOrDefault(u => u.UnitId == barcode.ProductUnitId);
-            if (unit is null)
-            {
-                ShowError("خطأ داخلي - الوحدة المرتبطة بالباركود غير موجودة.");
-                return;
-            }
-
-            var product = db.Products.FirstOrDefault(p => p.ProductId == unit.ProductId);
-            if (product is null || !product.IsAvailableForSale)
-            {
-                ShowError("هذا الصنف غير متوفر للبيع حاليًا.");
-                return;
-            }
-
-            if (product.IsBatchTracked)
-            {
-                AddBatchTrackedItem(db, product, unit);
-            }
-            else
-            {
-                AddSimpleItem(product, unit);
-            }
+            OpenSearchWindow(barcodeValue, priceCheckOnly: false);
         }
         finally
         {
@@ -224,6 +217,19 @@ public partial class SaleWindow : Window
             // الدائم على الحقل الصحيح، وإلا أرقامه بتروح لمكان تاني).
             BarcodeBox.Focus();
             BarcodeBox.SelectAll();
+        }
+    }
+
+    /// <summary>نقطة إضافة موحَّدة - يقرر بين صنف عادي أو متتبَّع دفعات، مستخدَمة من مسار الباركود المباشر وشاشة البحث الكاملة معًا، صفر تكرار منطق.</summary>
+    private void AddResolvedItem(LocalDbContext db, LocalProduct product, LocalProductUnit unit)
+    {
+        if (product.IsBatchTracked)
+        {
+            AddBatchTrackedItem(db, product, unit);
+        }
+        else
+        {
+            AddSimpleItem(product, unit);
         }
     }
 
@@ -463,119 +469,36 @@ public partial class SaleWindow : Window
         FlashBarcodeBox(System.Windows.Media.Brushes.MistyRose);
     }
 
-    // === البحث بالاسم — بحث محلي بس (SQLite)، بلا أي اتصال API ===
+    // === شاشة البحث الكاملة — بحث محلي بس (SQLite)، بلا أي اتصال API ===
 
     private void SearchByNameButton_Click(object sender, RoutedEventArgs e)
     {
-        SearchPanel.Visibility = Visibility.Visible;
-        SearchNameBox.Text = string.Empty;
-        SearchResultsList.ItemsSource = null;
-        SearchNameBox.Focus();
+        OpenSearchWindow(initialTerm: string.Empty, priceCheckOnly: false);
     }
 
-    private void CloseSearchButton_Click(object sender, RoutedEventArgs e)
+    private void PriceCheckButton_Click(object sender, RoutedEventArgs e)
     {
-        CloseSearchPanel();
+        OpenSearchWindow(initialTerm: string.Empty, priceCheckOnly: true);
     }
 
-    private void CloseSearchPanel()
+    /// <summary>
+    /// نافذة معيارية (ShowDialog) - تحجب هذه الشاشة لحد ما الكاشير يختار
+    /// صنف أو يقفل (Escape). بوضع الإضافة (priceCheckOnly=false) وDialogResult
+    /// صار true، بنضيف المنتج/الوحدة المختارة مباشرة لنفس السلة الحالية.
+    /// بوضع معرفة السعر، ما في شي يُضاف إطلاقًا مهما اختار الكاشير.
+    /// </summary>
+    private void OpenSearchWindow(string initialTerm, bool priceCheckOnly)
     {
-        SearchPanel.Visibility = Visibility.Collapsed;
+        var window = new ProductSearchWindow(_dbPath, initialTerm, priceCheckOnly) { Owner = this };
+        var result = window.ShowDialog();
+
+        if (result == true && window.SelectedProduct is LocalProduct selectedProduct && window.SelectedUnit is LocalProductUnit selectedUnit)
+        {
+            using var db = new LocalDbContext(_dbPath);
+            AddResolvedItem(db, selectedProduct, selectedUnit);
+        }
+
         BarcodeBox.Focus();
-    }
-
-    /// <summary>
-    /// بحث حي (Contains) بالاسم على الكتالوج المحلي — بلا أي استدعاء API،
-    /// نفس فلسفة مسح الباركود بالضبط: البيع (وأدواته) يشتغل حتى لو النت
-    /// مقطوع كليًا.
-    /// </summary>
-    private void SearchNameBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
-    {
-        var term = SearchNameBox.Text.Trim();
-
-        if (term.Length < 2)
-        {
-            SearchResultsList.ItemsSource = null;
-            return;
-        }
-
-        using var db = new LocalDbContext(_dbPath);
-        var matches = db.Products
-            .Where(p => p.IsAvailableForSale && p.Name.Contains(term))
-            .OrderBy(p => p.Name)
-            .Take(15)
-            .ToList();
-
-        SearchResultsList.ItemsSource = matches;
-        SearchResultsList.DisplayMemberPath = nameof(LocalProduct.Name);
-    }
-
-    private void SearchNameBox_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Escape)
-        {
-            CloseSearchPanel();
-        }
-        else if (e.Key == Key.Down && SearchResultsList.Items.Count > 0)
-        {
-            SearchResultsList.Focus();
-            SearchResultsList.SelectedIndex = 0;
-        }
-        else if (e.Key == Key.Enter && SearchResultsList.Items.Count > 0)
-        {
-            AddSearchedProduct((LocalProduct)SearchResultsList.Items[0]!);
-        }
-    }
-
-    private void SearchResultsList_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Enter && SearchResultsList.SelectedItem is LocalProduct selected)
-        {
-            AddSearchedProduct(selected);
-        }
-        else if (e.Key == Key.Escape)
-        {
-            CloseSearchPanel();
-        }
-    }
-
-    private void SearchResultsList_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        if (SearchResultsList.SelectedItem is LocalProduct selected)
-        {
-            AddSearchedProduct(selected);
-        }
-    }
-
-    /// <summary>
-    /// البحث بالاسم بيضيف الوحدة الأساسية دائمًا (لا خيار وحدة بالبحث
-    /// نفسه — لو الكاشير يحتاج وحدة تانية "طرد" مثلًا، يمسح باركودها
-    /// مباشرة بدل البحث بالاسم). يعيد استخدام نفس منطق الإضافة بالضبط
-    /// (AddSimpleItem/AddBatchTrackedItem) اللي يستخدمها مسار الباركود،
-    /// صفر تكرار منطق.
-    /// </summary>
-    private void AddSearchedProduct(LocalProduct product)
-    {
-        using var db = new LocalDbContext(_dbPath);
-
-        var baseUnit = db.ProductUnits.FirstOrDefault(u => u.ProductId == product.ProductId && u.IsBaseUnit);
-        if (baseUnit is null)
-        {
-            ShowError($"تعذّر إيجاد وحدة أساسية للصنف '{product.Name}'.");
-            CloseSearchPanel();
-            return;
-        }
-
-        if (product.IsBatchTracked)
-        {
-            AddBatchTrackedItem(db, product, baseUnit);
-        }
-        else
-        {
-            AddSimpleItem(product, baseUnit);
-        }
-
-        CloseSearchPanel();
     }
 
     private void HideError()

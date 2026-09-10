@@ -23,6 +23,8 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="10" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="16" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="8" />
@@ -38,50 +40,25 @@
             <Button x:Name="AddButton" Grid.Column="2" Height="42" Width="90" Content="إضافة"
                     Style="{StaticResource SecondaryButton}" Click="AddButton_Click" />
 
-            <Button x:Name="SearchByNameButton" Grid.Column="4" Height="42" Width="120" Content="🔍 بحث بالاسم"
+            <!-- باركود غير مطابق أو فاضي بحقل الباركود بيفتح نفس هذه الشاشة تلقائيًا (راجع AddScannedItem بالكود-behind) -->
+            <Button x:Name="SearchByNameButton" Grid.Column="4" Height="42" Width="120" Content="🔍 بحث عن صنف"
                     Style="{StaticResource SecondaryButton}" Click="SearchByNameButton_Click" />
 
+            <!-- وضع مستقل: يعرض السعر فقط بلا إضافة للفاتورة - لزبون يسأل عن سعر بينما زبون آخر عالكاش -->
+            <Button x:Name="PriceCheckButton" Grid.Column="6" Height="42" Width="120" Content="💰 معرفة السعر"
+                    Style="{StaticResource SecondaryButton}" Click="PriceCheckButton_Click" />
+
             <!-- تفعّل بس لما يتأكد فعليًا وجود اتصال بالسيرفر (فحص دوري خفيف كل بضع ثواني، راجع SaleWindow.xaml.cs) -->
-            <Button x:Name="SyncNowButton" Grid.Column="6" Height="42" Width="110" Content="🔄 مزامنة الآن"
+            <Button x:Name="SyncNowButton" Grid.Column="8" Height="42" Width="110" Content="🔄 مزامنة الآن"
                     Style="{StaticResource SecondaryButton}" Click="SyncNowButton_Click" IsEnabled="False" />
 
             <!-- تظهر بس أثناء مزامنة يدوية شغّالة فعليًا (راجع SyncNowButton_Click) -->
-            <Button x:Name="CancelSyncButton" Grid.Column="8" Height="42" Width="80" Content="إلغاء"
+            <Button x:Name="CancelSyncButton" Grid.Column="10" Height="42" Width="80" Content="إلغاء"
                     Style="{StaticResource SecondaryButton}" Click="CancelSyncButton_Click" Visibility="Collapsed" />
 
-            <TextBlock x:Name="ConnectionStatusText" Grid.Column="10" VerticalAlignment="Center"
+            <TextBlock x:Name="ConnectionStatusText" Grid.Column="12" VerticalAlignment="Center"
                        FontSize="12" Text="" />
         </Grid>
-
-        <!-- لوحة بحث بالاسم - تظهر فوق باقي المحتوى مؤقتًا، تختفي فور اختيار صنف أو الإغلاق -->
-        <Border x:Name="SearchPanel" Grid.Row="0" Grid.RowSpan="3" Background="White" BorderBrush="#CCCCCC"
-                BorderThickness="1" CornerRadius="8" Visibility="Collapsed" Panel.ZIndex="10"
-                VerticalAlignment="Top" Margin="0,52,0,0" MaxHeight="380">
-            <Grid Margin="12">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="8" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-
-                <Grid Grid.Row="0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="8" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBox x:Name="SearchNameBox" Grid.Column="0" Height="38" FontSize="14" Padding="8,0"
-                             VerticalContentAlignment="Center"
-                             TextChanged="SearchNameBox_TextChanged" KeyDown="SearchNameBox_KeyDown" />
-                    <Button x:Name="CloseSearchButton" Grid.Column="2" Width="38" Height="38" Content="×" FontSize="16"
-                            Style="{StaticResource SecondaryButton}" Click="CloseSearchButton_Click" />
-                </Grid>
-
-                <ListBox x:Name="SearchResultsList" Grid.Row="2" MaxHeight="300"
-                         MouseDoubleClick="SearchResultsList_MouseDoubleClick"
-                         KeyDown="SearchResultsList_KeyDown" />
-            </Grid>
-        </Border>
 
         <Border Grid.Row="2" Background="White" CornerRadius="10" BorderBrush="#E5E2DD" BorderThickness="1">
             <DataGrid x:Name="CartGrid" AutoGenerateColumns="False" IsReadOnly="True"
