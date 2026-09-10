@@ -43,6 +43,7 @@ public partial class App : Application
         // تأخير فتح شاشة تسجيل الدخول لحد ما تجاوب السيرفر. لو فشل (بلا
         // نت لحظة الإقلاع)، يضل يستخدم آخر نسخة مخزَّنة محليًا (أو لا شي).
         _ = RefreshStoreBrandingCacheAsync(apiClient, dataDir);
+        _ = RefreshPaymentSettingsCacheAsync(apiClient, dataDir);
 
         var loginWindow = new LoginWindow(apiClient, authSession, dbPath, backgroundSync, receiptPrinter, config.AdminScreenPassword);
         loginWindow.Show();
@@ -54,6 +55,15 @@ public partial class App : Application
         if (branding is not null)
         {
             StoreBrandingCache.WriteStoreName(dataDir, branding.StoreName);
+        }
+    }
+
+    private static async Task RefreshPaymentSettingsCacheAsync(ApiClient apiClient, string dataDir)
+    {
+        var settings = await apiClient.GetPaymentSettingsAsync(CancellationToken.None);
+        if (settings is not null)
+        {
+            PaymentSettingsCache.WriteUsdToJodExchangeRate(dataDir, settings.UsdToJodExchangeRate);
         }
     }
 }

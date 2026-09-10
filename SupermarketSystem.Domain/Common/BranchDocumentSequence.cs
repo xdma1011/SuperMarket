@@ -10,7 +10,8 @@ public enum DocumentType
     SaleInvoice = 1,
     PurchaseInvoice = 2,
     ReturnInvoice = 3,
-    Stocktake = 4
+    Stocktake = 4,
+    StockTransfer = 5
 }
 
 /// <summary>

@@ -1,0 +1,90 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">الإعدادات / وحدات القياس</span>
+    <h1>وحدات القياس</h1>
+    <span class="subtitle">مرجع موحَّد لأسماء الوحدات (كيلو، لتر، حبة...) - يظهر كقائمة اختيار عند إضافة وحدة لمنتج، بدل إدخال حر.</span>
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn-primary" (click)="openCreateForm()">وحدة جديدة</button>
+  </div>
+</div>
+
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<section class="table-panel">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>الاسم</th>
+          <th>الحالة</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (u of units(); track u.id) {
+          <tr>
+            <td>{{ u.name }}</td>
+            <td>
+              <span class="status-chip" [class.inactive]="!u.isActive">
+                {{ u.isActive ? 'فعّالة' : 'موقَفة' }}
+              </span>
+            </td>
+            <td>
+              <button type="button" class="link-btn" [disabled]="togglingId() === u.id" (click)="toggleActive(u)">
+                {{ u.isActive ? 'إيقاف' : 'تفعيل' }}
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (!loading() && units().length === 0) {
+      <div class="no-results">
+        <span class="no-results-title">لا يوجد وحدات قياس بعد</span>
+        <span class="no-results-sub">ابدأ بإضافة أول وحدة عبر الزر أعلاه (كيلو، لتر، حبة...).</span>
+      </div>
+    }
+
+    @if (loading()) {
+      <div class="no-results">
+        <span class="no-results-sub">جارٍ التحميل…</span>
+      </div>
+    }
+  </div>
+</section>
+
+@if (formOpen()) {
+  <div class="modal-backdrop" (click)="closeForm()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div class="modal-title-group">
+          <h2>وحدة قياس جديدة</h2>
+          <span class="modal-hint">مثلًا: كيلو، غرام، لتر، مل، حبة، علبة، كرتون، متر، سم.</span>
+        </div>
+        <button type="button" class="icon-btn" (click)="closeForm()" aria-label="إغلاق">×</button>
+      </div>
+
+      @if (formError()) {
+        <p class="form-error">{{ formError() }}</p>
+      }
+
+      <div class="modal-fields">
+        <label class="field" style="grid-column: span 2">
+          <span>اسم الوحدة</span>
+          <input type="text" [(ngModel)]="newUnitName" placeholder="كيلو" />
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" [disabled]="submitting()" (click)="submit()">
+          {{ submitting() ? 'جارٍ الحفظ…' : 'إنشاء الوحدة' }}
+        </button>
+        <button type="button" class="btn-ghost" (click)="closeForm()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+}

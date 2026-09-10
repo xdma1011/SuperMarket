@@ -154,7 +154,11 @@
         @if (!isEditingProduct()) {
           <label class="field">
             <span>الوحدة الأساسية</span>
-            <input type="text" [(ngModel)]="baseUnitName" placeholder="حبة / كرتونة / كيلو" />
+            <select [(ngModel)]="baseUnitName">
+              @for (u of unitsOfMeasure(); track u.id) {
+                <option [value]="u.name">{{ u.name }}</option>
+              }
+            </select>
           </label>
           <label class="field">
             <span>باركود الوحدة الأساسية (اختياري)</span>
@@ -215,7 +219,11 @@
               <div class="add-unit-fields">
                 <label class="field">
                   <span>اسم الوحدة</span>
-                  <input type="text" [(ngModel)]="newUnitName" placeholder="طرد / كرتونة" />
+                  <select [(ngModel)]="newUnitName">
+                    @for (u of unitsOfMeasure(); track u.id) {
+                      <option [value]="u.name">{{ u.name }}</option>
+                    }
+                  </select>
                 </label>
                 <label class="field">
                   <span>كم حبة بالوحدة</span>

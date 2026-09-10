@@ -144,6 +144,16 @@ export const routes: Routes = [
         path: 'cash-closings',
         canActivate: [requirePermissionGuard('CashClosing.Manage')],
         loadComponent: () => import('./features/cash-closings/cash-closings.component').then(m => m.CashClosingsComponent)
+      },
+      {
+        path: 'units-of-measure',
+        canActivate: [requirePermissionGuard('Catalog.Manage')],
+        loadComponent: () => import('./features/units-of-measure/units-of-measure.component').then(m => m.UnitsOfMeasureComponent)
+      },
+      {
+        path: 'stock-transfers',
+        canActivate: [requirePermissionGuard('StockTransfer.Manage')],
+        loadComponent: () => import('./features/stock-transfers/stock-transfers.component').then(m => m.StockTransfersComponent)
       }
     ]
   },

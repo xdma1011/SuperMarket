@@ -1,0 +1,199 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">المخزون / نقل بين الفروع</span>
+    <h1>نقل المخزون بين الفروع</h1>
+    <span class="subtitle">خطوتان منفصلتان: إرسال (يخصم من الفرع المصدر فورًا) ثم استلام (يضيف للفرع الوجهة عند الوصول فعليًا).</span>
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn-primary" (click)="openForm()">نقل جديد</button>
+  </div>
+</div>
+
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<section class="table-panel">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>الرقم</th>
+          <th>من</th>
+          <th>إلى</th>
+          <th>عدد الأصناف</th>
+          <th>الحالة</th>
+          <th>تاريخ الإرسال</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (t of transfers(); track t.id) {
+          <tr>
+            <td class="mono">{{ t.transferNumber }}</td>
+            <td>{{ t.sourceBranchName }}</td>
+            <td>{{ t.destinationBranchName }}</td>
+            <td class="mono">{{ t.itemCount }}</td>
+            <td>
+              <span class="status-chip" [class.inactive]="t.statusCode === 1">
+                {{ t.statusTitle }}
+              </span>
+            </td>
+            <td class="mono">{{ t.dispatchedAtUtc | date: 'yyyy-MM-dd HH:mm' }}</td>
+            <td>
+              @if (t.statusCode === 1) {
+                <button type="button" class="link-btn" (click)="openReceiveModal(t)">استلام</button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (!loading() && transfers().length === 0) {
+      <div class="no-results">
+        <span class="no-results-title">لا يوجد عمليات نقل بعد</span>
+        <span class="no-results-sub">ابدأ بإنشاء أول عملية نقل عبر الزر أعلاه.</span>
+      </div>
+    }
+
+    @if (loading()) {
+      <div class="no-results">
+        <span class="no-results-sub">جارٍ التحميل…</span>
+      </div>
+    }
+  </div>
+
+  @if (totalCount() > 0) {
+    <app-pagination
+      [pageNumber]="pageNumber()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (changed)="onPageChanged($event)"
+    ></app-pagination>
+  }
+</section>
+
+@if (formOpen()) {
+  <div class="modal-backdrop" (click)="closeForm()">
+    <div class="modal-card wide" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div class="modal-title-group">
+          <h2>نقل مخزون جديد</h2>
+          <span class="modal-hint">الإرسال يخصم من الفرع المصدر فورًا - الاستلام خطوة منفصلة لاحقة من الفرع الوجهة.</span>
+        </div>
+        <button type="button" class="icon-btn" (click)="closeForm()" aria-label="إغلاق">×</button>
+      </div>
+
+      @if (formError()) {
+        <p class="form-error">{{ formError() }}</p>
+      }
+
+      <div class="modal-fields">
+        <label class="field">
+          <span>الفرع المصدر</span>
+          <select [(ngModel)]="sourceBranchId">
+            @for (b of branches(); track b.id) {
+              <option [value]="b.id">{{ b.name }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span>الفرع الوجهة</span>
+          <select [(ngModel)]="destinationBranchId">
+            @for (b of branches(); track b.id) {
+              <option [value]="b.id">{{ b.name }}</option>
+            }
+          </select>
+        </label>
+      </div>
+
+      <div class="add-line-row">
+        <select [(ngModel)]="newLineProductId" class="grow">
+          @for (p of products(); track p.id) {
+            <option [value]="p.id">{{ p.name }}{{ p.isBatchTracked ? ' (دفعات)' : '' }}</option>
+          }
+        </select>
+        <button type="button" class="btn-outline" (click)="addLine()">إضافة صنف</button>
+      </div>
+
+      @if (lines.length > 0) {
+        <div class="lines-list">
+          @for (line of lines; track $index) {
+            <div class="line-row">
+              <span class="line-name">{{ line.productName }}</span>
+
+              <select [(ngModel)]="line.unitId" class="line-unit">
+                @for (u of line.units; track u.id) {
+                  <option [value]="u.id">{{ u.unitName }}</option>
+                }
+              </select>
+
+              <input type="number" [(ngModel)]="line.quantity" min="0.01" step="0.01" class="line-qty" placeholder="الكمية" />
+
+              @if (line.isBatchTracked) {
+                <select [(ngModel)]="line.selectedBatchId" class="line-batch">
+                  @for (b of line.batches; track b.productBatchId) {
+                    <option [value]="b.productBatchId">{{ b.batchNumber }} ({{ b.quantityOnHand }})</option>
+                  }
+                </select>
+              }
+
+              <button type="button" class="icon-btn" (click)="removeLine($index)" aria-label="حذف">×</button>
+            </div>
+          }
+        </div>
+      }
+
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" [disabled]="submitting()" (click)="submit()">
+          {{ submitting() ? 'جارٍ الإرسال…' : 'إرسال النقل' }}
+        </button>
+        <button type="button" class="btn-ghost" (click)="closeForm()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (receiveModalOpen()) {
+  <div class="modal-backdrop" (click)="closeReceiveModal()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div class="modal-title-group">
+          <h2>تأكيد الاستلام</h2>
+          @if (receiveDetail(); as detail) {
+            <span class="modal-hint">{{ detail.transferNumber }} - {{ detail.sourceBranchName }} ← {{ detail.destinationBranchName }}</span>
+          }
+        </div>
+        <button type="button" class="icon-btn" (click)="closeReceiveModal()" aria-label="إغلاق">×</button>
+      </div>
+
+      @if (receiveError()) {
+        <p class="form-error">{{ receiveError() }}</p>
+      }
+
+      @if (receiveDetail(); as detail) {
+        <div class="lines-list">
+          @for (item of detail.items; track item.productId) {
+            <div class="unit-row">
+              <span class="unit-name">{{ item.productName }}</span>
+              <span class="unit-factor mono">{{ item.quantityBase }} {{ item.unitName }}</span>
+              @if (item.batchNumber) {
+                <span class="unit-factor mono">دفعة: {{ item.batchNumber }}</span>
+              }
+            </div>
+          }
+        </div>
+      } @else {
+        <p class="modal-hint">جارٍ التحميل…</p>
+      }
+
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" [disabled]="receiveSubmitting() || !receiveDetail()" (click)="confirmReceive()">
+          {{ receiveSubmitting() ? 'جارٍ التأكيد…' : 'تأكيد استلام البضاعة' }}
+        </button>
+        <button type="button" class="btn-ghost" (click)="closeReceiveModal()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+}

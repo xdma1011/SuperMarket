@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using SupermarketSystem.Domain.Branches;
 using SupermarketSystem.Domain.Catalog;
 using SupermarketSystem.Domain.Identity;
 using SupermarketSystem.Domain.Inventory;
@@ -88,6 +89,52 @@ public class StockConfiguration : IEntityTypeConfiguration<Stock>
         builder.HasOne<Product>().WithMany().HasForeignKey(s => s.ProductId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Domain.Inventory.ProductBatch>().WithMany().HasForeignKey(s => s.ProductBatchId).OnDelete(DeleteBehavior.Restrict);
         // Branch FK (Restrict) configured on the Branches side.
+    }
+}
+
+public class StockTransferConfiguration : IEntityTypeConfiguration<StockTransfer>
+{
+    public void Configure(EntityTypeBuilder<StockTransfer> builder)
+    {
+        builder.ToTable("StockTransfers");
+        builder.HasKey(t => t.Id);
+
+        builder.Property(t => t.TransferNumber).IsRequired().HasMaxLength(50);
+        builder.Property(t => t.Status).HasConversion<int>().IsRequired();
+        builder.Property(t => t.DispatchedAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(t => t.ReceivedAtUtc).HasColumnType("datetime2");
+        builder.Property(t => t.RowVersion).IsRowVersion();
+        builder.Property(t => t.CreatedAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(t => t.UpdatedAtUtc).HasColumnType("datetime2");
+
+        // فريد على الفرع المصدر (الفرع اللي بيحجز الرقم فعليًا، راجع الـHandler) - نفس نمط كل مستند مرقَّم بالنظام.
+        builder.HasIndex(t => new { t.SourceBranchId, t.TransferNumber }).IsUnique();
+        builder.HasIndex(t => new { t.DestinationBranchId, t.Status });
+
+        builder.HasOne<Branch>().WithMany().HasForeignKey(t => t.SourceBranchId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Branch>().WithMany().HasForeignKey(t => t.DestinationBranchId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(t => t.DispatchedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(t => t.ReceivedByUserId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasMany(t => t.Items).WithOne().HasForeignKey(i => i.StockTransferId).OnDelete(DeleteBehavior.Cascade);
+        builder.Navigation(t => t.Items).HasField("_items").UsePropertyAccessMode(PropertyAccessMode.Field);
+    }
+}
+
+public class StockTransferItemConfiguration : IEntityTypeConfiguration<StockTransferItem>
+{
+    public void Configure(EntityTypeBuilder<StockTransferItem> builder)
+    {
+        builder.ToTable("StockTransferItems");
+        builder.HasKey(i => i.Id);
+
+        builder.Property(i => i.QuantityBase).HasColumnType("decimal(18,4)").IsRequired();
+        builder.Property(i => i.BatchNumber).HasMaxLength(100);
+
+        builder.HasOne<Product>().WithMany().HasForeignKey(i => i.ProductId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<ProductUnit>().WithMany().HasForeignKey(i => i.ProductUnitId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Domain.Inventory.ProductBatch>().WithMany().HasForeignKey(i => i.SourceProductBatchId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Domain.Inventory.ProductBatch>().WithMany().HasForeignKey(i => i.DestinationProductBatchId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 

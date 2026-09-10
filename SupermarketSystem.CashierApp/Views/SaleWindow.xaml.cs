@@ -22,6 +22,9 @@ public partial class SaleWindow : Window
     private readonly ObservableCollection<CartLine> _cart = new();
     private List<PaymentMethodDto> _paymentMethods = new();
 
+    /// <summary>كم دينار يساوي الدولار الواحد - من الإعدادات (راجع PaymentSettingsCache)، تُقرأ مرة وقت فتح الشاشة.</summary>
+    private readonly decimal _usdToJodExchangeRate;
+
     /// <summary>آخر سطر انضاف للسلة - يُفحص بـCartGrid_LoadingRow لتمييزه بصريًا (وميض خلفية) لحظة توليد صفّه فعليًا بالـDataGrid.</summary>
     private CartLine? _lastAddedLine;
 
@@ -47,6 +50,7 @@ public partial class SaleWindow : Window
         _receiptPrinter = receiptPrinter;
         _backgroundSync = backgroundSync;
         _adminScreenPassword = adminScreenPassword;
+        _usdToJodExchangeRate = PaymentSettingsCache.ReadUsdToJodExchangeRate(Path.GetDirectoryName(_dbPath) ?? "");
 
         CartGrid.ItemsSource = _cart;
         Loaded += SaleWindow_Loaded;
@@ -399,6 +403,59 @@ public partial class SaleWindow : Window
     {
         var total = _cart.Sum(l => l.LineTotal);
         TotalText.Text = $"الإجمالي: {total:0.00}";
+        UpdateChangeDisplay();
+    }
+
+    /// <summary>
+    /// كبسة فئة نقدية دينار - تستبدل قيمة صندوق المبلغ المستلم بالكامل
+    /// (لا تُضاف عليها)، تمامًا متل ما لو الكاشير كتبها يدويًا. لو المبلغ
+    /// المستلم مبلغ غير اعتيادي (51 مثلًا)، الكاشير بيكتبه يدويًا بالصندوق
+    /// مباشرة بدل الكبسات.
+    /// </summary>
+    private void JodDenominationButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string tag } && decimal.TryParse(tag, out var jodAmount))
+        {
+            TenderedAmountBox.Text = jodAmount.ToString("0.00");
+        }
+    }
+
+    /// <summary>كبسة فئة نقدية دولار - تُحوَّل للدينار بسعر الصرف من الإعدادات قبل ما تنحط بصندوق المبلغ المستلم.</summary>
+    private void UsdDenominationButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string tag } && decimal.TryParse(tag, out var usdAmount))
+        {
+            TenderedAmountBox.Text = (usdAmount * _usdToJodExchangeRate).ToString("0.00");
+        }
+    }
+
+    private void TenderedAmountBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    {
+        UpdateChangeDisplay();
+    }
+
+    /// <summary>
+    /// الباقي = المستلم - الإجمالي. أخضر كبير وواضح بالحالة الطبيعية؛
+    /// أحمر لو المبلغ المستلم غير كافٍ - تنبيه بصري بس، لا يمنع إتمام
+    /// البيع (نفس فلسفة "لا نوقف الكاشير أبدًا").
+    /// </summary>
+    private void UpdateChangeDisplay()
+    {
+        var total = _cart.Sum(l => l.LineTotal);
+        var tenderedText = TenderedAmountBox.Text.Trim();
+
+        if (tenderedText.Length == 0 || !decimal.TryParse(tenderedText, out var tendered))
+        {
+            ChangeAmountText.Text = "0.00";
+            ChangeAmountText.Foreground = System.Windows.Media.Brushes.Gray;
+            return;
+        }
+
+        var change = tendered - total;
+        ChangeAmountText.Text = change.ToString("0.00");
+        ChangeAmountText.Foreground = change >= 0
+            ? System.Windows.Media.Brushes.Green
+            : System.Windows.Media.Brushes.Red;
     }
 
     private async void CompleteSaleButton_Click(object sender, RoutedEventArgs e)
@@ -476,16 +533,39 @@ public partial class SaleWindow : Window
             await db.SaveChangesAsync();
         }
 
-        // محاولة إرسال فورية (Online-first) - لو نجحت، نحذف الصف المحلي
-        // حالًا. لو فشلت، يضل بالطابور لخدمة المزامنة بالخلفية.
+        // محاولة إرسال فورية (Online-first) - البيع بالكاشير ما يتوقف أبدًا
+        // لأي سبب، مهما كان (لا انقطاع نت، ولا حتى رفض فعلي من السيرفر
+        // كـSale.ProductNotActive) - الزبون واقف قدام الكاشير، والبضاعة
+        // بتطلع معه بكل الأحوال. الفرق الوحيد بين "انقطاع نت" و"رفض فعلي"
+        // مش شي الكاشير لازم يتعامل معه لحظيًا - هو بس يحدّد هل الصف
+        // بيضل بالطابور (الحالتين، فعليًا) لمراجعة لاحقة من الإدارة
+        // (PendingQueueWindow يعرض السبب الحقيقي، وزر الحذف هناك للتعامل
+        // مع رفض نهائي ما رح ينحل بإعادة المحاولة). لو الإدارة صلّحت السبب
+        // لاحقًا (مثلًا فعّلت المنتج من جديد)، الفاتورة العالقة بتترسل
+        // تلقائيًا بنفس دورة المزامنة الجاية - ذاتية الإصلاح بلا أي تدخّل
+        // إضافي.
         var sendResult = await _apiClient.SendPendingSaleAsync(pendingSale, CancellationToken.None);
-        if (sendResult.Success)
+
+        using (var db = new LocalDbContext(_dbPath))
         {
-            using var db = new LocalDbContext(_dbPath);
             var savedRow = await db.PendingSales.FirstOrDefaultAsync(s => s.ClientRequestId == clientRequestId);
             if (savedRow is not null)
             {
-                db.PendingSales.Remove(savedRow);
+                if (sendResult.Success)
+                {
+                    db.PendingSales.Remove(savedRow);
+                }
+                else
+                {
+                    // لو ظلّت بالطابور، نسجّل سبب الفشل من أول محاولة فورًا -
+                    // بلا هذا، عمود "آخر خطأ" بـPendingQueueWindow كان يضل
+                    // فاضي لحد أول دورة مزامنة خلفية لاحقة (فجوة صغيرة، بس
+                    // حقيقية لو الإدارة فتحت الشاشة قبل أول دورة).
+                    savedRow.AttemptCount += 1;
+                    savedRow.LastAttemptAtLocal = DateTime.UtcNow;
+                    savedRow.LastErrorMessage = ExtractErrorDetail(sendResult.ErrorMessage);
+                }
+
                 await db.SaveChangesAsync();
             }
         }
@@ -507,6 +587,7 @@ public partial class SaleWindow : Window
         var printResult = await _receiptPrinter.PrintAsync(receiptData, CancellationToken.None);
 
         _cart.Clear();
+        TenderedAmountBox.Clear();
         UpdateTotal();
         CompleteSaleButton.IsEnabled = true;
         BarcodeBox.Focus();
@@ -515,13 +596,47 @@ public partial class SaleWindow : Window
         // الطباعة شي تاني كليًا. فشل الطباعة *أبدًا* ما يعني فشل البيع.
         var saleMessage = sendResult.Success
             ? "تم إتمام البيع وإرساله فورًا."
-            : "تم حفظ البيع محليًا - رح يُرسل تلقائيًا أول ما يرجع الاتصال.";
+            : "تم حفظ البيع محليًا - رح يُرسل تلقائيًا بالخلفية (راجع شاشة الفواتير المعلَّقة لو ضلّت متكرّرة).";
         var printMessage = printResult.Success
             ? "تمت طباعة الفاتورة."
             : $"تعذّرت الطباعة: {printResult.ErrorMessage}";
 
         MessageBox.Show($"{saleMessage}\n{printMessage}", "تم", MessageBoxButton.OK,
             printResult.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+    }
+
+    /// <summary>
+    /// رسالة الخطأ الخام شكلها "422: {json ProblemDetails}" - نطلع حقل
+    /// "detail" منها للكاشير، بدل ما نعرضله JSON خام. لو الاستخراج فشل
+    /// لأي سبب (شكل غير متوقَّع)، نرجع النص الخام كما هو - أفضل من رسالة فاضية.
+    /// </summary>
+    private static string ExtractErrorDetail(string? rawErrorMessage)
+    {
+        if (string.IsNullOrWhiteSpace(rawErrorMessage))
+        {
+            return "سبب غير معروف.";
+        }
+
+        try
+        {
+            var jsonStart = rawErrorMessage.IndexOf('{');
+            if (jsonStart < 0)
+            {
+                return rawErrorMessage;
+            }
+
+            using var document = JsonDocument.Parse(rawErrorMessage[jsonStart..]);
+            if (document.RootElement.TryGetProperty("detail", out var detail) && detail.ValueKind == JsonValueKind.String)
+            {
+                return detail.GetString() ?? rawErrorMessage;
+            }
+        }
+        catch (JsonException)
+        {
+            // شكل غير متوقَّع - نرجع النص الخام تحت (fallback بالأسفل).
+        }
+
+        return rawErrorMessage;
     }
 
     private void ShowError(string message)

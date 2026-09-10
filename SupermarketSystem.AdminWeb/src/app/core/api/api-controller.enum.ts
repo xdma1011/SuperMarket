@@ -22,8 +22,10 @@ export enum ApiController {
   Returns = 'returns',
   Reviews = 'reviews',
   Sales = 'sales',
+  StockTransfers = 'stock-transfers',
   Stocktakes = 'stocktakes',
   Suppliers = 'suppliers',
   System = 'system',
+  UnitsOfMeasure = 'units-of-measure',
   Users = 'users'
 }

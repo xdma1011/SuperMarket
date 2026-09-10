@@ -65,6 +65,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ProductBarcode> ProductBarcodes => Set<ProductBarcode>();
     public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
     public DbSet<ProductBranch> ProductBranches => Set<ProductBranch>();
+    public DbSet<UnitOfMeasure> UnitsOfMeasure => Set<UnitOfMeasure>();
 
     // Inventory
     public DbSet<ProductBatch> ProductBatches => Set<ProductBatch>();
@@ -72,6 +73,8 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<Stock> Stocks => Set<Stock>();
     public DbSet<Stocktake> Stocktakes => Set<Stocktake>();
     public DbSet<StocktakeItem> StocktakeItems => Set<StocktakeItem>();
+    public DbSet<StockTransfer> StockTransfers => Set<StockTransfer>();
+    public DbSet<StockTransferItem> StockTransferItems => Set<StockTransferItem>();
 
     // Purchasing
     public DbSet<Supplier> Suppliers => Set<Supplier>();

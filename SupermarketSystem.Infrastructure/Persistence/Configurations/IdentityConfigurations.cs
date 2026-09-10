@@ -309,6 +309,14 @@ public class PermissionConfiguration : IEntityTypeConfiguration<Permission>
             Description = "View orders assigned to the current driver and confirm delivery/payment.",
             CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });
+        builder.HasData(new
+        {
+            Id = Guid.Parse("b758b4b2-c9df-4764-aa98-c60a71aff35b"),
+            Code = "StockTransfer.Manage",
+            Name = "Manage stock transfers",
+            Description = "Dispatch a stock transfer from one branch and receive it at another.",
+            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+        });
     }
 }
 
@@ -598,6 +606,19 @@ public class RolePermissionConfiguration : IEntityTypeConfiguration<RolePermissi
             Id = Guid.Parse("5d7fa04b-ce6a-4b8d-af02-4a5b6c7d8e9f"),
             RoleId = Guid.Parse("5d0b3578-417e-4706-ab9b-fc9a208b6642"),
             PermissionId = Guid.Parse("3b5e8d2f-ac4e-4f6b-9d70-2e3f4a5b6c7d")
+        });
+        // Master Admin + مساعد أدمن -> StockTransfer.Manage (راجع PermissionCodes.All/AssistantAdminDefaults).
+        builder.HasData(new
+        {
+            Id = Guid.Parse("1c66e7ba-28bf-490d-898b-791a06babd50"),
+            RoleId = Guid.Parse("50e6125a-cac0-4d82-a0b8-9f3c6fff59d7"),
+            PermissionId = Guid.Parse("b758b4b2-c9df-4764-aa98-c60a71aff35b")
+        });
+        builder.HasData(new
+        {
+            Id = Guid.Parse("829bb241-1d64-499f-a090-bb3da34023e3"),
+            RoleId = Guid.Parse("5d0b3578-417e-4706-ab9b-fc9a208b6642"),
+            PermissionId = Guid.Parse("b758b4b2-c9df-4764-aa98-c60a71aff35b")
         });
     }
 }

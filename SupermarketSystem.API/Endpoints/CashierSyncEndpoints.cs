@@ -52,8 +52,20 @@ public static class CashierSyncEndpoints
         .WithSummary("اسم المحل ليُطبع بأعلى فاتورة الكاشير الحرارية - يُخزَّن محليًا بالكاشير للطباعة أوفلاين.")
         .Produces<StoreBrandingResponse>(StatusCodes.Status200OK);
 
+        group.MapGet("/payment-settings", async (
+            ISettingsProvider settingsProvider,
+            CancellationToken cancellationToken) =>
+        {
+            var exchangeRate = await settingsProvider.GetDecimalAsync(PaymentSettingsKeys.UsdToJodExchangeRate, 0.71m, cancellationToken);
+            return Results.Ok(new PaymentSettingsResponse(exchangeRate));
+        })
+        .WithName("GetCashierPaymentSettings")
+        .WithSummary("سعر تحويل الدولار للدينار - يُخزَّن محليًا بالكاشير لحساب الفكة أوفلاين.")
+        .Produces<PaymentSettingsResponse>(StatusCodes.Status200OK);
+
         return app;
     }
 
     public sealed record StoreBrandingResponse(string? StoreName);
+    public sealed record PaymentSettingsResponse(decimal UsdToJodExchangeRate);
 }

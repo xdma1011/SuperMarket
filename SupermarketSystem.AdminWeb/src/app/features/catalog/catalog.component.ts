@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
-import { ProductCategoriesOperation, ProductsOperation, BranchesOperation } from '../../core/api/operations';
+import { ProductCategoriesOperation, ProductsOperation, BranchesOperation, UnitsOfMeasureOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
 import { BarcodeScannerComponent } from './barcode-scanner/barcode-scanner.component';
 
@@ -49,6 +49,12 @@ interface BranchDto {
   name: string;
 }
 
+interface UnitOfMeasureDto {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
+
 interface PagedResult<T> {
   items: T[];
   totalCount: number;
@@ -91,7 +97,7 @@ export class CatalogComponent implements OnInit {
   productPrice: number | null = null;
   productExpectedShelfLifeDays: number | null = null;
   productIsBatchTracked = false;
-  baseUnitName = 'حبة';
+  baseUnitName = '';
   baseUnitBarcode = '';
 
   editingCategoryId = '';
@@ -123,6 +129,9 @@ export class CatalogComponent implements OnInit {
   newBranchId = '';
   newBranchPrice: number | null = null;
 
+  /** مرجع موحَّد لأسماء الوحدات - كانت الحقول (baseUnitName/newUnitName) نص حر بلا أي قائمة، راجع UnitOfMeasure.cs بالباك إند. */
+  readonly unitsOfMeasure = signal<UnitOfMeasureDto[]>([]);
+
   constructor(private readonly apiClient: ApiClient) {}
 
   ngOnInit(): void {
@@ -148,19 +157,21 @@ export class CatalogComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const [productsResult, categoriesResult, branchesResult] = await Promise.all([
+      const [productsResult, categoriesResult, branchesResult, unitsOfMeasureResult] = await Promise.all([
         firstValueFrom(this.apiClient.get<PagedResult<ProductDto>>(ApiController.Products, ProductsOperation.List, undefined, {
           pageNumber: this.productsPageNumber(),
           pageSize: this.productsPageSize()
         })),
         firstValueFrom(this.apiClient.get<PagedResult<CategoryDto>>(ApiController.ProductCategories, ProductCategoriesOperation.List)),
-        firstValueFrom(this.apiClient.get<PagedResult<BranchDto>>(ApiController.Branches, BranchesOperation.List, undefined, { pageSize: 500 }))
+        firstValueFrom(this.apiClient.get<PagedResult<BranchDto>>(ApiController.Branches, BranchesOperation.List, undefined, { pageSize: 500 })),
+        firstValueFrom(this.apiClient.get<UnitOfMeasureDto[]>(ApiController.UnitsOfMeasure, UnitsOfMeasureOperation.List, undefined, { activeOnly: true }))
       ]);
 
       this.products.set(productsResult.items);
       this.productsTotalCount.set(productsResult.totalCount);
       this.categories.set(categoriesResult.items);
       this.branches.set(branchesResult.items);
+      this.unitsOfMeasure.set(unitsOfMeasureResult);
 
       if (categoriesResult.items.length > 0 && !this.productCategoryId) {
         this.productCategoryId = categoriesResult.items[0].id;
@@ -181,6 +192,7 @@ export class CatalogComponent implements OnInit {
     this.isEditingProduct.set(false);
     this.productFormOpen.set(true);
     this.formError.set(null);
+    this.baseUnitName = this.unitsOfMeasure().length > 0 ? this.unitsOfMeasure()[0].name : '';
   }
 
   openEditProductForm(product: ProductDto): void {
@@ -226,7 +238,7 @@ export class CatalogComponent implements OnInit {
     this.productPrice = null;
     this.productExpectedShelfLifeDays = null;
     this.productIsBatchTracked = false;
-    this.baseUnitName = 'حبة';
+    this.baseUnitName = '';
     this.baseUnitBarcode = '';
     this.productUnits.set([]);
     this.addUnitFormOpen.set(false);
@@ -423,7 +435,7 @@ export class CatalogComponent implements OnInit {
   openAddUnitForm(): void {
     this.addUnitFormOpen.set(true);
     this.addUnitError.set(null);
-    this.newUnitName = '';
+    this.newUnitName = this.unitsOfMeasure().length > 0 ? this.unitsOfMeasure()[0].name : '';
     this.newUnitConversionFactor = null;
     this.newUnitBarcode = '';
   }

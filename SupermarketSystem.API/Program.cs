@@ -111,6 +111,8 @@ app.MapReviewsEndpoints();
 app.MapCashierSyncEndpoints();
 app.MapBranchEndpoints();
 app.MapCatalogEndpoints();
+app.MapUnitOfMeasureEndpoints();
+app.MapStockTransferEndpoints();
 app.MapSupplierEndpoints();
 app.MapPurchasingEndpoints();
 app.MapPurchaseInvoiceDraftEndpoints();

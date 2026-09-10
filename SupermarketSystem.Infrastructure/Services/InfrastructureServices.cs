@@ -117,6 +117,7 @@ public sealed class DocumentNumberGenerator : IDocumentNumberGenerator
             DocumentType.SaleInvoice => "SI",
             DocumentType.PurchaseInvoice => "PI",
             DocumentType.ReturnInvoice => "RI",
+            DocumentType.StockTransfer => "TR",
             _ => "DOC"
         };
 

@@ -16,6 +16,8 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="10" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="10" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <Grid Grid.Row="0">
@@ -87,7 +89,70 @@
             </DataGrid>
         </Border>
 
-        <Grid Grid.Row="6">
+        <!-- لوحة المبلغ المستلم والفكة - منفصلة بصريًا عن شريط الإجمالي/الدفع، كبيرة وواضحة قدام الزبون والكاشير معًا -->
+        <Border Grid.Row="6" Background="#FFF9F0" CornerRadius="10" BorderBrush="#E9C46A" BorderThickness="1" Padding="14,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="10" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock Text="المبلغ المستلم" FontSize="11" Foreground="#6B6355" />
+                    <TextBox x:Name="TenderedAmountBox" Width="130" Height="40" FontSize="16" Padding="8,0"
+                             VerticalContentAlignment="Center" TextChanged="TenderedAmountBox_TextChanged" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                    <TextBlock Text="دينار" FontSize="11" Foreground="#6B6355" HorizontalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="1" Width="34" Height="30" FontSize="11" Margin="0,0,3,0"
+                                Style="{StaticResource SecondaryButton}" Click="JodDenominationButton_Click" Tag="1" />
+                        <Button Content="5" Width="34" Height="30" FontSize="11" Margin="0,0,3,0"
+                                Style="{StaticResource SecondaryButton}" Click="JodDenominationButton_Click" Tag="5" />
+                        <Button Content="10" Width="34" Height="30" FontSize="11" Margin="0,0,3,0"
+                                Style="{StaticResource SecondaryButton}" Click="JodDenominationButton_Click" Tag="10" />
+                        <Button Content="20" Width="34" Height="30" FontSize="11" Margin="0,0,3,0"
+                                Style="{StaticResource SecondaryButton}" Click="JodDenominationButton_Click" Tag="20" />
+                        <Button Content="50" Width="34" Height="30" FontSize="11"
+                                Style="{StaticResource SecondaryButton}" Click="JodDenominationButton_Click" Tag="50" />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Grid.Column="4" VerticalAlignment="Center">
+                    <TextBlock Text="دولار" FontSize="11" Foreground="#6B6355" HorizontalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="1" Width="34" Height="30" FontSize="11" Margin="0,0,3,0"
+                                Style="{StaticResource SecondaryButton}" Click="UsdDenominationButton_Click" Tag="1" />
+                        <Button Content="5" Width="34" Height="30" FontSize="11" Margin="0,0,3,0"
+                                Style="{StaticResource SecondaryButton}" Click="UsdDenominationButton_Click" Tag="5" />
+                        <Button Content="10" Width="34" Height="30" FontSize="11" Margin="0,0,3,0"
+                                Style="{StaticResource SecondaryButton}" Click="UsdDenominationButton_Click" Tag="10" />
+                        <Button Content="20" Width="34" Height="30" FontSize="11" Margin="0,0,3,0"
+                                Style="{StaticResource SecondaryButton}" Click="UsdDenominationButton_Click" Tag="20" />
+                        <Button Content="50" Width="34" Height="30" FontSize="11" Margin="0,0,3,0"
+                                Style="{StaticResource SecondaryButton}" Click="UsdDenominationButton_Click" Tag="50" />
+                        <Button Content="100" Width="34" Height="30" FontSize="11"
+                                Style="{StaticResource SecondaryButton}" Click="UsdDenominationButton_Click" Tag="100" />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Grid.Column="8" VerticalAlignment="Center" HorizontalAlignment="Left">
+                    <TextBlock Text="الباقي للزبون" FontSize="12" Foreground="#6B6355" HorizontalAlignment="Center" />
+                    <TextBlock x:Name="ChangeAmountText" Text="0.00" FontSize="30" FontWeight="Bold"
+                               Foreground="#16A34A" HorizontalAlignment="Center" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="16" />

@@ -32,7 +32,8 @@ public enum StockMovementReferenceType
     PurchaseInvoiceItem = 2,
     ReturnInvoiceItem = 3,
     StocktakeItem = 4,
-    ManualAdjustment = 5
+    ManualAdjustment = 5,
+    StockTransferItem = 6
 }
 
 /// <summary>

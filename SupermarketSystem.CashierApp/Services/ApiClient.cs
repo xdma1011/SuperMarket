@@ -23,6 +23,8 @@ public sealed record PagedResultDto<T>(List<T> Items, int TotalCount, int PageNu
 
 public sealed record StoreBrandingDto(string? StoreName);
 
+public sealed record PaymentSettingsDto(decimal UsdToJodExchangeRate);
+
 public sealed record LogoutRequestDto(string RefreshToken);
 
 /// <summary>مطابق حرفيًا لـCompleteCashClosingCommand بالباك إند.</summary>
@@ -200,6 +202,19 @@ public sealed class ApiClient
         catch
         {
             // بلا اتصال - الطالب بيرجع للنسخة المخزَّنة محليًا (راجع StoreBrandingCache).
+            return null;
+        }
+    }
+
+    public async Task<PaymentSettingsDto?> GetPaymentSettingsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<PaymentSettingsDto>("cashier-sync/payment-settings", cancellationToken);
+        }
+        catch
+        {
+            // بلا اتصال - الطالب بيرجع للنسخة المخزَّنة محليًا (راجع PaymentSettingsCache).
             return null;
         }
     }

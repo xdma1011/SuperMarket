@@ -53,6 +53,7 @@ public interface IApplicationDbContext
     DbSet<ProductBarcode> ProductBarcodes { get; }
     DbSet<ProductCategory> ProductCategories { get; }
     DbSet<ProductBranch> ProductBranches { get; }
+    DbSet<UnitOfMeasure> UnitsOfMeasure { get; }
 
     // Inventory
     DbSet<ProductBatch> ProductBatches { get; }
@@ -60,6 +61,8 @@ public interface IApplicationDbContext
     DbSet<Stock> Stocks { get; }
     DbSet<Stocktake> Stocktakes { get; }
     DbSet<StocktakeItem> StocktakeItems { get; }
+    DbSet<StockTransfer> StockTransfers { get; }
+    DbSet<StockTransferItem> StockTransferItems { get; }
 
     // Purchasing
     DbSet<Supplier> Suppliers { get; }
