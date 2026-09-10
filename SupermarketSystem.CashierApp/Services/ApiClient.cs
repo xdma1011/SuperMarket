@@ -23,6 +23,19 @@ public sealed record PagedResultDto<T>(List<T> Items, int TotalCount, int PageNu
 
 public sealed record StoreBrandingDto(string? StoreName);
 
+public sealed record LogoutRequestDto(string RefreshToken);
+
+/// <summary>مطابق حرفيًا لـCompleteCashClosingCommand بالباك إند.</summary>
+public sealed record CompleteCashClosingCountedDetailDto(Guid PaymentMethodId, decimal CountedAmount);
+
+public sealed record CompleteCashClosingRequestDto(
+    Guid BranchId, DateOnly BusinessDate, decimal CountedCash, List<CompleteCashClosingCountedDetailDto> CountedDetails);
+
+/// <summary>بس الحقول اللي شاشة الكاشير فعليًا بتعرضها - التفاصيل حسب طريقة الدفع (Details) موجودة بالرد الفعلي بس غير مستخدَمة هون.</summary>
+public sealed record CompleteCashClosingResponseDto(Guid CashClosingId, decimal ExpectedCash, decimal CountedCash, decimal Variance);
+
+public sealed record CashClosingResult(bool Success, CompleteCashClosingResponseDto? Response, string? ErrorMessage);
+
 /// <summary>يطابق ClientAppType بالباك إند حرفيًا (Cashier = 1, Admin = 2) - قيمة الـenum لازم تبقى مطابقة، لأنها بتُسلسَل كرقم بالـJSON.</summary>
 public enum ClientAppType
 {
@@ -95,6 +108,56 @@ public sealed class ApiClient
         catch (Exception ex)
         {
             return new LoginResult(false, null, $"تعذّر الاتصال بالسيرفر: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// خروج طوعي - POST /auth/logout (AllowAnonymous بالباك إند، بلا
+    /// حاجة توكن). أفضل-محاولة عمدًا: فشلها (نت مقطوع مثلًا) ما يمنع
+    /// الخروج المحلي - الجلسة بالذاكرة بتُمسح بكل الأحوال من الطرف
+    /// اللي بينادي هالميثود (LoginWindow جديدة = جلسة نظيفة تلقائيًا).
+    /// </summary>
+    public async Task<bool> LogoutAsync(string refreshToken, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await _http.PostAsJsonAsync("auth/logout", new LogoutRequestDto(refreshToken), cancellationToken);
+            return response.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// POST /cash-closings - يحتاج صلاحية CashClosing.Manage (كاشير عادي
+    /// ما عنده هذه الصلاحية افتراضيًا، مقصود - الشاشة اللي بتنادي هالميثود
+    /// محمية بباسوورد الأدمن المحلي، راجع CashClosingWindow).
+    /// </summary>
+    public async Task<CashClosingResult> CompleteCashClosingAsync(
+        Guid branchId, DateOnly businessDate, decimal countedCash,
+        List<CompleteCashClosingCountedDetailDto> countedDetails, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var request = new CompleteCashClosingRequestDto(branchId, businessDate, countedCash, countedDetails);
+            var response = await _http.PostAsJsonAsync("cash-closings", request, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadFromJsonAsync<CompleteCashClosingResponseDto>(cancellationToken: cancellationToken);
+                return body is null
+                    ? new CashClosingResult(false, null, "رد غير متوقَّع من السيرفر.")
+                    : new CashClosingResult(true, body, null);
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            return new CashClosingResult(false, null, $"{(int)response.StatusCode}: {errorBody}");
+        }
+        catch (Exception ex)
+        {
+            return new CashClosingResult(false, null, $"تعذّر الاتصال بالسيرفر: {ex.Message}");
         }
     }
 

@@ -11,6 +11,7 @@ using SupermarketSystem.Application.Catalog.GetProductBranches;
 using SupermarketSystem.Application.Catalog.GetProductByBarcode;
 using SupermarketSystem.Application.Catalog.GetProductUnits;
 using SupermarketSystem.Application.Catalog.SetProductComplimentaryAllowed;
+using SupermarketSystem.Application.Catalog.SetProductBranchAvailability;
 using SupermarketSystem.Application.Catalog.UpdateProduct;
 using SupermarketSystem.Application.Catalog.UpdateProductCategory;
 using SupermarketSystem.Application.Common.Pagination;
@@ -220,6 +221,22 @@ public static class CatalogEndpoints
         .ProducesProblem(StatusCodes.Status404NotFound)
         .ProducesProblem(StatusCodes.Status409Conflict);
 
+        products.MapPost("/{productId:guid}/branches/{productBranchId:guid}/availability", async (
+            Guid productId,
+            Guid productBranchId,
+            SetProductBranchAvailabilityRequest request,
+            SetProductBranchAvailabilityHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(
+                new SetProductBranchAvailabilityCommand(productBranchId, request.IsAvailableForSale), cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithName("SetProductBranchAvailability")
+        .WithSummary("يفعّل/يوقف بيع منتج بفرع معيّن - كانت مفقودة كليًا (سبب خطأ Sale.ProductNotActive الغامض بلا أي طريقة تعديله من الواجهة).")
+        .Produces(StatusCodes.Status204NoContent)
+        .ProducesProblem(StatusCodes.Status404NotFound);
+
         return app;
     }
 
@@ -227,6 +244,8 @@ public static class CatalogEndpoints
     public sealed record CreateProductBranchRequest(Guid BranchId, decimal SellingPrice, decimal? MinimumStock, decimal? MaximumStock);
 
     public sealed record SetProductComplimentaryAllowedRequest(bool Allowed);
+
+    public sealed record SetProductBranchAvailabilityRequest(bool IsAvailableForSale);
     public sealed record UpdateProductCategoryRequest(string Name);
     public sealed record UpdateProductRequest(string Name, Guid CategoryId, decimal? SuggestedRetailPrice, int? ExpectedShelfLifeDays);
     public sealed record AddProductUnitRequest(string UnitName, decimal ConversionFactorToBase, string? BarcodeValue);

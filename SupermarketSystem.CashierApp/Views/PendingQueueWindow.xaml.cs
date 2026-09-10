@@ -54,4 +54,40 @@ public partial class PendingQueueWindow : Window
         LoadQueue();
         SyncNowButton.IsEnabled = true;
     }
+
+    /// <summary>
+    /// كانت مفقودة كليًا - رفض حقيقي من السيرفر (مو انقطاع نت) بيخلّي
+    /// الفاتورة تضل بالطابور للأبد، تُعاد المحاولة كل دورة مزامنة وتفشل
+    /// بنفس السبب دائمًا، بلا أي طريقة تصفّيها. الحذف هون نهائي ومقصود -
+    /// لازم مراجعة السبب (عمود "آخر خطأ") قبل الضغط، البيع ما رح يوصل
+    /// السيرفر أبدًا بعدها.
+    /// </summary>
+    private void DiscardButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (QueueGrid.SelectedItem is not PendingSale selected)
+        {
+            StatusText.Text = "اختر فاتورة من القائمة أولًا.";
+            return;
+        }
+
+        var confirm = MessageBox.Show(
+            $"حذف نهائي - هذه الفاتورة (أُنشئت {selected.CreatedAtLocal:yyyy-MM-dd HH:mm}) لن تصل للسيرفر أبدًا بعد الحذف.\n\nآخر خطأ: {selected.LastErrorMessage}\n\nأكيد الحذف؟",
+            "تأكيد الحذف النهائي", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+
+        if (confirm != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        using var db = new LocalDbContext(_dbPath);
+        var tracked = db.PendingSales.FirstOrDefault(s => s.Id == selected.Id);
+        if (tracked is not null)
+        {
+            db.PendingSales.Remove(tracked);
+            db.SaveChanges();
+        }
+
+        StatusText.Text = "تم حذف الفاتورة نهائيًا.";
+        LoadQueue();
+    }
 }

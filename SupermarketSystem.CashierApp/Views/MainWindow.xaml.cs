@@ -29,7 +29,7 @@ public partial class MainWindow : Window
 
     private void StartSaleButton_Click(object sender, RoutedEventArgs e)
     {
-        var saleWindow = new SaleWindow(_apiClient, _authSession, _dbPath, _receiptPrinter, _backgroundSync);
+        var saleWindow = new SaleWindow(_apiClient, _authSession, _dbPath, _receiptPrinter, _backgroundSync, _adminScreenPassword);
         saleWindow.Show();
         Close();
     }

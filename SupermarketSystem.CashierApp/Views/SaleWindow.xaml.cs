@@ -17,6 +17,7 @@ public partial class SaleWindow : Window
     private readonly string _dbPath;
     private readonly Services.Printing.ReceiptPrinterService _receiptPrinter;
     private readonly BackgroundSyncService _backgroundSync;
+    private readonly string _adminScreenPassword;
 
     private readonly ObservableCollection<CartLine> _cart = new();
     private List<PaymentMethodDto> _paymentMethods = new();
@@ -36,7 +37,8 @@ public partial class SaleWindow : Window
 
     public SaleWindow(
         ApiClient apiClient, AuthSession authSession, string dbPath,
-        Services.Printing.ReceiptPrinterService receiptPrinter, BackgroundSyncService backgroundSync)
+        Services.Printing.ReceiptPrinterService receiptPrinter, BackgroundSyncService backgroundSync,
+        string adminScreenPassword)
     {
         InitializeComponent();
         _apiClient = apiClient;
@@ -44,6 +46,7 @@ public partial class SaleWindow : Window
         _dbPath = dbPath;
         _receiptPrinter = receiptPrinter;
         _backgroundSync = backgroundSync;
+        _adminScreenPassword = adminScreenPassword;
 
         CartGrid.ItemsSource = _cart;
         Loaded += SaleWindow_Loaded;
@@ -113,6 +116,65 @@ public partial class SaleWindow : Window
     {
         _backgroundSync.CancelManualSync();
         CancelSyncButton.IsEnabled = false;
+    }
+
+    /// <summary>
+    /// كانت مفقودة كليًا - محمية بنفس باسوورد شاشة الإدارة المحلي
+    /// (راجع MainWindow.AdminAccessButton_Click) لأن صلاحية CashClosing.Manage
+    /// الفعلية أصلًا مو من صلاحيات دور "كاشير" الافتراضية - هدف الباسوورد
+    /// هون تنظيم الوصول لإجراء نهاية وردية، لا حماية أمنية جدّية.
+    /// </summary>
+    private void CashClosingButton_Click(object sender, RoutedEventArgs e)
+    {
+        var passwordPrompt = new AdminPasswordWindow { Owner = this };
+        if (passwordPrompt.ShowDialog() != true || passwordPrompt.EnteredPassword != _adminScreenPassword)
+        {
+            return;
+        }
+
+        if (_authSession.BranchId is null)
+        {
+            ShowError("لا يوجد فرع مرتبط بجلستك - راجع الإدارة.");
+            return;
+        }
+
+        var closingWindow = new CashClosingWindow(_apiClient, _authSession.BranchId.Value, _paymentMethods) { Owner = this };
+        closingWindow.ShowDialog();
+    }
+
+    /// <summary>
+    /// خروج طوعي - تحذير أول لو فيه أصناف بالسلة لسه ما اتباعت (تفادي
+    /// خروج بالغلط وضياع سلة نصف جاهزة)، ثم POST /auth/logout أفضل-محاولة
+    /// (فشلها ما يمنع الخروج المحلي، راجع ApiClient.LogoutAsync)، ثم مسح
+    /// الجلسة وفتح شاشة دخول جديدة نظيفة.
+    /// </summary>
+    private async void LogoutButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_cart.Count > 0)
+        {
+            var confirmDiscard = MessageBox.Show(
+                "فيه أصناف بالسلة الحالية لسه ما اتباعت - هل متأكد من الخروج؟ رح تضيع السلة.",
+                "تأكيد الخروج", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+
+            if (confirmDiscard != MessageBoxResult.Yes)
+            {
+                return;
+            }
+        }
+
+        LogoutButton.IsEnabled = false;
+        _backgroundSync.Stop();
+
+        if (_authSession.RefreshToken is { } refreshToken)
+        {
+            await _apiClient.LogoutAsync(refreshToken, CancellationToken.None);
+        }
+
+        _authSession.Clear();
+
+        var loginWindow = new LoginWindow(_apiClient, _authSession, _dbPath, _backgroundSync, _receiptPrinter, _adminScreenPassword);
+        loginWindow.Show();
+        Close();
     }
 
     /// <summary>

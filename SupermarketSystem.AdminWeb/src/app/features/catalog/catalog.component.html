@@ -254,6 +254,13 @@
               <div class="unit-row">
                 <span class="unit-name">{{ b.branchName }}</span>
                 <span class="unit-factor mono">{{ b.sellingPrice | number: '1.2-2' }}</span>
+                <span class="status-chip" [class.inactive]="!b.isAvailableForSale">
+                  {{ b.isAvailableForSale ? 'متوفر للبيع' : 'موقَف' }}
+                </span>
+                <button type="button" class="link-btn" [disabled]="togglingBranchAvailabilityId() === b.productBranchId"
+                        (click)="toggleBranchAvailability(b)">
+                  {{ b.isAvailableForSale ? 'إيقاف البيع' : 'تفعيل البيع' }}
+                </button>
               </div>
             }
           </div>

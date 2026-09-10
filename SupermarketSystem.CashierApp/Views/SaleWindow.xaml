@@ -10,6 +10,8 @@
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="6" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="10" />
             <RowDefinition Height="*" />
             <RowDefinition Height="10" />
@@ -60,7 +62,15 @@
                        FontSize="12" Text="" />
         </Grid>
 
-        <Border Grid.Row="2" Background="White" CornerRadius="10" BorderBrush="#E5E2DD" BorderThickness="1">
+        <!-- شريط إجراءات الجلسة/الوردية - منفصل عن أزرار البيع عمدًا (ليست عمليات بيع) -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Left">
+            <Button x:Name="CashClosingButton" Height="32" Width="120" FontSize="12" Content="🧮 إغلاق الصندوق"
+                    Style="{StaticResource SecondaryButton}" Click="CashClosingButton_Click" Margin="0,0,8,0" />
+            <Button x:Name="LogoutButton" Height="32" Width="110" FontSize="12" Content="🔒 تسجيل خروج"
+                    Style="{StaticResource SecondaryButton}" Click="LogoutButton_Click" />
+        </StackPanel>
+
+        <Border Grid.Row="4" Background="White" CornerRadius="10" BorderBrush="#E5E2DD" BorderThickness="1">
             <DataGrid x:Name="CartGrid" AutoGenerateColumns="False" IsReadOnly="True"
                       HeadersVisibility="Column" GridLinesVisibility="Horizontal" BorderThickness="0"
                       Background="Transparent" RowBackground="White" AlternatingRowBackground="#FAF9F7"
@@ -77,7 +87,7 @@
             </DataGrid>
         </Border>
 
-        <Grid Grid.Row="4">
+        <Grid Grid.Row="6">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="16" />

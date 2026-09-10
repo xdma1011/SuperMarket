@@ -20,17 +20,24 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="10" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <TextBlock x:Name="SummaryText" Grid.Column="0" FontSize="15" FontWeight="Bold"
                        VerticalAlignment="Center" Foreground="#1F1B16" />
 
-            <Button x:Name="SyncNowButton" Grid.Column="2" Width="130" Height="38" Content="🔄 مزامنة الآن"
+            <!-- حذف نهائي - فقط لفاتورة برفض فعلي من السيرفر لا يمكن حلّه بإعادة المحاولة (راجع تعليق DiscardButton_Click بالكود-behind) -->
+            <Button x:Name="DiscardButton" Grid.Column="2" Width="130" Height="38" Content="🗑 حذف المحدَّد"
+                    Style="{StaticResource SecondaryButton}" Click="DiscardButton_Click" />
+
+            <Button x:Name="SyncNowButton" Grid.Column="4" Width="130" Height="38" Content="🔄 مزامنة الآن"
                     Style="{StaticResource SecondaryButton}" Click="SyncNowButton_Click" />
         </Grid>
 
         <Border Grid.Row="2" Background="White" CornerRadius="10" BorderBrush="#E5E2DD" BorderThickness="1">
             <DataGrid x:Name="QueueGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                      SelectionMode="Single" SelectionUnit="FullRow"
                       HeadersVisibility="Column" GridLinesVisibility="Horizontal" BorderThickness="0"
                       Background="Transparent" RowBackground="White" AlternatingRowBackground="#FAF9F7">
                 <DataGrid.Columns>

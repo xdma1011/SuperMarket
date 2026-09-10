@@ -119,6 +119,7 @@ export class CatalogComponent implements OnInit {
   readonly addBranchFormOpen = signal(false);
   readonly addBranchSubmitting = signal(false);
   readonly addBranchError = signal<string | null>(null);
+  readonly togglingBranchAvailabilityId = signal<string | null>(null);
   newBranchId = '';
   newBranchPrice: number | null = null;
 
@@ -553,6 +554,31 @@ export class CatalogComponent implements OnInit {
       this.addBranchError.set(message ?? 'تعذّر إضافة الفرع.');
     } finally {
       this.addBranchSubmitting.set(false);
+    }
+  }
+
+  /**
+   * كانت مفقودة كليًا — IsAvailableForSale موجود بالـDomain من البداية
+   * (ProductBranch.MakeAvailable/MakeUnavailable)، بس ولا endpoint كان
+   * يستدعيهما، فتعطيل بيع منتج بفرع معيّن ما كان ممكن إلا بـSQL مباشر.
+   * هذا بالضبط سبب خطأ "Sale.ProductNotActive" الغامض بالكاشير بلا أي
+   * أثر يشرحه بالواجهة.
+   */
+  async toggleBranchAvailability(branch: ProductBranchItemDto): Promise<void> {
+    this.togglingBranchAvailabilityId.set(branch.productBranchId);
+    this.addBranchError.set(null);
+
+    try {
+      await firstValueFrom(
+        this.apiClient.post(ApiController.Products, ProductsOperation.SetBranchAvailability, {
+          isAvailableForSale: !branch.isAvailableForSale
+        }, { productId: this.editingProductId, productBranchId: branch.productBranchId })
+      );
+      await this.loadProductBranches(this.editingProductId);
+    } catch {
+      this.addBranchError.set('تعذّر تغيير حالة توفّر المنتج بهذا الفرع.');
+    } finally {
+      this.togglingBranchAvailabilityId.set(null);
     }
   }
 }
