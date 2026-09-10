@@ -29,9 +29,14 @@ public partial class App : Application
         Directory.CreateDirectory(dataDir);
         var dbPath = Path.Combine(dataDir, "local.db");
 
+        // Migrate() لا EnsureCreated() - كانت المشكلة إنه EnsureCreated() ما
+        // بيطبّق أي تعديل سكيما لاحق على local.db موجودة أصلًا عند مستخدم -
+        // جدول جديد كان رح يظل غايب للأبد بدون Migration حقيقية. ما في
+        // مستخدمين حاليين على local.db بالإصدار القديم (المشروع لسه قبل
+        // الإطلاق)، فما في داعي backfill يدوي.
         using (var db = new LocalDbContext(dbPath))
         {
-            db.Database.EnsureCreated();
+            db.Database.Migrate();
         }
 
         var apiClient = new ApiClient(config);

@@ -20,6 +20,12 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <!-- لدعم أوامر Add-Migration/Update-Database من Package Manager Console
+         بفيجوال ستوديو - نفس سبب وجودها بـSupermarketSystem.Infrastructure.csproj. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.0" />
     <!-- لدعم ترميز Windows-1256 (عربي) على طابعات ESC/POS - .NET Core
          ما بيشمل الترميزات القديمة افتراضيًا. -->
