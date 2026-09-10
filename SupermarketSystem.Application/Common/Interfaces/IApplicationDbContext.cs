@@ -54,6 +54,7 @@ public interface IApplicationDbContext
     DbSet<ProductCategory> ProductCategories { get; }
     DbSet<ProductBranch> ProductBranches { get; }
     DbSet<UnitOfMeasure> UnitsOfMeasure { get; }
+    DbSet<PriceChangeRequest> PriceChangeRequests { get; }
 
     // Inventory
     DbSet<ProductBatch> ProductBatches { get; }

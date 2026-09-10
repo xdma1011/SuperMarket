@@ -66,6 +66,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
     public DbSet<ProductBranch> ProductBranches => Set<ProductBranch>();
     public DbSet<UnitOfMeasure> UnitsOfMeasure => Set<UnitOfMeasure>();
+    public DbSet<PriceChangeRequest> PriceChangeRequests => Set<PriceChangeRequest>();
 
     // Inventory
     public DbSet<ProductBatch> ProductBatches => Set<ProductBatch>();

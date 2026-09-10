@@ -250,6 +250,9 @@ export class CatalogComponent implements OnInit {
     this.newBranchPrice = null;
     this.editingUnitBarcodeId = '';
     this.editingUnitBarcodeValue = '';
+    this.editingBranchPriceId = '';
+    this.editingBranchPriceValue = null;
+    this.branchPriceMessage.set(null);
   }
 
   async submitProduct(): Promise<void> {
@@ -591,6 +594,61 @@ export class CatalogComponent implements OnInit {
       this.addBranchError.set('تعذّر تغيير حالة توفّر المنتج بهذا الفرع.');
     } finally {
       this.togglingBranchAvailabilityId.set(null);
+    }
+  }
+
+  // === تعديل سعر البيع بفرع - سماح بثلاث مستويات (راجع PriceChangeRequest.cs
+  // بالباك إند): مباشر (يتغيّر فورًا)، أو طلب بانتظار موافقة (يظهر بصفحة
+  // "طلبات تعديل السعر")، أو منع مطلق (403 - ولا واحد من الحالتين). ===
+
+  editingBranchPriceId = '';
+  editingBranchPriceValue: number | null = null;
+  readonly branchPriceSaving = signal(false);
+  readonly branchPriceError = signal<string | null>(null);
+  readonly branchPriceMessage = signal<string | null>(null);
+
+  startEditBranchPrice(branch: ProductBranchItemDto): void {
+    this.editingBranchPriceId = branch.productBranchId;
+    this.editingBranchPriceValue = branch.sellingPrice;
+    this.branchPriceError.set(null);
+    this.branchPriceMessage.set(null);
+  }
+
+  cancelEditBranchPrice(): void {
+    this.editingBranchPriceId = '';
+    this.editingBranchPriceValue = null;
+  }
+
+  async saveBranchPrice(branch: ProductBranchItemDto): Promise<void> {
+    if (this.editingBranchPriceValue === null || this.editingBranchPriceValue < 0) {
+      this.branchPriceError.set('السعر يجب أن يكون رقمًا موجبًا أو صفرًا.');
+      return;
+    }
+
+    this.branchPriceSaving.set(true);
+    this.branchPriceError.set(null);
+    this.branchPriceMessage.set(null);
+
+    try {
+      const result = await firstValueFrom(
+        this.apiClient.post<{ applied: boolean }>(ApiController.Products, ProductsOperation.RequestPriceChange, {
+          requestedPrice: this.editingBranchPriceValue
+        }, { productId: this.editingProductId, productBranchId: branch.productBranchId })
+      );
+
+      this.editingBranchPriceId = '';
+      this.branchPriceMessage.set(
+        result.applied ? 'تم تعديل السعر فورًا.' : 'أُرسل طلب تعديل السعر - بانتظار موافقة إدارية قبل ما يصير فعليًا.'
+      );
+      await this.loadProductBranches(this.editingProductId);
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === 'object' && 'error' in err
+          ? (err as { error?: { detail?: string } }).error?.detail
+          : null;
+      this.branchPriceError.set(message ?? 'تعذّر إرسال تعديل السعر - قد لا تملك الصلاحية اللازمة.');
+    } finally {
+      this.branchPriceSaving.set(false);
     }
   }
 }

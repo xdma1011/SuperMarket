@@ -34,5 +34,6 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'customers', label: 'الزبائن', route: '/customers', requiredPermission: 'Customers.Manage' },
   { id: 'cash-closings', label: 'تقفيل الصندوق', route: '/cash-closings', requiredPermission: 'CashClosing.Manage' },
   { id: 'units-of-measure', label: 'وحدات القياس', route: '/units-of-measure', requiredPermission: 'Catalog.Manage' },
-  { id: 'stock-transfers', label: 'نقل المخزون', route: '/stock-transfers', requiredPermission: 'StockTransfer.Manage' }
+  { id: 'stock-transfers', label: 'نقل المخزون', route: '/stock-transfers', requiredPermission: 'StockTransfer.Manage' },
+  { id: 'price-change-requests', label: 'طلبات تعديل السعر', route: '/price-change-requests', requiredPermission: 'Catalog.ChangePriceDirect' }
 ];

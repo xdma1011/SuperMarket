@@ -31,6 +31,10 @@ public static class PermissionCodes
     public const string CustomersManage = "Customers.Manage";
     public const string StockTransferManage = "StockTransfer.Manage";
 
+    /// <summary>سماح بثلاث مستويات لتغيير سعر بيع منتج بفرع (راجع PriceChangeRequest.cs بالـDomain): Direct يغيّر فورًا، RequestOnly (بلا Direct) يحتاج موافقة، بلا الاثنين = منع مطلق.</summary>
+    public const string ChangeSellingPriceDirect = "Catalog.ChangePriceDirect";
+    public const string RequestSellingPriceChange = "Catalog.RequestPriceChange";
+
     /// <summary>صفحة السائق (طلبات مسندة له + تأكيد التسليم والدفع) - عمدًا صلاحية وحيدة بلا أي صلاحية أخرى بدور "سائق"، ليخلي صفحته الوحيدة اللي يشوفها بعد الدخول.</summary>
     public const string OrdersDeliver = "Orders.Deliver";
 
@@ -41,7 +45,8 @@ public static class PermissionCodes
         PurchasingCreate, PurchasingCreateDraft, CatalogManage, SuppliersManage, BranchesManage,
         StocktakeManage, StocktakeApprove, CashClosingManage, ReportsView,
         BackupsManage, SessionsManage, NotificationsView, UsersManage, ComplimentaryIssue,
-        SystemSettingsManage, CustomersManage, OrdersDeliver, StockTransferManage
+        SystemSettingsManage, CustomersManage, OrdersDeliver, StockTransferManage,
+        ChangeSellingPriceDirect, RequestSellingPriceChange
     };
 
     /// <summary>
@@ -64,6 +69,7 @@ public static class PermissionCodes
     {
         SalesCreate, SalesVoid, ReturnsProcess, ReturnsReview, PurchasingCreate, PurchasingCreateDraft,
         CatalogManage, SuppliersManage, StocktakeManage, StocktakeApprove,
-        CashClosingManage, ReportsView, NotificationsView, CustomersManage, StockTransferManage
+        CashClosingManage, ReportsView, NotificationsView, CustomersManage, StockTransferManage,
+        ChangeSellingPriceDirect, RequestSellingPriceChange
     };
 }

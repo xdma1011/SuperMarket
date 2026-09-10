@@ -257,11 +257,36 @@
             <p class="empty-branches-hint">⚠️ هذا المنتج غير مربوط بأي فرع بعد - ما رح يظهر بالكاشير إطلاقًا لحد ما تضيف سعر بفرع.</p>
           }
 
+          @if (branchPriceMessage()) {
+            <p class="price-change-message">{{ branchPriceMessage() }}</p>
+          }
+          @if (branchPriceError()) {
+            <p class="form-error">{{ branchPriceError() }}</p>
+          }
+
           <div class="units-list">
             @for (b of productBranches(); track b.productBranchId) {
               <div class="unit-row">
                 <span class="unit-name">{{ b.branchName }}</span>
-                <span class="unit-factor mono">{{ b.sellingPrice | number: '1.2-2' }}</span>
+
+                @if (editingBranchPriceId === b.productBranchId) {
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    class="branch-price-input mono"
+                    [(ngModel)]="editingBranchPriceValue"
+                    [disabled]="branchPriceSaving()"
+                  />
+                  <button type="button" class="link-btn" [disabled]="branchPriceSaving()" (click)="saveBranchPrice(b)">
+                    {{ branchPriceSaving() ? 'جارٍ الإرسال…' : 'حفظ' }}
+                  </button>
+                  <button type="button" class="link-btn" [disabled]="branchPriceSaving()" (click)="cancelEditBranchPrice()">إلغاء</button>
+                } @else {
+                  <span class="unit-factor mono">{{ b.sellingPrice | number: '1.2-2' }}</span>
+                  <button type="button" class="link-btn" (click)="startEditBranchPrice(b)">تعديل السعر</button>
+                }
+
                 <span class="status-chip" [class.inactive]="!b.isAvailableForSale">
                   {{ b.isAvailableForSale ? 'متوفر للبيع' : 'موقَف' }}
                 </span>

@@ -1,0 +1,58 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">الكتالوج / طلبات تعديل السعر</span>
+    <h1>طلبات تعديل السعر</h1>
+    <span class="subtitle">طلبات معلَّقة من مستخدمين ليس عندهم صلاحية تعديل السعر المباشرة - وافق أو ارفض قبل ما يصير التعديل فعليًا.</span>
+  </div>
+</div>
+
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<section class="table-panel">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>الصنف</th>
+          <th>الفرع</th>
+          <th>السعر الحالي</th>
+          <th>السعر المطلوب</th>
+          <th>طلبها</th>
+          <th>التاريخ</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (r of requests(); track r.id) {
+          <tr>
+            <td>{{ r.productName }}</td>
+            <td>{{ r.branchName }}</td>
+            <td class="mono">{{ r.previousPrice | number: '1.2-2' }}</td>
+            <td class="mono price-change-highlight">{{ r.requestedPrice | number: '1.2-2' }}</td>
+            <td>{{ r.requestedByUserName }}</td>
+            <td class="mono">{{ r.requestedAtUtc | date: 'yyyy-MM-dd HH:mm' }}</td>
+            <td>
+              <button type="button" class="link-btn" [disabled]="decidingId() === r.id" (click)="approve(r)">موافقة</button>
+              <button type="button" class="link-btn danger" [disabled]="decidingId() === r.id" (click)="reject(r)">رفض</button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (!loading() && requests().length === 0) {
+      <div class="no-results">
+        <span class="no-results-title">لا يوجد طلبات معلَّقة</span>
+        <span class="no-results-sub">كل طلبات تعديل السعر تم البت فيها.</span>
+      </div>
+    }
+
+    @if (loading()) {
+      <div class="no-results">
+        <span class="no-results-sub">جارٍ التحميل…</span>
+      </div>
+    }
+  </div>
+</section>

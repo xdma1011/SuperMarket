@@ -14,6 +14,9 @@ using SupermarketSystem.Application.Catalog.SetProductComplimentaryAllowed;
 using SupermarketSystem.Application.Catalog.SetProductBranchAvailability;
 using SupermarketSystem.Application.Catalog.UpdateProduct;
 using SupermarketSystem.Application.Catalog.UpdateProductCategory;
+using SupermarketSystem.Application.Catalog.RequestPriceChange;
+using SupermarketSystem.Application.Catalog.GetPendingPriceChangeRequests;
+using SupermarketSystem.Application.Catalog.DecidePriceChangeRequest;
 using SupermarketSystem.Application.Common.Pagination;
 
 namespace SupermarketSystem.API.Endpoints;
@@ -237,6 +240,74 @@ public static class CatalogEndpoints
         .Produces(StatusCodes.Status204NoContent)
         .ProducesProblem(StatusCodes.Status404NotFound);
 
+        // خارج مجموعة products عمدًا - صلاحيتها Catalog.Manage، بينما تعديل
+        // السعر له صلاحيتان منفصلتان (Direct/Request)، والفلاتر تتراكم (AND)
+        // لا تتجاوز بعض (CLAUDE.md §3.4) - لو حطينا هون جوّا المجموعة كان
+        // رح يصير لازم Catalog.Manage و[صلاحية السعر] معًا، بينما القصد
+        // إحداهما لحالها.
+        app.MapPost("/api/v1/products/{productId:guid}/branches/{productBranchId:guid}/price-change-requests", async (
+            Guid productId,
+            Guid productBranchId,
+            RequestPriceChangeRequest request,
+            RequestPriceChangeHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new RequestPriceChangeCommand(productBranchId, request.RequestedPrice), cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithTags("Catalog")
+        .RequirePermission(PermissionCodes.RequestSellingPriceChange)
+        .WithName("RequestPriceChange")
+        .WithSummary("يطلب تعديل سعر بيع منتج بفرع - يتغيّر فورًا لو عند المستخدم Catalog.ChangePriceDirect، وإلا يضل بانتظار موافقة صريحة.")
+        .Produces<RequestPriceChangeResponse>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status404NotFound);
+
+        app.MapGet("/api/v1/price-change-requests", async (
+            GetPendingPriceChangeRequestsHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new GetPendingPriceChangeRequestsQuery(), cancellationToken);
+            return Results.Ok(result);
+        })
+        .WithTags("Catalog")
+        .RequirePermission(PermissionCodes.ChangeSellingPriceDirect)
+        .WithName("GetPendingPriceChangeRequests")
+        .WithSummary("قائمة طلبات تعديل السعر بانتظار الموافقة - لمن يقدر يوافق فقط (Catalog.ChangePriceDirect).")
+        .Produces<IReadOnlyList<PriceChangeRequestListItemDto>>(StatusCodes.Status200OK);
+
+        app.MapPost("/api/v1/price-change-requests/{requestId:guid}/approve", async (
+            Guid requestId,
+            DecidePriceChangeRequestRequest request,
+            ApprovePriceChangeRequestHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new ApprovePriceChangeRequestCommand(requestId, request.Note), cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithTags("Catalog")
+        .RequirePermission(PermissionCodes.ChangeSellingPriceDirect)
+        .WithName("ApprovePriceChangeRequest")
+        .Produces(StatusCodes.Status204NoContent)
+        .ProducesProblem(StatusCodes.Status404NotFound)
+        .ProducesProblem(StatusCodes.Status409Conflict);
+
+        app.MapPost("/api/v1/price-change-requests/{requestId:guid}/reject", async (
+            Guid requestId,
+            DecidePriceChangeRequestRequest request,
+            RejectPriceChangeRequestHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new RejectPriceChangeRequestCommand(requestId, request.Note), cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithTags("Catalog")
+        .RequirePermission(PermissionCodes.ChangeSellingPriceDirect)
+        .WithName("RejectPriceChangeRequest")
+        .Produces(StatusCodes.Status204NoContent)
+        .ProducesProblem(StatusCodes.Status404NotFound)
+        .ProducesProblem(StatusCodes.Status409Conflict);
+
         return app;
     }
 
@@ -246,6 +317,8 @@ public static class CatalogEndpoints
     public sealed record SetProductComplimentaryAllowedRequest(bool Allowed);
 
     public sealed record SetProductBranchAvailabilityRequest(bool IsAvailableForSale);
+    public sealed record RequestPriceChangeRequest(decimal RequestedPrice);
+    public sealed record DecidePriceChangeRequestRequest(string? Note);
     public sealed record UpdateProductCategoryRequest(string Name);
     public sealed record UpdateProductRequest(string Name, Guid CategoryId, decimal? SuggestedRetailPrice, int? ExpectedShelfLifeDays);
     public sealed record AddProductUnitRequest(string UnitName, decimal ConversionFactorToBase, string? BarcodeValue);

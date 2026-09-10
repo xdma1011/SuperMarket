@@ -13,6 +13,7 @@ export enum ApiController {
   Driver = 'driver',
   Inventory = 'inventory',
   ProductCategories = 'product-categories',
+  PriceChangeRequests = 'price-change-requests',
   Products = 'products',
   PurchaseInvoices = 'purchase-invoices',
   Notifications = 'notifications',

@@ -17,5 +17,13 @@ export enum ProductsOperation {
   SetComplimentaryAllowed = '{productId}/complimentary-allowed',
   GetBranches = '{productId}/branches',
   AddBranch = '{productId}/branches',
-  SetBranchAvailability = '{productId}/branches/{productBranchId}/availability'
+  SetBranchAvailability = '{productId}/branches/{productBranchId}/availability',
+  RequestPriceChange = '{productId}/branches/{productBranchId}/price-change-requests'
+}
+
+/** ApiController مباشر (لا Products) - PriceChangeRequests مسار مستقل عن /products، راجع تعليق CLAUDE.md §3.4 بـCatalogEndpoints.cs. */
+export enum PriceChangeRequestsOperation {
+  List = '',
+  Approve = '{requestId}/approve',
+  Reject = '{requestId}/reject'
 }

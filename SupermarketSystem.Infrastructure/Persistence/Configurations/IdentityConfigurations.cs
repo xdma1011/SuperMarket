@@ -317,6 +317,22 @@ public class PermissionConfiguration : IEntityTypeConfiguration<Permission>
             Description = "Dispatch a stock transfer from one branch and receive it at another.",
             CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });
+        builder.HasData(new
+        {
+            Id = Guid.Parse("959d574d-9b51-46ac-9c13-45ef2ea11a07"),
+            Code = "Catalog.ChangePriceDirect",
+            Name = "Change selling price directly",
+            Description = "Change a product's selling price at a branch immediately, with no approval needed.",
+            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+        });
+        builder.HasData(new
+        {
+            Id = Guid.Parse("ece946d9-376c-48e4-baa1-d076180d6251"),
+            Code = "Catalog.RequestPriceChange",
+            Name = "Request selling price change",
+            Description = "Submit a request to change a product's selling price at a branch - takes effect only once someone with Catalog.ChangePriceDirect approves it.",
+            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+        });
     }
 }
 
@@ -619,6 +635,31 @@ public class RolePermissionConfiguration : IEntityTypeConfiguration<RolePermissi
             Id = Guid.Parse("829bb241-1d64-499f-a090-bb3da34023e3"),
             RoleId = Guid.Parse("5d0b3578-417e-4706-ab9b-fc9a208b6642"),
             PermissionId = Guid.Parse("b758b4b2-c9df-4764-aa98-c60a71aff35b")
+        });
+        // Master Admin + مساعد أدمن -> Catalog.ChangePriceDirect + Catalog.RequestPriceChange.
+        builder.HasData(new
+        {
+            Id = Guid.Parse("482a76e3-c0ec-42d5-9220-7787ea4ff504"),
+            RoleId = Guid.Parse("50e6125a-cac0-4d82-a0b8-9f3c6fff59d7"),
+            PermissionId = Guid.Parse("959d574d-9b51-46ac-9c13-45ef2ea11a07")
+        });
+        builder.HasData(new
+        {
+            Id = Guid.Parse("41607168-90c0-4f99-8e1b-abb16b2a4585"),
+            RoleId = Guid.Parse("50e6125a-cac0-4d82-a0b8-9f3c6fff59d7"),
+            PermissionId = Guid.Parse("ece946d9-376c-48e4-baa1-d076180d6251")
+        });
+        builder.HasData(new
+        {
+            Id = Guid.Parse("9e1b38a1-05ce-48a9-b500-837a51e0cf8c"),
+            RoleId = Guid.Parse("5d0b3578-417e-4706-ab9b-fc9a208b6642"),
+            PermissionId = Guid.Parse("959d574d-9b51-46ac-9c13-45ef2ea11a07")
+        });
+        builder.HasData(new
+        {
+            Id = Guid.Parse("607b2b4c-4ce1-402f-b958-b5e1ececf160"),
+            RoleId = Guid.Parse("5d0b3578-417e-4706-ab9b-fc9a208b6642"),
+            PermissionId = Guid.Parse("ece946d9-376c-48e4-baa1-d076180d6251")
         });
     }
 }

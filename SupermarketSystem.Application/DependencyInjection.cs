@@ -70,6 +70,9 @@ using SupermarketSystem.Application.Inventory.ReceiveStockTransfer;
 using SupermarketSystem.Application.Inventory.GetStockTransfers;
 using SupermarketSystem.Application.Inventory.GetStockTransferDetail;
 using SupermarketSystem.Application.Inventory.GetProductBatchesWithStock;
+using SupermarketSystem.Application.Catalog.RequestPriceChange;
+using SupermarketSystem.Application.Catalog.GetPendingPriceChangeRequests;
+using SupermarketSystem.Application.Catalog.DecidePriceChangeRequest;
 using SupermarketSystem.Application.Catalog.CreateProductCategory;
 using SupermarketSystem.Application.Catalog.GetProductCategories;
 using SupermarketSystem.Application.Catalog.GetProducts;
@@ -184,6 +187,10 @@ public static class DependencyInjection
         services.AddScoped<GetStockTransfersHandler>();
         services.AddScoped<GetStockTransferDetailHandler>();
         services.AddScoped<GetProductBatchesWithStockHandler>();
+        services.AddScoped<RequestPriceChangeHandler>();
+        services.AddScoped<GetPendingPriceChangeRequestsHandler>();
+        services.AddScoped<ApprovePriceChangeRequestHandler>();
+        services.AddScoped<RejectPriceChangeRequestHandler>();
 
         services.AddScoped<CreateSupplierHandler>();
         services.AddScoped<GetSuppliersHandler>();

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using SupermarketSystem.Domain.Catalog;
+using SupermarketSystem.Domain.Identity;
 
 namespace SupermarketSystem.Infrastructure.Persistence.Configurations;
 
@@ -146,5 +147,31 @@ public class ProductBranchConfiguration : IEntityTypeConfiguration<ProductBranch
             .HasForeignKey(pb => pb.ProductId)
             .OnDelete(DeleteBehavior.Restrict);
         // Branch FK (Restrict) configured on the Branches side.
+    }
+}
+
+public class PriceChangeRequestConfiguration : IEntityTypeConfiguration<PriceChangeRequest>
+{
+    public void Configure(EntityTypeBuilder<PriceChangeRequest> builder)
+    {
+        builder.ToTable("PriceChangeRequests");
+        builder.HasKey(r => r.Id);
+
+        builder.Property(r => r.PreviousPrice).HasColumnType("decimal(18,4)").IsRequired();
+        builder.Property(r => r.RequestedPrice).HasColumnType("decimal(18,4)").IsRequired();
+        builder.Property(r => r.Status).HasConversion<int>().IsRequired();
+        builder.Property(r => r.RequestedAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(r => r.DecidedAtUtc).HasColumnType("datetime2");
+        builder.Property(r => r.DecisionNote).HasMaxLength(500);
+        builder.Property(r => r.CreatedAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(r => r.UpdatedAtUtc).HasColumnType("datetime2");
+
+        // "قائمة الطلبات المعلَّقة بانتظار الموافقة" - نفس نمط StockMovement.NeedsReview بالضبط.
+        builder.HasIndex(r => r.Status);
+        builder.HasIndex(r => r.ProductBranchId);
+
+        builder.HasOne<ProductBranch>().WithMany().HasForeignKey(r => r.ProductBranchId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(r => r.RequestedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(r => r.DecidedByUserId).OnDelete(DeleteBehavior.Restrict);
     }
 }
