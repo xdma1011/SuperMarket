@@ -261,8 +261,12 @@ export class PurchasingComponent implements OnInit {
 
       this.closeForm();
       await this.loadAll();
-    } catch {
-      this.formError.set('تعذّر تسجيل فاتورة الشراء.');
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === 'object' && 'error' in err
+          ? (err as { error?: { detail?: string } }).error?.detail
+          : null;
+      this.formError.set(message ?? 'تعذّر تسجيل فاتورة الشراء.');
     } finally {
       this.submitting.set(false);
     }
