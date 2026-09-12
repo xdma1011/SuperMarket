@@ -41,9 +41,18 @@ public sealed class GetPublicCatalogHandler
         var minStockMid = await _settingsProvider.GetDecimalAsync(OrderingPolicyKeys.MinVisibleStockMidPrice, 5m, cancellationToken);
         var minStockLow = await _settingsProvider.GetDecimalAsync(OrderingPolicyKeys.MinVisibleStockLowPrice, 30m, cancellationToken);
 
+        // IgnoreQueryFilters على ProductBranches: هذا endpoint عام بالكامل
+        // (AllowAnonymous - راجع PublicCatalogEndpoints) لتصفّح الزبون *قبل*
+        // ما يسجّل دخول، فبلا أي HttpContext.User مصادَق، ICurrentUserContext.BranchId
+        // بيرجع null دايمًا - والمرشِّح العام للفروع (AppDbContext.SetBranchFilter:
+        // isCrossBranchAccessAllowed || BranchId == currentBranchId) بيتحوّل
+        // لـ"BranchId == null" اللي ما بتطابق أي صف حقيقي أبدًا. كان هذا خطأ
+        // حقيقي بالإنتاج: كتالوج الزبائن العام كان يرجّع صفر منتجات دائمًا
+        // بغض النظر عن المخزون الفعلي. الأمان هون مش بحاجة المرشِّح العام
+        // أصلًا - الفلترة الحقيقية بـquery.BranchId الصريح تحت مباشرة.
         var productsQuery =
             from product in _context.Products.AsNoTracking()
-            join branch in _context.ProductBranches.AsNoTracking() on product.Id equals branch.ProductId
+            join branch in _context.ProductBranches.AsNoTracking().IgnoreQueryFilters() on product.Id equals branch.ProductId
             join category in _context.ProductCategories.AsNoTracking() on product.CategoryId equals category.Id
             where !product.IsDeleted && product.Status == ProductStatus.Active
                   && branch.BranchId == query.BranchId && branch.IsAvailableForSale
@@ -62,7 +71,8 @@ public sealed class GetPublicCatalogHandler
 
         var withStock =
             from x in productsQuery
-            let stockOnHand = _context.Stocks.AsNoTracking()
+            // نفس سبب IgnoreQueryFilters فوق - Stock كيان Branch-owned كمان.
+            let stockOnHand = _context.Stocks.AsNoTracking().IgnoreQueryFilters()
                 .Where(s => s.ProductId == x.Product.Id && s.BranchId == query.BranchId)
                 .Sum(s => (decimal?)s.QuantityOnHand) ?? 0
             select new { x.Product, x.Branch, x.CategoryName, StockOnHand = stockOnHand };

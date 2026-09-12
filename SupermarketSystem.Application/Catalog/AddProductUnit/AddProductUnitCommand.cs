@@ -67,11 +67,21 @@ public sealed class AddProductUnitHandler
         // وحدة جديدة أبدًا مش أساسية — الوحدة الأساسية تُحدَّد حصرًا وقت
         // إنشاء المنتج نفسه.
         var unit = product.AddUnit(command.UnitName.Trim(), command.ConversionFactorToBase, isBaseUnit: false);
+        // خطأ حقيقي كان موجودًا: بلا _context.Add() صريح هون، EF Core بيعامل
+        // الوحدة/الباركود الجديدين كـ"Modified" لا "Added" (لأنهما وصلوا عبر
+        // navigation على Product *موجود أصلًا* بحالة Unchanged، لا Product
+        // جديد بحالة Added - الحالة الوحيدة اللي EF بيعمل cascade تلقائي
+        // فيها لحالة Added للأبناء). النتيجة: UPDATE بدل INSERT، وبما إنه
+        // الصف أصلًا مش موجود، DbUpdateConcurrencyException ("0 rows
+        // affected") بكل استدعاء فعلي لهاد الـendpoint - فجوة حقيقية كانت
+        // رح تمنع إضافة أي وحدة جديدة (طرد/كرتونة) لمنتج موجود بالإنتاج.
+        _context.ProductUnits.Add(unit);
 
         Guid? barcodeId = null;
         if (!string.IsNullOrWhiteSpace(command.BarcodeValue))
         {
             var barcode = product.AddBarcode(command.BarcodeValue.Trim(), unit.Id);
+            _context.ProductBarcodes.Add(barcode);
             barcodeId = barcode.Id;
         }
 
