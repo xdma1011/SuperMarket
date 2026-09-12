@@ -38,7 +38,13 @@ public sealed class GetOrderByIdHandler
 
     public async Task<Result<OrderDetailDto>> HandleAsync(GetOrderByIdQuery query, CancellationToken cancellationToken)
     {
+        // Include(Items) إلزامي هون: order.Items تُقرأ لاحقًا بكود C# عادي
+        // (plain LINQ-to-Objects) بعد التجسيد، لا داخل استعلام EF مترجَم -
+        // بدونها المجموعة تضل فاضية دائمًا (خلاف GetPendingOrders/GetCustomerOrders
+        // اللي بيستخدموا order.Items.Sum/Count داخل IQueryable نفسه، فبيترجم
+        // لـSQL صحيح بلا حاجة Include).
         var order = await _context.Orders.AsNoTracking()
+            .Include(o => o.Items)
             .FirstOrDefaultAsync(o => o.Id == query.OrderId, cancellationToken);
 
         if (order is null)

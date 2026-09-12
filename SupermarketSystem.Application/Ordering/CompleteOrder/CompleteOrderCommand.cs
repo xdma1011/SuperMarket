@@ -44,7 +44,13 @@ public sealed class CompleteOrderHandler
 
     public async Task<Result<CompleteSaleResponse>> HandleAsync(CompleteOrderCommand command, CancellationToken cancellationToken)
     {
-        var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == command.OrderId, cancellationToken);
+        // Include(Items) إلزامي هون - بدونها order.Items تضل فاضية دائمًا
+        // بعد التجسيد (نفس الفخ بالضبط بـGetOrderByIdHandler)، فـsaleItems
+        // تحته بتضل فاضية والـCompleteSaleCommand يرفض بـ"Sale.ItemsRequired"
+        // لأي طلب عنده أصناف فعلية - كان bug حقيقي يمنع إكمال أي طلب إطلاقًا.
+        var order = await _context.Orders
+            .Include(o => o.Items)
+            .FirstOrDefaultAsync(o => o.Id == command.OrderId, cancellationToken);
         if (order is null)
         {
             return Result.Failure<CompleteSaleResponse>(Error.NotFound("Order.NotFound", $"الطلب '{command.OrderId}' غير موجود."));
