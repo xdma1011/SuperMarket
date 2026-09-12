@@ -137,3 +137,9 @@ app.Run();
 //   - CORS origins are hardcoded to localhost:4200 for local development.
 //     A production deployment must move this list into configuration
 //     (appsettings/environment variables) rather than editing this file.
+
+// Top-level statements generate an *internal* Program class by default —
+// WebApplicationFactory<Program> (SupermarketSystem.IntegrationTests) needs
+// it public to reference it from another assembly. Marker only, zero effect
+// on runtime behavior.
+public partial class Program { }

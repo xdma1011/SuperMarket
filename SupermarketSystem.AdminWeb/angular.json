@@ -33,6 +33,16 @@
             "development": { "buildTarget": "supermarket-admin-web:build:development" }
           },
           "defaultConfiguration": "development"
+        },
+        "test": {
+          "builder": "@angular-devkit/build-angular:karma",
+          "options": {
+            "polyfills": ["src/polyfills.ts", "zone.js/testing"],
+            "tsConfig": "tsconfig.spec.json",
+            "assets": [],
+            "styles": ["src/styles.css"],
+            "karmaConfig": "karma.conf.js"
+          }
         }
       }
     }
