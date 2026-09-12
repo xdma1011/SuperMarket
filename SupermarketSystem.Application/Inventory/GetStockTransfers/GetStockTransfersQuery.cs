@@ -41,9 +41,12 @@ public sealed class GetStockTransfersHandler
             transfers = transfers.Where(t => t.SourceBranchId == query.BranchId.Value || t.DestinationBranchId == query.BranchId.Value);
         }
 
+        // كان معكوسًا (IsDescending=true بيرجّع تصاعدي والعكس) - انصلح هون
+        // (راجع تقرير الاختبارات: GetCashClosingsQuery/GetCurrentStockQuery
+        // نفس الملف عندهم النمط الصحيح، وهذا الملف بالذات كان الاستثناء).
         transfers = paging.IsDescending
-            ? transfers.OrderBy(t => t.DispatchedAtUtc).ThenBy(t => t.Id)
-            : transfers.OrderByDescending(t => t.DispatchedAtUtc).ThenByDescending(t => t.Id);
+            ? transfers.OrderByDescending(t => t.DispatchedAtUtc).ThenByDescending(t => t.Id)
+            : transfers.OrderBy(t => t.DispatchedAtUtc).ThenBy(t => t.Id);
 
         var totalCount = await transfers.CountAsync(cancellationToken);
 

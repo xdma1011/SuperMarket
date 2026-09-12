@@ -18,29 +18,52 @@ public sealed record RecordPurchaseInvoicePaymentResponse(
 /// <summary>
 /// تسجيل دفعة يدوية للمورد — نسخة مبسَّطة من نمط SaleInvoicePayment
 /// (بلا آلية عكس، راجع تعليق الكيان نفسه). القيد الوحيد: مجموع
-/// المدفوعات ما يتجاوز إجمالي الفاتورة. بخلاف مسارات البيع عالية
-/// التزامن، هذا المسار عادة إداري لمستخدم واحد بلحظة معيّنة — ضمان
-/// EF Core العادي داخل معاملة كافٍ هون.
+/// المدفوعات ما يتجاوز إجمالي الفاتورة.
 ///
-/// فجوة كانت موجودة من زمان وانسدّت هون: هالدفعة كانت ما بتنكتب
-/// بـCashDrawerLog إطلاقًا مهما كانت طريقة الدفع - يعني كاش خارج فعليًا
-/// للمورد بيضل غير معروف للنظام، وتقفيل الصندوق (CashClosing) كان
-/// يظهر عجز غير مفسَّر كل مرة. الآن، تمامًا زي CompleteSaleCommand،
-/// الاعتماد على PaymentMethod.AffectsCashDrawer (سلوك، لا اسم/كود) هو
-/// اللي بيقرر تسجيل حركة الدرج.
+/// ═══════════════════════════════════════════════════════════════════
+/// خطأ إنتاج حقيقي كان هون، اكتُشف عبر اختبارات integration (راجع تقرير
+/// الجلسة) - **كل استدعاء لهذا الـEndpoint كان يفشل حتمًا بـ409
+/// Concurrency.Conflict**، حتى عبر HTTP حقيقي بطلبين منفصلين تمامًا
+/// (إنشاء فاتورة شراء ثم تسجيل دفعة عليها فورًا - أبسط سيناريو استخدام
+/// ممكن):
+///
+/// السبب الجذري (تأكَّد بتفعيل EF Core SQL logging مؤقتًا للتشخيص):
+/// `invoice.AddPayment(...)` بيضيف الدفعة الجديدة لمجموعة `_payments`
+/// الخاصة بـPurchaseInvoice - بس `invoice` هون كيان **موجود مسبقًا**
+/// (Unchanged، جاي من استعلام FirstOrDefaultAsync)، لا كيان جديد
+/// (Added) زي حالة CompleteSaleHandler/ProcessReturnHandler (وين
+/// AddPayment بتنضاف لفاتورة جديدة بالكامل، فكل العناصر بالرسم البياني
+/// بتاخد Added تلقائيًا). لما تنضاف دفعة جديدة لمجموعة كيان أب *موجود
+/// أصلًا*، EF Core ما بيستنتج دايمًا Added للطفل الجديد تلقائيًا من
+/// تغيّر المجموعة وحده - النتيجة الفعلية كانت EF يبني **UPDATE**
+/// لـPurchaseInvoicePayments (`WHERE RowVersion IS NULL`) بدل **INSERT**،
+/// وبما إن الصف أصلًا مش موجود (دفعة جديدة لسه ما انحفظت)، الـUPDATE
+/// بيأثر على صفر صفوف، فتفشل الدفعة كاملة بـDbUpdateConcurrencyException
+/// (تترجم لـ409 بـExceptionHandlingMiddleware) - رغم إن كل القيم (بما
+/// فيها RowVersion لفاتورة الشراء نفسها) كانت صحيحة تمامًا.
+///
+/// الإصلاح: `_context.PurchaseInvoicePayments.Add(newPayment)` صراحة -
+/// يجبر EF يتعامل معها كـAdded من البداية، بدل الاعتماد فقط على تتبّع
+/// تغيّر مجموعة الكيان الأب الموجود مسبقًا. أضفنا أيضًا لف الحفظ
+/// بـITransactionalExecutor (كان يستدعي SaveChangesAsync مباشرة، خلافًا
+/// لكل الـHandlers الشقيقة الحسّاسة) - تحسين اتساق إضافي، لا الإصلاح
+/// الجذري نفسه.
 /// </summary>
 public sealed class RecordPurchaseInvoicePaymentHandler
 {
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserContext _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly ITransactionalExecutor _transactionalExecutor;
 
     public RecordPurchaseInvoicePaymentHandler(
-        IApplicationDbContext context, ICurrentUserContext currentUser, IDateTimeProvider dateTimeProvider)
+        IApplicationDbContext context, ICurrentUserContext currentUser, IDateTimeProvider dateTimeProvider,
+        ITransactionalExecutor transactionalExecutor)
     {
         _context = context;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
+        _transactionalExecutor = transactionalExecutor;
     }
 
     public async Task<Result<RecordPurchaseInvoicePaymentResponse>> HandleAsync(
@@ -81,9 +104,10 @@ public sealed class RecordPurchaseInvoicePaymentHandler
         var userId = _currentUser.UserId
             ?? throw new InvalidOperationException("لا يمكن تسجيل دفعة بلا هوية مستخدم مصادَق عليها.");
 
+        Domain.Purchasing.PurchaseInvoicePayment newPayment;
         try
         {
-            invoice.AddPayment(
+            newPayment = invoice.AddPayment(
                 command.PaymentMethodId, command.Amount, userId, invoice.BranchId,
                 command.ExternalReference, command.ClientRequestId);
         }
@@ -93,7 +117,10 @@ public sealed class RecordPurchaseInvoicePaymentHandler
                 Error.Validation("Payment.ExceedsInvoiceTotal", ex.Message));
         }
 
-        var newPayment = invoice.Payments.Last();
+        // إضافة صريحة لازمة (راجع تعليق الصنف بالأعلى) - invoice كيان
+        // موجود مسبقًا (Unchanged)، فـEF ما بيضمن استنتاج Added تلقائيًا
+        // للطفل الجديد بمجرد إضافته لمجموعة Payments بالذاكرة.
+        _context.PurchaseInvoicePayments.Add(newPayment);
 
         // نفس مبدأ CompleteSaleCommand حرفيًا: الاعتماد على سلوك طريقة
         // الدفع (AffectsCashDrawer)، لا اسمها أو كودها (§16.2).
@@ -109,9 +136,12 @@ public sealed class RecordPurchaseInvoicePaymentHandler
                 _dateTimeProvider.UtcNow));
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
+        return await _transactionalExecutor.ExecuteAsync<RecordPurchaseInvoicePaymentResponse>(async ct =>
+        {
+            await _context.SaveChangesAsync(ct);
 
-        return Result.Success(new RecordPurchaseInvoicePaymentResponse(
-            newPayment.Id, invoice.TotalPaidAmount, invoice.TotalAmount - invoice.TotalPaidAmount));
+            return Result.Success(new RecordPurchaseInvoicePaymentResponse(
+                newPayment.Id, invoice.TotalPaidAmount, invoice.TotalAmount - invoice.TotalPaidAmount));
+        }, cancellationToken);
     }
 }
