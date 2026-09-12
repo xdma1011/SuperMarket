@@ -12,3 +12,7 @@ obj/
 *.db
 *.db-shm
 *.db-wal
+
+# مساحات عمل git worktree مؤقتة لوكلاء Claude الخلفية (كل واحدة checkout
+# كامل لـgit لحاله) - أدوات تشغيل الجلسة، لا محتوى مشروع.
+.claude/worktrees/
