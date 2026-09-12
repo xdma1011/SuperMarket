@@ -53,38 +53,51 @@ public sealed class GetProductConsumptionLevelsHandler
         var mediumThreshold = await _settingsProvider.GetDecimalAsync(ConsumptionLevelSettingsKeys.MediumThreshold, 15m, cancellationToken);
         var lowThreshold = await _settingsProvider.GetDecimalAsync(ConsumptionLevelSettingsKeys.LowThreshold, 1m, cancellationToken);
 
-        var soldQuantityByProduct = _context.SaleInvoiceItems.AsNoTracking()
+        // خطأ حقيقي كان موجودًا (نوعين مختلفين، الاثنان بيمنعان هالتقرير من
+        // الشغل إطلاقًا): (1) ORDER BY على تعبير شرطي فوق نتيجة
+        // GroupJoin+DefaultIfEmpty (left join) مبني على subquery مجمَّع كان
+        // يرمي "could not be translated"، و(2) حتى بعد جلب النتائج بلا
+        // ترتيب بقاعدة البيانات، قراءة عمود المجموع من الجهة الفارغة
+        // بالـleft join كانت ترمي "Nullable object must have a value" -
+        // شكل EF المولَّد لهالنمط تحديدًا (GroupJoin+SelectMany+DefaultIfEmpty
+        // فوق subquery GroupBy+Sum) غير موثوق الترجمة بكلا الاتجاهين. الحل:
+        // نجيب "كمية كل منتج المباعة" كـdictionary صغير بالذاكرة أول (نفس
+        // مبدأ CLAUDE.md §3.1)، وبعدين نطابقها يدويًا بـC# مع منتجات الفرع -
+        // كتالوج فرع واحد حجمه محدود بطبيعته، لا مليارات الصفوف.
+        var soldQuantityByProduct = await _context.SaleInvoiceItems.AsNoTracking()
             .Join(_context.SaleInvoices.AsNoTracking(),
                 i => i.SaleInvoiceId, s => s.Id, (i, s) => new { i.ProductId, i.Quantity, s.BranchId, s.CreatedAtUtc })
             .Where(x => x.BranchId == query.BranchId && x.CreatedAtUtc >= query.SinceUtc)
             .GroupBy(x => x.ProductId)
-            .Select(g => new { ProductId = g.Key, QuantitySold = g.Sum(x => x.Quantity) });
+            .Select(g => new { ProductId = g.Key, QuantitySold = g.Sum(x => x.Quantity) })
+            .ToDictionaryAsync(x => x.ProductId, x => x.QuantitySold, cancellationToken);
 
-        var withSales = _context.ProductBranches.AsNoTracking()
+        var branchProducts = _context.ProductBranches.AsNoTracking()
             .Where(pb => pb.BranchId == query.BranchId && pb.IsAvailableForSale)
-            .Join(_context.Products.AsNoTracking(), pb => pb.ProductId, p => p.Id, (pb, p) => new { pb.ProductId, ProductName = p.Name })
-            .GroupJoin(soldQuantityByProduct, x => x.ProductId, s => s.ProductId, (x, sales) => new { x.ProductId, x.ProductName, sales })
-            .SelectMany(x => x.sales.DefaultIfEmpty(), (x, s) => new
-            {
-                x.ProductId,
-                x.ProductName,
-                QuantitySold = s != null ? s.QuantitySold : 0m
-            });
+            .Join(_context.Products.AsNoTracking(), pb => pb.ProductId, p => p.Id, (pb, p) => new { pb.ProductId, ProductName = p.Name });
 
         if (!string.IsNullOrWhiteSpace(paging.Search))
         {
             var pattern = $"%{paging.Search.Trim()}%";
-            withSales = withSales.Where(x => EF.Functions.Like(x.ProductName, pattern));
+            branchProducts = branchProducts.Where(x => EF.Functions.Like(x.ProductName, pattern));
         }
 
-        var totalCount = await withSales.CountAsync(cancellationToken);
+        var totalCount = await branchProducts.CountAsync(cancellationToken);
 
-        var page = await withSales
+        var withSales = (await branchProducts.ToListAsync(cancellationToken))
+            .Select(x => new
+            {
+                x.ProductId,
+                x.ProductName,
+                QuantitySold = soldQuantityByProduct.GetValueOrDefault(x.ProductId, 0m)
+            });
+
+        var page = withSales
             .OrderByDescending(x => x.QuantitySold)
             .ThenBy(x => x.ProductName)
             .Skip(paging.Skip)
             .Take(paging.PageSize)
-            .ToListAsync(cancellationToken);
+            .ToList();
 
         var items = page.Select(x => ToDto(x.ProductId, x.ProductName, x.QuantitySold, highThreshold, mediumThreshold, lowThreshold)).ToList();
 

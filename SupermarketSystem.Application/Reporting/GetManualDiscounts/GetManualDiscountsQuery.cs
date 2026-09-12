@@ -62,33 +62,43 @@ public sealed class GetManualDiscountsHandler
             invoices = invoices.Where(s => s.CreatedAtUtc <= toUtc);
         }
 
+        // خطأ حقيقي كان موجودًا: التعليق الأصلي هون كان يدّعي "EF Core
+        // يترجم Concat لـUNION ALL"، بس هذا ما بيصير فعليًا لما كل فرع من
+        // الـConcat يكون معمول له .Select(new ManualDiscountItemDto(...))
+        // (إسقاط لـrecord) *قبل* الدمج - EF بيرمي "Unable to translate set
+        // operation after client projection has been applied" بكل استدعاء
+        // فعلي، بلا استثناء (كان هذا التقرير معطَّل بالكامل بالإنتاج).
+        // الحل: إسقاط لنوع anonymous موحَّد بالطرفين أول (Concat بينهم
+        // بيترجم UNION ALL بأمان)، وبس بعدين إسقاط واحد نهائي لـManualDiscountItemDto.
         var lineLevel = _context.SaleInvoiceItems
             .AsNoTracking()
             .Where(i => i.DiscountId == null && i.DiscountSnapshot > 0)
-            .Join(invoices, i => i.SaleInvoiceId, s => s.Id, (i, s) => new ManualDiscountItemDto(
-                "Line",
-                s.Id,
+            .Join(invoices, i => i.SaleInvoiceId, s => s.Id, (i, s) => new
+            {
+                Level = "Line",
+                SaleInvoiceId = s.Id,
                 s.InvoiceNumber,
                 s.BranchId,
-                i.ProductId,
-                i.DiscountSnapshot,
+                ProductId = (Guid?)i.ProductId,
+                DiscountAmount = i.DiscountSnapshot,
                 s.CreatedByUserId,
-                s.CreatedAtUtc));
+                s.CreatedAtUtc
+            });
 
         var invoiceLevel = invoices
             .Where(s => s.DiscountId == null && s.DiscountAmountSnapshot > 0)
-            .Select(s => new ManualDiscountItemDto(
-                "Invoice",
-                s.Id,
+            .Select(s => new
+            {
+                Level = "Invoice",
+                SaleInvoiceId = s.Id,
                 s.InvoiceNumber,
                 s.BranchId,
-                null,
-                s.DiscountAmountSnapshot,
+                ProductId = (Guid?)null,
+                DiscountAmount = s.DiscountAmountSnapshot,
                 s.CreatedByUserId,
-                s.CreatedAtUtc));
+                s.CreatedAtUtc
+            });
 
-        // EF Core translates Concat to UNION ALL on SQL Server, so ordering
-        // and paging below still happen database-side over the combined set.
         var combined = lineLevel.Concat(invoiceLevel);
 
         var totalCount = await combined.CountAsync(cancellationToken);
@@ -97,6 +107,9 @@ public sealed class GetManualDiscountsHandler
             .OrderByDescending(x => x.CreatedAtUtc)
             .Skip(paging.Skip)
             .Take(paging.PageSize)
+            .Select(x => new ManualDiscountItemDto(
+                x.Level, x.SaleInvoiceId, x.InvoiceNumber, x.BranchId,
+                x.ProductId, x.DiscountAmount, x.CreatedByUserId, x.CreatedAtUtc))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<ManualDiscountItemDto>(items, totalCount, paging.PageNumber, paging.PageSize);

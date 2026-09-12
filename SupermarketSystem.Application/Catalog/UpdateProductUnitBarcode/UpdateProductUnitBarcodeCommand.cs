@@ -71,7 +71,14 @@ public sealed class UpdateProductUnitBarcodeHandler
         }
         else
         {
-            product.AddBarcode(newValue, command.ProductUnitId);
+            // خطأ حقيقي كان موجودًا (راجع تعليق مطابق بـAddProductUnitCommand.cs):
+            // بلا _context.Add() صريح، EF Core بيعامل الباركود الجديد
+            // كـ"Modified" لا "Added" لأنه وصل عبر navigation على Product
+            // موجود أصلًا (Unchanged)، فيحاول UPDATE بدل INSERT ويفشل بـ
+            // DbUpdateConcurrencyException - كان يمنع تسجيل باركود لوحدة
+            // ما إلها باركود سابقًا بالإنتاج فعليًا.
+            var newBarcode = product.AddBarcode(newValue, command.ProductUnitId);
+            _context.ProductBarcodes.Add(newBarcode);
         }
 
         await _context.SaveChangesAsync(cancellationToken);

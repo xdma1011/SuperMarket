@@ -20,11 +20,15 @@ public sealed class GetPublicCatalogCategoriesHandler
 
     public async Task<IReadOnlyList<PublicCategoryDto>> HandleAsync(GetPublicCatalogCategoriesQuery query, CancellationToken cancellationToken)
     {
+        // IgnoreQueryFilters على ProductBranches - نفس سبب GetPublicCatalogQuery
+        // بالضبط: endpoint عام بالكامل (AllowAnonymous)، بلا HttpContext.User
+        // مصادَق ما في BranchId للمرشِّح العام يقارن عليه، فكان يرجّع صفر
+        // تصنيفات دائمًا بالإنتاج الحقيقي - خطأ حقيقي، لا فقط بالاختبار.
         return await (
             from category in _context.ProductCategories.AsNoTracking()
             where !category.IsDeleted
             where _context.Products.AsNoTracking()
-                .Join(_context.ProductBranches.AsNoTracking(), p => p.Id, b => b.ProductId, (p, b) => new { p, b })
+                .Join(_context.ProductBranches.AsNoTracking().IgnoreQueryFilters(), p => p.Id, b => b.ProductId, (p, b) => new { p, b })
                 .Any(x => x.p.CategoryId == category.Id && !x.p.IsDeleted && x.p.Status == ProductStatus.Active
                           && x.b.BranchId == query.BranchId && x.b.IsAvailableForSale)
             orderby category.Name
