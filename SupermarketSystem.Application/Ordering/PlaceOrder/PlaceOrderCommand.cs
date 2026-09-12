@@ -127,7 +127,15 @@ public sealed class PlaceOrderHandler
                 Error.Forbidden("Order.CustomerBlocked", "لا يمكن تقديم طلب - هذا الرقم محظور."));
         }
 
+        // IgnoreQueryFilters إلزامي هون: هذا الـcommand مسجَّل AllowAnonymous
+        // (زبون بلا توكن)، فمرشِّح الفروع العام (AppDbContext.SetBranchFilter)
+        // بيقرأ BranchId من claim JWT غير موجود أصلًا لطلب مجهول، فيحجب كل
+        // صف ProductBranch دائمًا - كان يخلي أي طلب حقيقي يفشل بـ
+        // Order.ProductNotAvailable مهما كان المنتج متوفرًا فعليًا. آمن
+        // هون لأن command.BranchId صريح بالـWhere أصلًا - نفس نمط
+        // GetPublicCatalogQuery.
         var productBranches = await _context.ProductBranches.AsNoTracking()
+            .IgnoreQueryFilters()
             .Where(pb => pb.BranchId == command.BranchId && command.Items.Select(i => i.ProductId).Contains(pb.ProductId))
             .Select(pb => new { pb.ProductId, pb.SellingPrice, pb.IsAvailableForSale })
             .ToDictionaryAsync(pb => pb.ProductId, cancellationToken);

@@ -18,7 +18,13 @@ public sealed class RateOrderHandler
 
     public async Task<Result> HandleAsync(RateOrderCommand command, CancellationToken cancellationToken)
     {
-        var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == command.OrderId, cancellationToken);
+        // IgnoreQueryFilters إلزامي هون: endpoint هذا AllowAnonymous (زبون
+        // بلا توكن)، فمرشِّح الفرع العام بيحجب أي صف Order دائمًا لطلب
+        // مجهول. آمن تجاهله لأن OrderId معروف صراحة (نفس منطق GetOrderById
+        // بالنسخة الموجَّهة للزبون - رقم الطلب وحده هو "بطاقة الدخول"
+        // هون، بلا تحقق هوية حقيقي، وهذا محدود ومقصود مؤقتًا).
+        var order = await _context.Orders.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(o => o.Id == command.OrderId, cancellationToken);
         if (order is null)
         {
             return Result.Failure(Error.NotFound("Order.NotFound", $"الطلب '{command.OrderId}' غير موجود."));

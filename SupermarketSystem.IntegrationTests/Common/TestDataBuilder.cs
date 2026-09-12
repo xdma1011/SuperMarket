@@ -42,9 +42,9 @@ public static class TestDataBuilder
 
     /// <summary>
     /// منتج فعّال (Active) بوحدة أساسية واحدة (معامل تحويل = 1) — الحالة
-    /// الافتراضية عند الإنشاء PendingApproval (راجع Product.cs بالـDomain)،
-    /// فنحوّلها Active صراحة هون لأن أغلب اختبارات البيع/الشراء محتاجة
-    /// منتج فعّال فعليًا.
+    /// الافتراضية عند الإنشاء صارت Active مباشرة (كانت PendingApproval
+    /// بلا أي ترقية، فجوة حقيقية انصلحت - راجع تعليق PublicCatalogTests.cs).
+    /// ChangeStatus هون no-op الآن، بقي توثيقًا للنية.
     /// </summary>
     public static async Task<(Product Product, ProductUnit BaseUnit)> CreateActiveProductAsync(
         AppDbContext db,

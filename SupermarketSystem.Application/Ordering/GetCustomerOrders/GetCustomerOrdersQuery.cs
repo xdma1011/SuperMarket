@@ -21,7 +21,12 @@ public sealed class GetCustomerOrdersHandler
     {
         var paging = query.Paging.Normalized();
 
+        // IgnoreQueryFilters إلزامي هون: endpoint هذا AllowAnonymous (زبون
+        // بلا توكن)، فمرشِّح الفرع العام بيحجب كل صف Order دائمًا لطلب
+        // مجهول - آمن تجاهله لأن CustomerId صريح بالـWhere أصلًا (سجل
+        // طلبات زبون واحد بس، عبر كل الفروع اللي طلب منها).
         var orders = _context.Orders.AsNoTracking()
+            .IgnoreQueryFilters()
             .Where(o => o.CustomerId == query.CustomerId)
             .OrderByDescending(o => o.CreatedAtUtc).ThenByDescending(o => o.Id);
 

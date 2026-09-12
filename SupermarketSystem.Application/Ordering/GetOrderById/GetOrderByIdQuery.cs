@@ -4,7 +4,14 @@ using SupermarketSystem.Application.Common.Results;
 
 namespace SupermarketSystem.Application.Ordering.GetOrderById;
 
-public sealed record GetOrderByIdQuery(Guid OrderId);
+/// <summary>
+/// IgnoreBranchFilter=true حصرًا لمسار الزبون المجهول (GetOrderByIdForCustomer -
+/// AllowAnonymous، بلا claim فرع أصلًا فمرشِّح الفرع العام بيحجب كل شي).
+/// المسار المحمي (شاشة الكاشير، cashierGroup) لازم يضل يستخدم false
+/// الافتراضية - إزالة الفلتر لكل الاستدعاءات كانت رح تسمح لكاشير بفرع
+/// معيّن يشوف تفاصيل طلب فرع تاني بالكامل، خرق مباشر لعزل الفروع.
+/// </summary>
+public sealed record GetOrderByIdQuery(Guid OrderId, bool IgnoreBranchFilter = false);
 
 public sealed record OrderItemDetailDto(
     Guid ProductId, string ProductName, Guid ProductUnitId, string UnitName, decimal Quantity, decimal EstimatedUnitPrice);
@@ -43,7 +50,13 @@ public sealed class GetOrderByIdHandler
         // بدونها المجموعة تضل فاضية دائمًا (خلاف GetPendingOrders/GetCustomerOrders
         // اللي بيستخدموا order.Items.Sum/Count داخل IQueryable نفسه، فبيترجم
         // لـSQL صحيح بلا حاجة Include).
-        var order = await _context.Orders.AsNoTracking()
+        var ordersQuery = _context.Orders.AsNoTracking();
+        if (query.IgnoreBranchFilter)
+        {
+            ordersQuery = ordersQuery.IgnoreQueryFilters();
+        }
+
+        var order = await ordersQuery
             .Include(o => o.Items)
             .FirstOrDefaultAsync(o => o.Id == query.OrderId, cancellationToken);
 

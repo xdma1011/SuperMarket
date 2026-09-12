@@ -10,19 +10,21 @@ namespace SupermarketSystem.IntegrationTests.Ordering;
 
 /// <summary>
 /// PlaceOrder مُعفى من المصادقة عمدًا (AllowAnonymous - راجع تحذير
-/// OrderingEndpoints.cs). أغلب الاختبارات هون بتستخدم HttpClient مسجَّل
-/// دخول (Master Admin) رغم إن الـendpoint AllowAnonymous - سبب توثيقي
-/// إلزامي:
+/// OrderingEndpoints.cs).
 ///
 /// ═══════════════════════════════════════════════════════════════════
-/// خطأ إنتاج حقيقي مكتشَف هون: PlaceOrder (وأي endpoint آخر AllowAnonymous
-/// بيلمس كيان IBranchOwned) ما بيشتغل فعليًا لطلب مجهول الهوية حقيقي.
+/// خطأ إنتاج حقيقي انلقى هون، وانصلح: PlaceOrder (وأي endpoint آخر
+/// AllowAnonymous بيلمس كيان IBranchOwned) ما كان يشتغل إطلاقًا لطلب
+/// مجهول الهوية حقيقي - فلتر الفرع العام (AppDbContext.SetBranchFilter)
+/// بيقرأ BranchId من claim JWT غير موجود أصلًا لطلب مجهول، فيحجب كل صف
+/// ProductBranch/Order دائمًا. الإصلاح: IgnoreQueryFilters() صريح
+/// بـPlaceOrderCommand.cs (وGetCustomerOrdersQuery/RateOrderCommand/
+/// GetOrderByIdQuery بنفس السبب بالضبط) - آمن لأن كل واحد منهم مقيَّد
+/// أصلًا بـWhere صريح (BranchId أو CustomerId أو OrderId معروف)، فما في
+/// أي تسريب بيانات فرع تاني.
 /// ═══════════════════════════════════════════════════════════════════
-/// راجع اختبار تقديم_طلب_مجهول_الهوية_يفشل_فعليًا_بسبب_فلتر_الفرع_العام
-/// بالأسفل لإثبات وتوثيق كامل. لهذا السبب بالتحديد، بقية اختبارات هذا
-/// الملف بتستخدم توكن Master Admin (صلاحية CrossBranchAccess بتتجاوز
-/// الفلتر) لتقدر فعليًا تفحص منطق PlaceOrderHandler نفسه (التحقق، حساب
-/// السعر، حظر الزبون...) بمعزل عن هذه الفجوة المعمارية المنفصلة تمامًا.
+/// راجع اختبار تقديم_طلب_مجهول_الهوية_ينجح_فعليًا_بعد_إصلاح_فلتر_الفرع_العام
+/// بالأسفل لإثبات الإصلاح.
 /// </summary>
 [Collection(DatabaseCollection.Name)]
 public sealed class PlaceOrderTests : IntegrationTestBase
@@ -30,39 +32,10 @@ public sealed class PlaceOrderTests : IntegrationTestBase
     public PlaceOrderTests(DatabaseFixture fixture) : base(fixture) { }
 
     [Fact]
-    public async Task تقديم_طلب_مجهول_الهوية_يفشل_فعليًا_بسبب_فلتر_الفرع_العام()
+    public async Task تقديم_طلب_مجهول_الهوية_ينجح_فعليًا_بعد_إصلاح_فلتر_الفرع_العام()
     {
-        // ═══════════════════════════════════════════════════════════════
-        // توثيق خطأ إنتاج حقيقي (لم نُصلحه - غير تافه، قرار معماري):
-        // ═══════════════════════════════════════════════════════════════
-        // AppDbContext.SetBranchFilter (راجع Persistence/AppDbContext.cs)
-        // يطبّق فلتر عام على كل كيان IBranchOwned:
-        //   e => _isCrossBranchAccessAllowed || e.BranchId == _currentBranchId
-        // و_currentBranchId يُقرأ من ICurrentUserContext.BranchId، اللي
-        // بدوره claim من الـJWT (RealCurrentUserContext). طلب بلا توكن
-        // إطلاقًا (AllowAnonymous فعليًا، لا مستخدم مسجَّل دخول) يعني
-        // _currentBranchId = null و_isCrossBranchAccessAllowed = false -
-        // فالفلتر يصير (false || e.BranchId == null)، وهذا ما يتحقق أبدًا
-        // لأي صف ProductBranch/Order حقيقي (BranchId عندهم قيمة فعلية دومًا).
-        //
-        // النتيجة: PlaceOrderHandler (المصمَّم عمدًا AllowAnonymous - هذا
-        // بالضبط سلوك تطبيق الزبائن الحقيقي المتوقَّع اليوم قبل بناء
-        // مصادقة الزبون - راجع تحذير OrderingEndpoints.cs) ما بيقدر يلقى
-        // ولا صف ProductBranch واحد مهما كان الصنف متوفرًا فعليًا بالفرع -
-        // كل طلب مجهول الهوية برجع "Order.ProductNotAvailable" دائمًا،
-        // بغض النظر عن البيانات الفعلية. نفس المشكلة تنطبق على
-        // GetPublicCatalogHandler وGetCustomerOrdersHandler/GetOrderByIdHandler
-        // (endpoint العميل customer-view)/RateOrderHandler - كلها بتلمس
-        // Order أو ProductBranch (كيانات IBranchOwned) وAllowAnonymous بنفس
-        // الوقت.
-        //
-        // الإصلاح الصحيح خارج نطاق هذه المهمة (قرار معماري: يحتاج إما
-        // IgnoreQueryFilters() صريح بكل هالـhandlers مع تبرير أمني واضح
-        // ليش هذا آمن هون تحديدًا، أو مصادقة زبون حقيقية تحقن BranchId
-        // بالتوكن - المذكورة كخطوة قادمة غير مبنية بعد بتعليقات الكود
-        // نفسها). ذُكر لصاحب المشروع بالتقرير النهائي بالتفصيل.
         var (productId, unitId, _) = await OrderingTestDataHelper.CreateSellableProductAsync(
-            Fixture.Factory.Services, Fixture.TestBranchId);
+            Fixture.Factory.Services, Fixture.TestBranchId, sellingPrice: 5m);
 
         var anonymousClient = CreateAnonymousClient();
 
@@ -78,8 +51,10 @@ public sealed class PlaceOrderTests : IntegrationTestBase
         });
 
         var body = await response.Content.ReadAsStringAsync();
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains("Order.ProductNotAvailable", body);
+        Assert.True(response.StatusCode == HttpStatusCode.Created, $"توقعنا 201 ورجع {response.StatusCode}: {body}");
+
+        var json = JsonDocument.Parse(body).RootElement;
+        Assert.Equal(5m, json.GetProperty("estimatedTotal").GetDecimal());
     }
 
     [Fact]

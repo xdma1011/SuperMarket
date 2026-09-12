@@ -38,23 +38,10 @@ internal static class OrderingTestDataHelper
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SupermarketSystem.Infrastructure.Persistence.AppDbContext>();
 
-        // ⚠️ فجوة إنتاج حقيقية مكتشَفة (خارج نطاق دومينات هذه المهمة -
-        // Catalog/Sales - بس اكتشفناها هون لأننا احتجنا صنف قابل للبيع):
-        // CreateProductHandler بينشئ كل منتج جديد بحالة ProductStatus.
-        // PendingApproval (راجع Product.cs constructor)، وما في ولا Handler
-        // واحد بكامل Application يستدعي Product.ChangeStatus لترقيته لـ
-        // Active (تحقّقنا بـgrep شامل - صفر استدعاء). CompleteSaleHandler
-        // (Sales/CompleteSale) يرفض بيع أي منتج Status != Active صراحة
-        // ("Sale.ProductNotActive")، وGetPublicCatalogHandler بيخفي أي
-        // منتج Status != Active كذلك. يعني عمليًا: أي منتج يُنشأ اليوم
-        // عبر شاشة الكتالوج الحقيقية يضل PendingApproval للأبد وما ينباع
-        // أبدًا عبر أي واجهة، إلا بتعديل يدوي مباشر بقاعدة البيانات
-        // (SSMS) - فجوة من نفس عيار المذكورة بـCLAUDE.md §1.8 (منتج غير
-        // مربوط بفرع)، بس أخطر لأنها تمنع البيع كليًا لا الظهور بالكاشير
-        // فقط. لازم يُبلَّغ صاحب المشروع فورًا (تفاصيل كاملة بتقرير الجلسة).
-        // هون نفعّله يدويًا مباشرة بقاعدة بيانات الاختبار (بلا المرور بأي
-        // Handler إنتاجي - لأنه ما يوجد Handler كهذا أصلًا) فقط لغرض بناء
-        // بيانات اختبار Ordering صالحة، لا كإصلاح للفجوة الحقيقية.
+        // ✅ Product الجديد يبلش Active مباشرة من الآن (كانت فجوة حقيقية:
+        // PendingApproval للأبد بلا أي Handler يرفّعه - راجع تعليق
+        // PublicCatalogTests.cs للتفاصيل الكاملة والإصلاح). الاستدعاء هون
+        // بقي (no-op الآن) توثيقًا للنية بس.
         var product = await db.Products.FirstAsync(p => p.Id == productResult.Value.ProductId);
         product.ChangeStatus(SupermarketSystem.Domain.Catalog.ProductStatus.Active);
         await db.SaveChangesAsync();

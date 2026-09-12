@@ -78,15 +78,17 @@ public static class OrderingEndpoints
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status404NotFound);
 
-        // ⚠️ نفس تحذير PlaceOrder/GetCustomerOrders - بلا تحقق ملكية حقيقي
-        // (أي حد يعرف orderId يقدر يشوف تفاصيله). نفس GetOrderByIdHandler
-        // المستخدَم من شاشة الكاشير بالأسفل - قراءة بس، بلا فرق منطق.
+        // ⚠️ بلا تحقق ملكية حقيقي (أي حد يعرف orderId يقدر يشوف تفاصيله) -
+        // محدود ومقصود مؤقتًا، نفس تحذير PlaceOrder/GetCustomerOrders.
+        // IgnoreBranchFilter:true إلزامي هون تحديدًا (خلاف GetOrderById
+        // بالأسفل لشاشة الكاشير): طلب مجهول بلا أي claim فرع، فمرشِّح
+        // الفرع العام كان يحجب كل شي ويرجّع 404 دائمًا لزبون حقيقي.
         app.MapGet("/api/v1/orders/{orderId:guid}/customer-view", async (
             Guid orderId,
             GetOrderByIdHandler handler,
             CancellationToken cancellationToken) =>
         {
-            var result = await handler.HandleAsync(new GetOrderByIdQuery(orderId), cancellationToken);
+            var result = await handler.HandleAsync(new GetOrderByIdQuery(orderId, IgnoreBranchFilter: true), cancellationToken);
             return result.ToHttpResult();
         })
         .WithName("GetOrderByIdForCustomer")

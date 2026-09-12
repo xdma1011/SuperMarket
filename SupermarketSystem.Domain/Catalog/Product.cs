@@ -87,7 +87,16 @@ public class Product : AuditableEntity, ISoftDeletable, IHasRowVersion
         IsBatchTracked = isBatchTracked;
         SuggestedRetailPrice = suggestedRetailPrice;
         ExpectedShelfLifeDays = expectedShelfLifeDays;
-        Status = ProductStatus.PendingApproval;
+
+        // Active مباشرة، لا PendingApproval — ما في أي endpoint أو شاشة
+        // بالمشروع كله بترفع الحالة لاحقًا (تحقّقنا: صفر استدعاء
+        // ChangeStatus بكل الـApplication layer)، فمنتج جديد كان عمليًا
+        // غير قابل للبيع وغير ظاهر بأي كتالوج للأبد إلا بتعديل يدوي
+        // بقاعدة البيانات. هذا يخالف كمان فلسفة المشروع المعلَنة صراحة
+        // بـPosPolicy.cs ("CRITICAL DESIGN POINT — there is deliberately
+        // NO PendingApproval state... allow → complete → record →
+        // classify → review later") - راجع CLAUDE.md §1.6 لنفس المبدأ.
+        Status = ProductStatus.Active;
     }
 
     public void Rename(string name) => Name = name;

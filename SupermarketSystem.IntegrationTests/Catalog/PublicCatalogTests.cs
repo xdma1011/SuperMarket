@@ -18,18 +18,16 @@ namespace SupermarketSystem.IntegrationTests.Catalog;
 /// مخصصة: أعلى من 1.0 يحتاج مخزون >=7، بين 0.5 و1.0 يحتاج >=5، أقل من
 /// 0.5 يحتاج >=30 - راجع GetPublicCatalogHandler).
 ///
-/// ⚠️ فجوة حقيقية اكتُشفت أثناء بناء هالاختبارات (راجع تفاصيلها بالتقرير
-/// النهائي - لم تُصلَح هون عمدًا، تحتاج قرار صاحب المشروع): Product الجديد
-/// يبلش دائمًا بحالة ProductStatus.PendingApproval (راجع Product.cs
-/// constructor)، وGetPublicCatalog/GetPublicCatalogCategories/CompleteSale
-/// كلها بتشترط صراحة Status == Active - بس ولا مكان بكل الـApplication
-/// layer بيستدعي product.ChangeStatus(Active) أبدًا. يعني عمليًا: أي منتج
-/// جديد يتسجّل بالنظام الحقيقي يضل PendingApproval للأبد - ما بينباع
-/// (CompleteSaleCommand بيرفضه)، وما بيظهر بكتالوج الزبائن العام. الاختبارات
-/// هون بتفعّل المنتج يدويًا مباشرة (ActivateProductForTestAsync) لمحاكاة
-/// أي خطوة "اعتماد" مفقودة حاليًا من الإنتاج، بلا لمس أي كود إنتاج -
-/// القرار (هل نضيف خطوة اعتماد صريحة، أو نخلي الحالة الافتراضية Active
-/// من الأساس) يرجع لصاحب المشروع.
+/// ✅ فجوة حقيقية اكتُشفت أثناء بناء هالاختبارات، وانصلحت: Product كان
+/// يبلش دائمًا بحالة ProductStatus.PendingApproval (Product.cs constructor)،
+/// وما في أي مكان بالـApplication layer كان يستدعي ChangeStatus(Active) -
+/// يعني أي منتج جديد يتسجّل بالنظام الحقيقي كان يضل PendingApproval للأبد
+/// (ما بينباع، CompleteSaleCommand بيرفضه، وما بيظهر بكتالوج الزبائن
+/// العام). الحل: Product الجديد يبلش Active مباشرة من الآن (يطابق فلسفة
+/// المشروع المعلَنة بـPosPolicy.cs: "deliberately NO PendingApproval
+/// state"). الاستدعاءات الصريحة لـChangeStatus(Active) هون ضلّت بالكود
+/// (كانت أصلًا موجودة كتحايل على العلة) - صارت بلا تأثير فعلي (no-op)
+/// بس بلا ضرر، تُركت لتوثيق النية بوضوح.
 /// </summary>
 [Collection(DatabaseCollection.Name)]
 public sealed class PublicCatalogTests : IntegrationTestBase
