@@ -27,6 +27,7 @@ public class SaleInvoiceConfiguration : IEntityTypeConfiguration<SaleInvoice>
         builder.Property(s => s.VoidedAtUtc).HasColumnType("datetime2");
         builder.Property(s => s.VoidReason).HasConversion<int?>();
         builder.Property(s => s.VoidNotes).HasMaxLength(500);
+        builder.Property(s => s.ReviewedAtUtc).HasColumnType("datetime2");
         builder.Property(s => s.RowVersion).IsRowVersion();
         builder.Property(s => s.CreatedAtUtc).HasColumnType("datetime2").IsRequired();
         builder.Property(s => s.UpdatedAtUtc).HasColumnType("datetime2");
@@ -47,6 +48,8 @@ public class SaleInvoiceConfiguration : IEntityTypeConfiguration<SaleInvoice>
         builder.HasOne<Customer>().WithMany().HasForeignKey(s => s.CustomerId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Discount>().WithMany().HasForeignKey(s => s.DiscountId).OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<User>().WithMany().HasForeignKey(s => s.VoidedByUserId).OnDelete(DeleteBehavior.Restrict);
+        // مراجعة الإلغاء إجراء إداري لاحق — المستخدم المراجِع لا يُحذف أبدًا وسجل المراجعة يبقى (نفس نمط ReturnInvoiceConfiguration).
+        builder.HasOne<User>().WithMany().HasForeignKey(s => s.ReviewedByUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Branch>().WithMany().HasForeignKey(s => s.BranchId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasMany(s => s.Items).WithOne().HasForeignKey(i => i.SaleInvoiceId).OnDelete(DeleteBehavior.Cascade);

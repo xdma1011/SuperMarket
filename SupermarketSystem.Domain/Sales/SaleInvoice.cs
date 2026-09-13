@@ -79,6 +79,16 @@ public class SaleInvoice : AuditableEntity, IBranchOwned, IHasRowVersion
     public VoidReason? VoidReason { get; private set; }
     public string? VoidNotes { get; private set; }
 
+    /// <summary>
+    /// علامة "راجعتها" الإدارية — نفس نمط ReturnInvoice.ReviewedAtUtc
+    /// بالضبط. تُضاف *بعد* اكتمال العملية (هون: الإلغاء) بوقت، ولا تغيّر
+    /// أي شي مالي ولا حالة الفاتورة نفسها. الفاتورة تضل ظاهرة كملغاة
+    /// للأبد؛ هذي بس معلومة إضافية إن صاحب المحل شافها وراجعها (راجع
+    /// GetPendingReviewsQuery - صفحة المراجعات).
+    /// </summary>
+    public DateTime? ReviewedAtUtc { get; private set; }
+    public Guid? ReviewedByUserId { get; private set; }
+
     public byte[]? RowVersion { get; private set; }
 
     private readonly List<SaleInvoiceItem> _items = new();
@@ -204,6 +214,22 @@ public class SaleInvoice : AuditableEntity, IBranchOwned, IHasRowVersion
         VoidedByUserId = voidedByUserId;
         VoidReason = reason;
         VoidNotes = notes;
+    }
+
+    /// <summary>
+    /// تُستدعى مرة وحدة فقط — إعادة وضع العلامة على فاتورة مُراجَعة أصلًا
+    /// بترفض، عشان تاريخ/منفِّذ المراجعة الأصلي ما ينكتب فوقه بالغلط
+    /// (نفس نمط ReturnInvoice.MarkReviewed بالضبط).
+    /// </summary>
+    public void MarkReviewed(Guid reviewedByUserId, DateTime reviewedAtUtc)
+    {
+        if (ReviewedAtUtc is not null)
+        {
+            throw new DomainException("This sale invoice has already been marked as reviewed.");
+        }
+
+        ReviewedByUserId = reviewedByUserId;
+        ReviewedAtUtc = reviewedAtUtc;
     }
 }
 

@@ -3,6 +3,7 @@ using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Reviews.GetPendingReviews;
 using SupermarketSystem.Application.Reviews.MarkComplaintReviewed;
 using SupermarketSystem.Application.Reviews.MarkPurchaseInvoiceItemReviewed;
+using SupermarketSystem.Application.Reviews.MarkSaleInvoiceReviewed;
 using SupermarketSystem.Application.Reviews.MarkStockMovementReviewed;
 
 namespace SupermarketSystem.API.Endpoints;
@@ -66,6 +67,20 @@ public static class ReviewsEndpoints
         })
         .WithName("MarkComplaintReviewed")
         .WithSummary("يعلّم شكوى زبون كمحلولة.")
+        .Produces(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status404NotFound)
+        .ProducesProblem(StatusCodes.Status409Conflict);
+
+        group.MapPost("/sale-invoices/{saleInvoiceId:guid}/mark-reviewed", async (
+            Guid saleInvoiceId,
+            MarkSaleInvoiceReviewedHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new MarkSaleInvoiceReviewedCommand(saleInvoiceId), cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithName("MarkSaleInvoiceReviewed")
+        .WithSummary("يعلّم فاتورة بيع ملغاة (VoidSale) كمُراجَعة.")
         .Produces(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status404NotFound)
         .ProducesProblem(StatusCodes.Status409Conflict);

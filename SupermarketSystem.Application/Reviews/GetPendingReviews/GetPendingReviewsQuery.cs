@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Application.Common.Interfaces;
+using SupermarketSystem.Domain.Inventory;
+using SupermarketSystem.Domain.Sales;
 
 namespace SupermarketSystem.Application.Reviews.GetPendingReviews;
 
@@ -21,18 +23,41 @@ public sealed record PendingReviewItemDto(
     Guid BranchId,
     DateTime OccurredAtUtc);
 
-public sealed record GetPendingReviewsResponse(IReadOnlyList<PendingReviewItemDto> Items, int TotalCount);
+/// <summary>
+/// قسم مستقل عن Items - فاتورة بيع ملغاة (VoidSale) بانتظار المراجعة.
+/// مش جزء من Items العامة (PendingReviewItemDto) لأنها محتاجة حقول
+/// خاصة بيها (سبب الإلغاء، منفّذ الإلغاء) ما بتنلبس منطقيًا على شكل
+/// Title/Detail الحر المستخدم لباقي الأنواع - قرار تصميم مقصود، راجع
+/// تقرير التسليم. TotalCount بردّ الاستعلام يشملها زائد Items.Count.
+/// </summary>
+public sealed record VoidedSaleReviewDto(
+    Guid SaleInvoiceId,
+    string InvoiceNumber,
+    string VoidReasonTitle,
+    string? VoidNotes,
+    decimal Amount,
+    DateTime VoidedAtUtc,
+    string VoidedByName,
+    Guid BranchId);
+
+public sealed record GetPendingReviewsResponse(
+    IReadOnlyList<PendingReviewItemDto> Items,
+    int TotalCount,
+    IReadOnlyList<VoidedSaleReviewDto> VoidedSales);
 
 /// <summary>
 /// نقطة تجميع واحدة لكل شي "بانتظار مراجعة إدارية" — نفس فلسفة
-/// AllowWithReview المطبَّقة بكل النظام. أربعة مصادر حاليًا: ReturnInvoice
-/// (كل إرجاع غير مُراجَع بعد)، StockMovement.NeedsReview (ضيافة تجاوزت
-/// الحد اليومي)، PurchaseInvoiceItem.NeedsReview (سعر شراء أعلى بنسبة
-/// ملحوظة عن متوسط آخر 5 عمليات شراء لنفس المنتج)، وComplaint (شكوى
-/// زبون عبر تطبيق الزبائن).
+/// AllowWithReview المطبَّقة بكل النظام. خمسة مصادر حاليًا: ReturnInvoice
+/// (كل إرجاع غير مُراجَع بعد)، StockMovement.ManualAdjustment غير
+/// المُراجَع (يشمل الضيافة اللي تجاوزت الحد اليومي - NeedsReview بالـDTO
+/// بس مش بالفلتر، راجع التعليق تحت - وأي تعديل مخزون يدوي تاني)،
+/// PurchaseInvoiceItem.NeedsReview (سعر شراء أعلى بنسبة ملحوظة عن متوسط
+/// آخر 5 عمليات شراء لنفس المنتج)، Complaint (شكوى زبون عبر تطبيق
+/// الزبائن)، وSaleInvoice بحالة Voided غير المُراجَعة (قسم VoidedSales
+/// المنفصل).
 ///
 /// إضافة مصدر إضافي لاحقًا تعني إضافة استعلام موازٍ هون بس، بلا أي تغيير
-/// على شكل الرد أو الفرونت إند.
+/// جوهري على شكل الرد أو الفرونت إند.
 /// </summary>
 public sealed class GetPendingReviewsHandler
 {
@@ -77,15 +102,27 @@ public sealed class GetPendingReviewsHandler
             ? _context.StockMovements.IgnoreQueryFilters().AsNoTracking()
             : _context.StockMovements.AsNoTracking();
 
+        // كل تعديل مخزون يدوي (ManualAdjustment) غير مُراجَع - لا NeedsReview
+        // بالفلتر عمدًا (كانت هيك سابقًا، وهذا سبب فجوة حقيقية: الضيافة
+        // تحت الحد اليومي، أو أي تعديل يدوي تاني، ما كانت تظهر أبدًا هون
+        // حتى لو صاحب المحل فتح الصفحة كل يوم). NeedsReview ضلّت بالـDTO
+        // (مو بالفلتر) عشان الفرونت إند يميّز "العاجل" (تجاوز الحد) عن
+        // "العادي" بصريًا لو حاب - راجع تقرير التسليم. TypeTitle/Title
+        // "ضيافة" ثابت هون لأنه RecordComplimentaryIssueHandler هو
+        // المستخدم الوحيد فعليًا لـManualAdjustment اليوم (تحقّقنا
+        // بـgrep) - لو انضافت ميزة تعديل مخزون يدوي عامة مستقبلًا بنفس
+        // ReferenceType، هاي التسمية لازم تصير مشروطة بـMovementType.
         var pendingComplimentary = await stockMovements
-            .Where(m => m.NeedsReview && m.ReviewedAtUtc == null)
+            .Where(m => m.ReferenceType == StockMovementReferenceType.ManualAdjustment && m.ReviewedAtUtc == null)
             .Join(_context.Products.AsNoTracking(), m => m.ProductId, p => p.Id, (m, p) => new { Movement = m, ProductName = p.Name })
             .Select(x => new PendingReviewItemDto(
                 PendingReviewType.ComplimentaryIssue,
                 "ضيافة",
                 x.Movement.Id,
                 x.ProductName,
-                "تجاوزت الحد اليومي المسموح للضيافة",
+                x.Movement.NeedsReview
+                    ? "تجاوزت الحد اليومي المسموح للضيافة"
+                    : "تعديل مخزون يدوي بانتظار المراجعة",
                 x.Movement.QuantityBase,
                 x.Movement.BranchId,
                 x.Movement.OccurredAtUtc))
@@ -151,6 +188,62 @@ public sealed class GetPendingReviewsHandler
             .OrderByDescending(x => x.OccurredAtUtc)
             .ToList();
 
-        return new GetPendingReviewsResponse(combined, combined.Count);
+        // نفس مبدأ CLAUDE.md §3.1: نجيب الحقول الخام أول (بلا أي enum
+        // .ToString() مترجَم لـSQL)، ثم نبني نص سبب الإلغاء العربي
+        // بالذاكرة عبر switch صريح.
+        var saleInvoices = ignoreBranchFilter
+            ? _context.SaleInvoices.IgnoreQueryFilters().AsNoTracking()
+            : _context.SaleInvoices.AsNoTracking();
+
+        var voidedSaleRows = await saleInvoices
+            .Where(s => s.Status == SaleInvoiceStatus.Voided && s.ReviewedAtUtc == null)
+            .Select(s => new
+            {
+                s.Id,
+                s.InvoiceNumber,
+                s.TotalAmount,
+                s.BranchId,
+                s.VoidedAtUtc,
+                s.VoidedByUserId,
+                s.VoidReason,
+                s.VoidNotes
+            })
+            .ToListAsync(cancellationToken);
+
+        var voidedByUserIds = voidedSaleRows
+            .Where(s => s.VoidedByUserId.HasValue)
+            .Select(s => s.VoidedByUserId!.Value)
+            .Distinct()
+            .ToList();
+
+        var voidedByNameById = await _context.Users.AsNoTracking()
+            .Where(u => voidedByUserIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.FullName, cancellationToken);
+
+        var pendingVoidedSales = voidedSaleRows
+            .Select(s => new VoidedSaleReviewDto(
+                s.Id,
+                s.InvoiceNumber,
+                s.VoidReason switch
+                {
+                    VoidReason.CashierError => "خطأ بالكاشير",
+                    VoidReason.CustomerCancelled => "الزبون ألغى الطلب",
+                    VoidReason.SystemError => "خطأ نظام",
+                    VoidReason.Other => "سبب آخر",
+                    _ => "غير محدَّد"
+                },
+                s.VoidNotes,
+                s.TotalAmount,
+                // Void() بالـDomain (SaleInvoice.cs) بيضبط VoidedAtUtc دايمًا
+                // مع Status = Voided بنفس العملية - ثابت مضمون، لا قيمة افتراضية حقيقية هون.
+                s.VoidedAtUtc!.Value,
+                s.VoidedByUserId.HasValue && voidedByNameById.TryGetValue(s.VoidedByUserId.Value, out var voidedByName)
+                    ? voidedByName
+                    : "غير معروف",
+                s.BranchId))
+            .OrderByDescending(x => x.VoidedAtUtc)
+            .ToList();
+
+        return new GetPendingReviewsResponse(combined, combined.Count + pendingVoidedSales.Count, pendingVoidedSales);
     }
 }

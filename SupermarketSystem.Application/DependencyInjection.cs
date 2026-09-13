@@ -87,6 +87,7 @@ using SupermarketSystem.Application.Purchasing.RecordPurchaseInvoicePayment;
 using SupermarketSystem.Application.Reviews.GetPendingReviews;
 using SupermarketSystem.Application.Reviews.MarkComplaintReviewed;
 using SupermarketSystem.Application.Reviews.MarkPurchaseInvoiceItemReviewed;
+using SupermarketSystem.Application.Reviews.MarkSaleInvoiceReviewed;
 using SupermarketSystem.Application.Reviews.MarkStockMovementReviewed;
 using SupermarketSystem.Application.Reporting.GetBestCashiers;
 using SupermarketSystem.Application.Reporting.GetCurrentCapitalValue;
@@ -202,6 +203,7 @@ public static class DependencyInjection
         services.AddScoped<MarkStockMovementReviewedHandler>();
         services.AddScoped<MarkPurchaseInvoiceItemReviewedHandler>();
         services.AddScoped<MarkComplaintReviewedHandler>();
+        services.AddScoped<MarkSaleInvoiceReviewedHandler>();
         services.AddScoped<CompletePurchaseInvoiceHandler>();
         services.AddScoped<GetPaymentMethodsHandler>();
         services.AddScoped<GetPurchaseInvoicesHandler>();

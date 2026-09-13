@@ -18,15 +18,30 @@ interface PendingReviewItemDto {
   occurredAtUtc: string;
 }
 
+interface VoidedSaleReviewDto {
+  saleInvoiceId: string;
+  invoiceNumber: string;
+  voidReasonTitle: string;
+  voidNotes: string | null;
+  amount: number;
+  voidedAtUtc: string;
+  voidedByName: string;
+  branchId: string;
+}
+
 interface GetPendingReviewsResponse {
   items: PendingReviewItemDto[];
   totalCount: number;
+  voidedSales: VoidedSaleReviewDto[];
 }
 
 /**
- * صفحة واحدة تجمع كل شي بانتظار مراجعة إدارية — إرجاعات (D8) وضيافة
- * تجاوزت الحد اليومي (AllowWithReview). كل نوع إله زر "تمت المراجعة"
- * بيستدعي endpoint مختلف بحسب Type، بس الواجهة موحّدة بصريًا.
+ * صفحة واحدة تجمع كل شي بانتظار مراجعة إدارية — إرجاعات (D8)، تعديل
+ * مخزون يدوي/ضيافة (AllowWithReview)، ارتفاع سعر شراء، شكاوى، وقسم
+ * مستقل للمبيعات الملغاة (VoidSale) - كانت غايبة كليًا عن هالصفحة قبل
+ * هالتعديل. كل نوع إله زر "تمت المراجعة" بيستدعي endpoint مختلف بحسب
+ * Type، بس الواجهة موحّدة بصريًا لأنواع Items؛ VoidedSales قسم منفصل
+ * بحقوله الخاصة (سبب الإلغاء ومنفّذه) - راجع تقرير التسليم.
  */
 @Component({
   selector: 'app-reviews',
@@ -37,6 +52,7 @@ interface GetPendingReviewsResponse {
 })
 export class ReviewsComponent implements OnInit {
   readonly items = signal<PendingReviewItemDto[]>([]);
+  readonly voidedSales = signal<VoidedSaleReviewDto[]>([]);
   readonly loading = signal(true);
   readonly errorMessage = signal<string | null>(null);
   readonly processingId = signal<string | null>(null);
@@ -56,10 +72,32 @@ export class ReviewsComponent implements OnInit {
         this.apiClient.get<GetPendingReviewsResponse>(ApiController.Reviews, ReviewsOperation.List)
       );
       this.items.set(result.items);
+      this.voidedSales.set(result.voidedSales);
     } catch {
       this.errorMessage.set('تعذّر تحميل قائمة المراجعات.');
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  async markSaleInvoiceReviewed(voidedSale: VoidedSaleReviewDto): Promise<void> {
+    this.processingId.set(voidedSale.saleInvoiceId);
+    this.errorMessage.set(null);
+
+    try {
+      await firstValueFrom(
+        this.apiClient.post(
+          ApiController.Reviews,
+          ReviewsOperation.MarkSaleInvoiceReviewed,
+          {},
+          { saleInvoiceId: voidedSale.saleInvoiceId }
+        )
+      );
+      this.voidedSales.set(this.voidedSales().filter(v => v.saleInvoiceId !== voidedSale.saleInvoiceId));
+    } catch {
+      this.errorMessage.set(`تعذّر تعليم فاتورة "${voidedSale.invoiceNumber}" كمُراجَعة.`);
+    } finally {
+      this.processingId.set(null);
     }
   }
 
