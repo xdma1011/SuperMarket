@@ -24,6 +24,16 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
     public CustomWebApplicationFactory(string connectionString)
     {
         ConnectionString = connectionString;
+
+        // Jwt:SigningKey تُقرأ Eagerly (متزامن، مباشرة بجسم AddInfrastructure -
+        // لا عبر IOptions مؤجَّل زي ConnectionString اللي بيتقرأ جوا callback
+        // مؤجَّل وقت أول استخدام فعلي للـDbContext). يعني override عبر
+        // ConfigureAppConfiguration بالأسفل بيوصل متأخر عن هالسطر بالذات.
+        // متغيّر بيئة فعلي مضمون يتحمَّل من الأساس قبل ما أي كود بـProgram.cs
+        // يشتغل - راجع appsettings.json: SigningKey فاضية عمدًا (كانت مكشوفة
+        // بالمستودع)، والنظام يرفض يشتغل بلاها (fail-fast مقصود).
+        Environment.SetEnvironmentVariable(
+            "Jwt__SigningKey", "test-only-signing-key-never-used-in-production-1234567890");
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -34,7 +44,7 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
         {
             configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:DefaultConnection"] = ConnectionString
+                ["ConnectionStrings:DefaultConnection"] = ConnectionString,
             });
         });
 
