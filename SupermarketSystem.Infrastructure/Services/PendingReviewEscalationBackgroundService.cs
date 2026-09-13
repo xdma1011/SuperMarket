@@ -72,7 +72,11 @@ public sealed class PendingReviewEscalationBackgroundService : BackgroundService
 
             var cutoff = dateTimeProvider.UtcNow.AddDays(-(double)thresholdDays);
 
-            var pending = await pendingReviewsHandler.HandleAsync(cancellationToken);
+            // ignoreBranchFilter:true إلزامي هون - راجع تعليق GetPendingReviewsHandler.HandleAsync:
+            // خدمة خلفية بلا HttpContext تصير BranchId=null دايمًا، وفلتر الفرع
+            // العالمي بيرجع صفر صفوف لكل الكيانات IBranchOwned بلا هالمعامل -
+            // كان معناه هالتصعيد ما بيشتغل إطلاقًا بصمت منذ إضافته.
+            var pending = await pendingReviewsHandler.HandleAsync(cancellationToken, ignoreBranchFilter: true);
             var overdue = pending.Items.Where(i => i.OccurredAtUtc < cutoff).ToList();
 
             if (overdue.Count == 0)

@@ -43,9 +43,24 @@ public sealed class GetPendingReviewsHandler
         _context = context;
     }
 
-    public async Task<GetPendingReviewsResponse> HandleAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// ignoreBranchFilter=true حصرًا لخدمة الخلفية PendingReviewEscalationBackgroundService -
+    /// خدمة خلفية بلا HttpContext، فـRealCurrentUserContext.BranchId تِرجع null
+    /// دايمًا وIsCrossBranchAccessAllowed تِرجع false دايمًا، ففلتر الفرع
+    /// العالمي (_isCrossBranchAccessAllowed || e.BranchId == _currentBranchId)
+    /// بيصير false دايمًا لكل الكيانات IBranchOwned - يعني صفر نتيجة صفر تصعيد
+    /// أبدًا، بصمت، بغض النظر عن الوضع الفعلي (فجوة حقيقية كانت موجودة وغير
+    /// مكتشفة بميزة "مشحونة أصلًا"). endpoint المراجعات بالويب يستدعي بلا هالمعامل
+    /// (القيمة الافتراضية false) فيضل يحترم فرع الأدمن المسجّل دخول بالضبط
+    /// زي قبل - هذا التغيير ما بيأثر على سلوك الويب إطلاقًا.
+    /// </summary>
+    public async Task<GetPendingReviewsResponse> HandleAsync(CancellationToken cancellationToken, bool ignoreBranchFilter = false)
     {
-        var pendingReturns = await _context.ReturnInvoices.AsNoTracking()
+        var returnInvoices = ignoreBranchFilter
+            ? _context.ReturnInvoices.IgnoreQueryFilters().AsNoTracking()
+            : _context.ReturnInvoices.AsNoTracking();
+
+        var pendingReturns = await returnInvoices
             .Where(r => r.ReviewedAtUtc == null)
             .Select(r => new PendingReviewItemDto(
                 PendingReviewType.Return,
@@ -58,7 +73,11 @@ public sealed class GetPendingReviewsHandler
                 r.CreatedAtUtc))
             .ToListAsync(cancellationToken);
 
-        var pendingComplimentary = await _context.StockMovements.AsNoTracking()
+        var stockMovements = ignoreBranchFilter
+            ? _context.StockMovements.IgnoreQueryFilters().AsNoTracking()
+            : _context.StockMovements.AsNoTracking();
+
+        var pendingComplimentary = await stockMovements
             .Where(m => m.NeedsReview && m.ReviewedAtUtc == null)
             .Join(_context.Products.AsNoTracking(), m => m.ProductId, p => p.Id, (m, p) => new { Movement = m, ProductName = p.Name })
             .Select(x => new PendingReviewItemDto(
@@ -74,9 +93,13 @@ public sealed class GetPendingReviewsHandler
 
         // نفس مبدأ CLAUDE.md §3.1: لا تنسيق نص (:F2) جوّا Select() مترجَم
         // لـSQL - نجيب الحقول الخام أول، ونبني نص التفاصيل بالذاكرة.
+        var purchaseInvoices = ignoreBranchFilter
+            ? _context.PurchaseInvoices.IgnoreQueryFilters().AsNoTracking()
+            : _context.PurchaseInvoices.AsNoTracking();
+
         var highPriceRows = await _context.PurchaseInvoiceItems.AsNoTracking()
             .Where(i => i.NeedsReview && i.ReviewedAtUtc == null)
-            .Join(_context.PurchaseInvoices.AsNoTracking(), i => i.PurchaseInvoiceId, p => p.Id,
+            .Join(purchaseInvoices, i => i.PurchaseInvoiceId, p => p.Id,
                 (i, p) => new { i.Id, i.UnitCost, p.InvoiceNumber, p.BranchId, p.CreatedAtUtc, i.ProductId })
             .Join(_context.Products.AsNoTracking(), x => x.ProductId, prod => prod.Id,
                 (x, prod) => new { x.Id, x.UnitCost, x.InvoiceNumber, x.BranchId, x.CreatedAtUtc, ProductName = prod.Name })
@@ -103,7 +126,11 @@ public sealed class GetPendingReviewsHandler
                 (c, cust) => new { c.Id, c.Text, c.OrderId, CustomerName = cust.FullName, c.CreatedAtUtc })
             .ToListAsync(cancellationToken);
 
-        var orderBranchByOrderId = await _context.Orders.AsNoTracking()
+        var orders = ignoreBranchFilter
+            ? _context.Orders.IgnoreQueryFilters().AsNoTracking()
+            : _context.Orders.AsNoTracking();
+
+        var orderBranchByOrderId = await orders
             .Where(o => complaintRows.Select(c => c.OrderId).Contains(o.Id))
             .Select(o => new { o.Id, o.BranchId })
             .ToDictionaryAsync(o => o.Id, o => o.BranchId, cancellationToken);
