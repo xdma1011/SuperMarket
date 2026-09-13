@@ -123,6 +123,7 @@ using SupermarketSystem.Application.Reporting.GetProductConsumptionLevels;
 using SupermarketSystem.Application.Reporting.GetStagnantProducts;
 using SupermarketSystem.Application.Reporting.GetSupplierPriceComparison;
 using SupermarketSystem.Application.Reporting.GetVoidedSales;
+using SupermarketSystem.Application.Reporting.GetWeeklyActivityDigest;
 using SupermarketSystem.Application.Notifications.GetNotifications;
 
 namespace SupermarketSystem.Application;
@@ -262,6 +263,7 @@ public static class DependencyInjection
 
         services.AddScoped<GetRecentReturnsHandler>();
         services.AddScoped<GetVoidedSalesHandler>();
+        services.AddScoped<GetWeeklyActivityDigestHandler>();
         services.AddScoped<GetReturnFrequencyByProductHandler>();
         services.AddScoped<GetManualDiscountsHandler>();
         services.AddScoped<GetNegativeStockHandler>();

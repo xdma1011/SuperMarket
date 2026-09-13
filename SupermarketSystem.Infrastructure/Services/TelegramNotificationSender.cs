@@ -10,7 +10,13 @@ public static class NotificationSettingsKeys
     /// <summary>توكن بوت تلغرام. فاضي = القناة معطّلة، فشل هادئ بلا استثناء.</summary>
     public const string TelegramBotToken = "Notifications.TelegramBotToken";
 
-    /// <summary>معرّف المحادثة (Chat ID) اللي الرسائل بتوصلها. رقم بلا هوية User مرتبطة — تلغرام بيراسل chat ID، لا مستخدم بالنظام.</summary>
+    /// <summary>
+    /// معرّف/معرّفات المحادثة (Chat ID) اللي الرسائل بتوصلها. رقم بلا هوية
+    /// User مرتبطة — تلغرام بيراسل chat ID، لا مستخدم بالنظام. يدعم عدة
+    /// مستلمين بقيمة واحدة مفصولة بفاصلة (مثلًا "123456,789012") — كل واحد
+    /// بياخد محاولة إرسال منفصلة (best-effort لكل واحد لحاله، راجع تعليق
+    /// TelegramNotificationSender.SendAsync).
+    /// </summary>
     public const string TelegramChatId = "Notifications.TelegramChatId";
 }
 
@@ -20,9 +26,9 @@ public static class NotificationSettingsKeys
 /// ISettingsProvider المخزّن بالكاش أصلًا) — يعني تغيير التوكن من لوحة
 /// الإعدادات بيصير فعّال فورًا، بلا إعادة تشغيل السيرفر.
 ///
-/// المستقبِل هون هو "معرّف محادثة تلغرام"، لا مستخدم بالنظام (User) — هذا
-/// يتفادى عمدًا كل تعقيد "مين المدير" اللي ما عنا حل له لسه بلا مصادقة
-/// حقيقية (راجع تعليق NotificationDispatcher).
+/// المستقبِل هون هو "معرّف محادثة تلغرام" (أو أكتر من واحد مفصولين بفاصلة)،
+/// لا مستخدم بالنظام (User) — هذا يتفادى عمدًا كل تعقيد "مين المدير" اللي
+/// ما عنا حل له لسه بلا مصادقة حقيقية (راجع تعليق NotificationDispatcher).
 /// </summary>
 public sealed class TelegramNotificationSender : INotificationSender
 {
@@ -43,15 +49,59 @@ public sealed class TelegramNotificationSender : INotificationSender
         string title, string message, CancellationToken cancellationToken)
     {
         var botToken = await _settingsProvider.GetStringAsync(NotificationSettingsKeys.TelegramBotToken, null, cancellationToken);
-        var chatId = await _settingsProvider.GetStringAsync(NotificationSettingsKeys.TelegramChatId, null, cancellationToken);
+        var chatIdsSetting = await _settingsProvider.GetStringAsync(NotificationSettingsKeys.TelegramChatId, null, cancellationToken);
 
         // فشل هادئ ومقصود — نفس مبدأ مزوّدي الذكاء الاصطناعي: مفتاح فاضي
         // يعني القناة "مش مفعّلة بعد"، لا خطأ إعداد يوقف شيء.
-        if (string.IsNullOrWhiteSpace(botToken) || string.IsNullOrWhiteSpace(chatId))
+        if (string.IsNullOrWhiteSpace(botToken) || string.IsNullOrWhiteSpace(chatIdsSetting))
         {
             return (false, "قناة تلغرام غير مفعّلة (التوكن أو معرّف المحادثة غير مُعدّين بالإعدادات).");
         }
 
+        var chatIds = chatIdsSetting
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct()
+            .ToList();
+
+        if (chatIds.Count == 0)
+        {
+            return (false, "قناة تلغرام غير مفعّلة (معرّف المحادثة فاضي بعد التقسيم على الفاصلة).");
+        }
+
+        // كل مستلم بمحاولة إرسال منفصلة، بأفضل جهد — فشل مستلم واحد ما
+        // يمنع إرسال الباقي (راجع تعليق TelegramSettingsKeys.TelegramChatId).
+        // النجاح الكلي = وصلت لمستلم واحد ع الأقل؛ أي فشل جزئي يُذكر برسالة
+        // الخطأ حتى لو النتيجة الكلية "نجاح" (يظهر بسجل NotificationLog).
+        var failures = new List<string>();
+        var successCount = 0;
+
+        foreach (var chatId in chatIds)
+        {
+            var (success, errorMessage) = await SendToSingleChatAsync(botToken, chatId, title, message, cancellationToken);
+
+            if (success)
+            {
+                successCount++;
+            }
+            else
+            {
+                failures.Add($"{chatId}: {errorMessage}");
+            }
+        }
+
+        var overallSuccess = successCount > 0;
+        var combinedError = failures.Count == 0
+            ? null
+            : (chatIds.Count == 1
+                ? failures[0]
+                : $"فشل الإرسال لـ{failures.Count} من أصل {chatIds.Count} مستلم — " + string.Join(" | ", failures));
+
+        return (overallSuccess, combinedError);
+    }
+
+    private async Task<(bool Success, string? ErrorMessage)> SendToSingleChatAsync(
+        string botToken, string chatId, string title, string message, CancellationToken cancellationToken)
+    {
         try
         {
             var url = $"{TelegramApiBaseUrl}/bot{botToken}/sendMessage";
