@@ -30,6 +30,14 @@ public sealed class BackgroundSyncService
     public DateTime? LastSuccessfulSyncAtLocal { get; private set; }
     public string? LastErrorMessage { get; private set; }
 
+    /// <summary>
+    /// نفس نسخة ApiClient المستخدَمة بالمزامنة التلقائية - مكشوفة هون
+    /// عشان شاشات إدارية (PendingQueueWindow) تقدر تنادي endpoints أخرى
+    /// (مثل إشعار حذف فاتورة معلَّقة) بلا ما تحتاج نسخة HttpClient/توكن
+    /// منفصلة، وبلا تغيير سلسلة استدعاء منشئ هالنافذة من MainWindow.
+    /// </summary>
+    public ApiClient ApiClient => _apiClient;
+
     /// <summary>Tick التلقائي وضغطة "مزامنة الآن" اليدوية بيشتركوا بنفس هالعلم - مزامنتان متوازيتان بأي وقت ممنوعتان.</summary>
     public bool IsSyncing => _isRunning;
 

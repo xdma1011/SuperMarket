@@ -118,6 +118,7 @@ using SupermarketSystem.Application.Reporting.GetReturnFrequencyByProduct;
 using SupermarketSystem.Application.Reporting.GetSalesSummary;
 using SupermarketSystem.Application.CashierSync.GetCatalogSyncPage;
 using SupermarketSystem.Application.CashierSync.GetCatalogVersion;
+using SupermarketSystem.Application.CashierSync.ReportDiscardedPendingSale;
 using SupermarketSystem.Application.Reporting.GetProductConsumptionLevels;
 using SupermarketSystem.Application.Reporting.GetStagnantProducts;
 using SupermarketSystem.Application.Reporting.GetSupplierPriceComparison;
@@ -271,6 +272,7 @@ public static class DependencyInjection
         services.AddScoped<GetProductConsumptionLevelsHandler>();
         services.AddScoped<GetCatalogVersionHandler>();
         services.AddScoped<GetCatalogSyncPageHandler>();
+        services.AddScoped<ReportDiscardedPendingSaleHandler>();
         services.AddScoped<GetReorderNeededProductsHandler>();
         services.AddScoped<GetSupplierPriceComparisonHandler>();
         services.AddScoped<GetRecentReturnedItemsHandler>();

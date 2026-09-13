@@ -61,8 +61,15 @@ public partial class PendingQueueWindow : Window
     /// بنفس السبب دائمًا، بلا أي طريقة تصفّيها. الحذف هون نهائي ومقصود -
     /// لازم مراجعة السبب (عمود "آخر خطأ") قبل الضغط، البيع ما رح يوصل
     /// السيرفر أبدًا بعدها.
+    ///
+    /// قبل الحذف المحلي: محاولة أفضل-جهد (best-effort) لإشعار السيرفر
+    /// (POST /cashier-sync/report-discarded-pending-sale) - لو الكاشير
+    /// متصل فعليًا، لازم يوصل صوت للمدير قبل ما يختفي أي أثر لهالبيع
+    /// (كاش/بضاعة اتحرّكوا فعليًا بالمحل). لو فشلت المحاولة (أوفلاين
+    /// فعليًا)، هذا مقبول ومفهوم - الحذف المحلي بيصير بكل الأحوال، ما في
+    /// طريقة لأي إشعار يوصل بلا اتصال أصلًا.
     /// </summary>
-    private void DiscardButton_Click(object sender, RoutedEventArgs e)
+    private async void DiscardButton_Click(object sender, RoutedEventArgs e)
     {
         if (QueueGrid.SelectedItem is not PendingSale selected)
         {
@@ -79,6 +86,22 @@ public partial class PendingQueueWindow : Window
             return;
         }
 
+        DiscardButton.IsEnabled = false;
+        StatusText.Text = "جاري إشعار السيرفر...";
+
+        bool notified;
+        try
+        {
+            notified = await _backgroundSync.ApiClient.ReportDiscardedPendingSaleAsync(selected, CancellationToken.None);
+        }
+        catch
+        {
+            // احتياط إضافي - ReportDiscardedPendingSaleAsync أصلًا بتبلع كل
+            // استثناء وترجّع false، بس الحذف المحلي بكل الأحوال ما لازم
+            // يتعطّل مهما صار بمحاولة الإشعار.
+            notified = false;
+        }
+
         using var db = new LocalDbContext(_dbPath);
         var tracked = db.PendingSales.FirstOrDefault(s => s.Id == selected.Id);
         if (tracked is not null)
@@ -87,7 +110,11 @@ public partial class PendingQueueWindow : Window
             db.SaveChanges();
         }
 
-        StatusText.Text = "تم حذف الفاتورة نهائيًا.";
+        StatusText.Text = notified
+            ? "تم حذف الفاتورة نهائيًا، وأُشعِر السيرفر."
+            : "تم حذف الفاتورة نهائيًا محليًا (تعذّر إشعار السيرفر - أوفلاين على الأغلب).";
+
+        DiscardButton.IsEnabled = true;
         LoadQueue();
     }
 }

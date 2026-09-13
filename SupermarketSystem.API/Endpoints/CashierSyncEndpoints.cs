@@ -1,6 +1,7 @@
 using SupermarketSystem.API.Common;
 using SupermarketSystem.Application.CashierSync.GetCatalogSyncPage;
 using SupermarketSystem.Application.CashierSync.GetCatalogVersion;
+using SupermarketSystem.Application.CashierSync.ReportDiscardedPendingSale;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Pagination;
 
@@ -62,6 +63,18 @@ public static class CashierSyncEndpoints
         .WithName("GetCashierPaymentSettings")
         .WithSummary("سعر تحويل الدولار للدينار - يُخزَّن محليًا بالكاشير لحساب الفكة أوفلاين.")
         .Produces<PaymentSettingsResponse>(StatusCodes.Status200OK);
+
+        group.MapPost("/report-discarded-pending-sale", async (
+            ReportDiscardedPendingSaleCommand command,
+            ReportDiscardedPendingSaleHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(command, cancellationToken);
+            return Results.Ok(result);
+        })
+        .WithName("ReportDiscardedPendingSale")
+        .WithSummary("إشعار فقط - كاشير حذف فاتورة أوفلاين معلَّقة محليًا نهائيًا قبل ما توصل السيرفر، بلا أي سجل بزنس حقيقي لها.")
+        .Produces<ReportDiscardedPendingSaleResponse>(StatusCodes.Status200OK);
 
         return app;
     }

@@ -25,6 +25,10 @@ public sealed record StoreBrandingDto(string? StoreName);
 
 public sealed record PaymentSettingsDto(decimal UsdToJodExchangeRate);
 
+/// <summary>مطابق حرفيًا لـReportDiscardedPendingSaleCommand بالباك إند.</summary>
+public sealed record ReportDiscardedPendingSaleRequestDto(
+    Guid ClientRequestId, Guid BranchId, DateTime CreatedAtLocal, int AttemptCount, string? LastErrorMessage);
+
 public sealed record LogoutRequestDto(string RefreshToken);
 
 /// <summary>مطابق حرفيًا لـCompleteCashClosingCommand بالباك إند.</summary>
@@ -267,6 +271,31 @@ public sealed class ApiClient
         catch (Exception ex)
         {
             return new PendingSaleSendResult(Success: false, ErrorMessage: ex.Message, IsConnectivityFailure: true);
+        }
+    }
+
+    /// <summary>
+    /// POST /cashier-sync/report-discarded-pending-sale — أفضل-محاولة صريحة
+    /// (راجع PendingQueueWindow.DiscardButton_Click): تُستدعى *قبل* الحذف
+    /// المحلي، بس فشلها (أوفلاين فعليًا) ما يمنع الحذف المحلي من الصير -
+    /// هذا الميثود بيرجّع bool فقط، بلا استثناء يوصل للمستدعي إطلاقًا.
+    /// </summary>
+    public async Task<bool> ReportDiscardedPendingSaleAsync(PendingSale pendingSale, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var request = new ReportDiscardedPendingSaleRequestDto(
+                pendingSale.ClientRequestId, pendingSale.BranchId, pendingSale.CreatedAtLocal,
+                pendingSale.AttemptCount, pendingSale.LastErrorMessage);
+
+            var response = await _http.PostAsJsonAsync("cashier-sync/report-discarded-pending-sale", request, cancellationToken);
+            return response.IsSuccessStatusCode;
+        }
+        catch
+        {
+            // بلا اتصال أو رفض من السيرفر - الحذف المحلي بيصير بكل الأحوال
+            // (راجع PendingQueueWindow)، هذا مجرد أفضل-محاولة للإشعار.
+            return false;
         }
     }
 
