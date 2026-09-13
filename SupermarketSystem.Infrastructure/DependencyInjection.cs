@@ -116,6 +116,18 @@ public static class DependencyInjection
 
         var jwtOptions = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 
+        if (string.IsNullOrWhiteSpace(jwtOptions.SigningKey))
+        {
+            // فشل صريح وقت الإقلاع أفضل بما لا يقاس من مفتاح افتراضي مدسوس
+            // بالكود: مفتاح افتراضي معناه نظام "شغّال" بتوكنات يقدر أي حد
+            // عنده نسخة من الكود يزوّرها — عطل صامت وكارثي. نفس المنطق
+            // بالضبط الموجود بمنشئ JwtTokenService، موحَّد هون كمان بدل
+            // fallback صامت لمفتاح placeholder كان يخلي وسيط المصادقة
+            // يشتغل فعليًا بمفتاح معروف للجميع.
+            throw new InvalidOperationException(
+                $"مفتاح توقيع التوكن غير مُعدّ. أضف '{JwtOptions.SectionName}:SigningKey' بالإعدادات أو بمتغيّرات البيئة.");
+        }
+
         // الوسيط بيتحقق من التوقيع والصلاحية قبل ما يوصل الطلب لأي handler.
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
@@ -129,9 +141,7 @@ public static class DependencyInjection
                     ValidIssuer = jwtOptions.Issuer,
                     ValidAudience = jwtOptions.Audience,
                     IssuerSigningKey = new SymmetricSecurityKey(
-                        Encoding.UTF8.GetBytes(string.IsNullOrWhiteSpace(jwtOptions.SigningKey)
-                            ? new string('0', 32) // placeholder فقط؛ JwtTokenService بيفشل صراحة لو المفتاح غير مُعدّ
-                            : jwtOptions.SigningKey)),
+                        Encoding.UTF8.GetBytes(jwtOptions.SigningKey)),
 
                     // صفر تسامح زمني: الافتراضي بالمكتبة 5 دقائق، يعني توكن
                     // "منتهي" بيضل مقبولًا 5 دقائق إضافية — يناقض مباشرةً
