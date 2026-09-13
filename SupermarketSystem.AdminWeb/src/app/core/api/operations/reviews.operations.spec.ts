@@ -9,5 +9,6 @@ describe('ReviewsOperation enum', () => {
       'purchase-invoice-items/{purchaseInvoiceItemId}/mark-reviewed'
     );
     expect(ReviewsOperation.MarkComplaintReviewed).toBe('complaints/{complaintId}/mark-reviewed');
+    expect(ReviewsOperation.MarkSaleInvoiceReviewed).toBe('sale-invoices/{saleInvoiceId}/mark-reviewed');
   });
 });

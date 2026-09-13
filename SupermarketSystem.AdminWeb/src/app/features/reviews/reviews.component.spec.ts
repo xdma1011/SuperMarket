@@ -21,9 +21,22 @@ describe('ReviewsComponent', () => {
     };
   }
 
+  function voidedSale(saleInvoiceId = 'sale1') {
+    return {
+      saleInvoiceId,
+      invoiceNumber: 'INV-1',
+      voidReasonTitle: 'خطأ بالكاشير',
+      voidNotes: null,
+      amount: 25,
+      voidedAtUtc: '',
+      voidedByName: 'مدير الاختبار',
+      branchId: 'b1'
+    };
+  }
+
   beforeEach(async () => {
     apiClientSpy = jasmine.createSpyObj('ApiClient', ['get', 'post']);
-    apiClientSpy.get.and.returnValue(of({ items: [], totalCount: 0 }));
+    apiClientSpy.get.and.returnValue(of({ items: [], totalCount: 0, voidedSales: [] }));
 
     await TestBed.configureTestingModule({
       imports: [ReviewsComponent],
@@ -39,12 +52,21 @@ describe('ReviewsComponent', () => {
   });
 
   it('يحمّل عناصر المراجعة عند ngOnInit', async () => {
-    apiClientSpy.get.and.returnValue(of({ items: [item(1)], totalCount: 1 }));
+    apiClientSpy.get.and.returnValue(of({ items: [item(1)], totalCount: 1, voidedSales: [] }));
 
     fixture.detectChanges();
     await fixture.whenStable();
 
     expect(component.items().length).toBe(1);
+  });
+
+  it('يحمّل قائمة المبيعات الملغاة عند ngOnInit', async () => {
+    apiClientSpy.get.and.returnValue(of({ items: [], totalCount: 1, voidedSales: [voidedSale()] }));
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(component.voidedSales().length).toBe(1);
   });
 
   it('يعرض رسالة خطأ عربية واضحة عند فشل التحميل', async () => {
@@ -126,6 +148,35 @@ describe('ReviewsComponent', () => {
 
       expect(component.errorMessage()).toBe('تعذّر تعليم "عنصر بانتظار مراجعة" كمُراجَعة.');
       expect(component.items().length).toBe(1);
+    });
+  });
+
+  describe('markSaleInvoiceReviewed', () => {
+    it('يستدعي endpoint فاتورة البيع الملغاة الصحيح ويزيلها من القائمة', async () => {
+      apiClientSpy.post.and.returnValue(of({}));
+      const sale = voidedSale('sale1');
+      component.voidedSales.set([sale]);
+
+      await component.markSaleInvoiceReviewed(sale);
+
+      expect(apiClientSpy.post).toHaveBeenCalledWith(
+        jasmine.anything(),
+        jasmine.anything(),
+        {},
+        { saleInvoiceId: 'sale1' }
+      );
+      expect(component.voidedSales().length).toBe(0);
+    });
+
+    it('يعرض رسالة خطأ عربية تحمل رقم الفاتورة عند الفشل، بلا حذفها من القائمة', async () => {
+      apiClientSpy.post.and.returnValue(throwError(() => new Error('network')));
+      const sale = voidedSale('sale1');
+      component.voidedSales.set([sale]);
+
+      await component.markSaleInvoiceReviewed(sale);
+
+      expect(component.errorMessage()).toBe('تعذّر تعليم فاتورة "INV-1" كمُراجَعة.');
+      expect(component.voidedSales().length).toBe(1);
     });
   });
 });

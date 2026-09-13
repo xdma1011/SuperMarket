@@ -41,8 +41,14 @@ public sealed class GetPendingReviewsTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task ضيافة_ضمن_الحد_لا_تظهر_بقائمة_المراجعات_المعلَّقة()
+    public async Task ضيافة_ضمن_الحد_تظهر_أيضًا_بقائمة_المراجعات_بوصف_مختلف_عن_المتجاوزة()
     {
+        // فجوة حقيقية أصلحها Agent B (commit dbd5529): الفلتر كان NeedsReview
+        // فقط، فالضيافة ضمن الحد اليومي ما كانت تظهر أبدًا بصفحة المراجعات
+        // حتى لو صاحب المحل فتحها كل يوم - راجع تعليق GetPendingReviewsQuery.cs.
+        // الفلتر الصحيح الآن: أي تعديل مخزون يدوي (ManualAdjustment) غير
+        // مُراجَع يظهر، والتمييز بين "متجاوز الحد" و"ضمن الحد" صار بنص
+        // Detail فقط، لا بالظهور/الإخفاء.
         using var scope = CreateScope();
         await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
         var db = CreateDbContext(scope);
@@ -59,6 +65,7 @@ public sealed class GetPendingReviewsTests : IntegrationTestBase
         var reviewsHandler = scope.ServiceProvider.GetRequiredService<GetPendingReviewsHandler>();
         var result = await reviewsHandler.HandleAsync(CancellationToken.None);
 
-        Assert.DoesNotContain(result.Items, i => i.Type == PendingReviewType.ComplimentaryIssue);
+        var withinLimitReview = Assert.Single(result.Items, i => i.Type == PendingReviewType.ComplimentaryIssue);
+        Assert.Equal("تعديل مخزون يدوي بانتظار المراجعة", withinLimitReview.Detail);
     }
 }
