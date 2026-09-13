@@ -24,13 +24,17 @@ class SupermarketCustomerApp extends StatelessWidget {
         title: 'تطبيق الطلبات',
         debugShowCheckedModeBanner: false,
         locale: const Locale('ar'),
-        theme: ThemeData(
-          colorSchemeSeed: Colors.green,
-          useMaterial3: true,
-        ),
+        theme: _buildTheme(),
         builder: (context, child) => Directionality(textDirection: TextDirection.rtl, child: child!),
         home: const SplashScreen(),
       ),
+    );
+  }
+
+  ThemeData _buildTheme() {
+    final base = ThemeData(colorSchemeSeed: Colors.green, useMaterial3: true);
+    return base.copyWith(
+      textTheme: base.textTheme.apply(fontFamilyFallback: const ['NotoSansArabic']),
     );
   }
 }
