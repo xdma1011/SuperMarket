@@ -1,6 +1,8 @@
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using SupermarketSystem.CashierApp.Local;
 
 namespace SupermarketSystem.CashierApp.Services;
@@ -63,6 +65,87 @@ public sealed record LoginResult(bool Success, LoginResponseDto? Response, strin
 /// <summary>مطابق حرفيًا لـPaymentMethodDto بالباك إند.</summary>
 public sealed record PaymentMethodDto(Guid Id, string Name, bool RequiresExternalReference);
 
+// ══════════════════════════════════════════════════════════════════════
+// إرجاع (Returns) وإلغاء بيع (Void) — كانت الشاشتان مفقودتين كليًا من
+// تطبيق الكاشير رغم جهوزية الـendpoints بالباك إند (POST /api/v1/returns،
+// POST /api/v1/sales/{id}/void) وشمول صلاحيات دور "كاشير" الافتراضي
+// لهما (Returns.Process، Sales.Void) — أخطر فجوة وظيفية بالتطبيق قبل هذا
+// التعديل: زبون يرجّع صنف، والكاشير ما عنده أي طريقة يسجّلها بالنظام.
+//
+// عملية عمدية: الإرجاع والإلغاء أونلاين فقط (بخلاف البيع)، بلا طابور
+// PendingSale محلي — عمليات أقل تكرارًا وأكثر حساسية، وربطها بنفس آلية
+// إعادة المحاولة التلقائية للبيع يعقّد المعالجة بلا فائدة حقيقية هون
+// (لو فشل الاتصال، الرسالة توضح ذلك والكاشير يعيد المحاولة يدويًا لما
+// يرجع الاتصال - راجع ReturnWindow/VoidSaleWindow).
+// ══════════════════════════════════════════════════════════════════════
+
+/// <summary>مطابق حرفيًا لـReturnReason بالـDomain (SupermarketSystem.Domain.Sales.ReturnInvoice) - محلي هون لأن CashierApp ما بيرجع Domain مباشرة.</summary>
+public enum ReturnReasonDto
+{
+    Defective = 1,
+    CustomerChangedMind = 2,
+    WrongItem = 3,
+    Expired = 4,
+    Other = 5
+}
+
+/// <summary>مطابق حرفيًا لـVoidReason بالـDomain (SupermarketSystem.Domain.Sales.SaleInvoice).</summary>
+public enum VoidReasonDto
+{
+    CashierError = 1,
+    CustomerCancelled = 2,
+    SystemError = 3,
+    Other = 4
+}
+
+/// <summary>مطابق حرفيًا لـSaleInvoiceListItemDto (GetSaleInvoicesQuery بالباك إند) - أساس بحث الكاشير عن فاتورة أصلية.</summary>
+public sealed record SaleInvoiceListItemDto(
+    Guid Id, string InvoiceNumber, int StatusCode, string StatusTitle,
+    decimal TotalAmount, decimal TotalReturnedAmount, DateTime CreatedAtUtc,
+    string? CustomerName, string? CustomerPhone);
+
+/// <summary>مطابق حرفيًا لـSaleInvoiceItemDetailDto (GetSaleInvoiceByIdQuery) - Quantity - QuantityReturned هي الكمية القابلة للإرجاع.</summary>
+public sealed record SaleInvoiceItemDetailDto(
+    Guid SaleInvoiceItemId, Guid ProductId, string ProductName,
+    decimal Quantity, decimal QuantityReturned, decimal UnitPriceSnapshot, decimal LineTotal);
+
+/// <summary>مطابق حرفيًا لـSaleInvoiceDetailDto.</summary>
+public sealed record SaleInvoiceDetailDto(
+    Guid Id, string InvoiceNumber, int StatusCode, string StatusTitle,
+    decimal TotalAmount, decimal TotalReturnedAmount, DateTime CreatedAtUtc,
+    List<SaleInvoiceItemDetailDto> Items);
+
+public sealed record SaleInvoiceSearchResult(bool Success, PagedResultDto<SaleInvoiceListItemDto>? Response, string? ErrorMessage);
+
+public sealed record SaleInvoiceDetailResult(bool Success, SaleInvoiceDetailDto? Response, string? ErrorMessage);
+
+/// <summary>مطابق حرفيًا لـProcessReturnItemDto بالباك إند.</summary>
+public sealed record ProcessReturnItemRequestDto(Guid SaleInvoiceItemId, decimal Quantity);
+
+/// <summary>مطابق حرفيًا لـProcessReturnPaymentDto بالباك إند.</summary>
+public sealed record ProcessReturnRefundRequestDto(Guid PaymentMethodId, decimal Amount, string? ExternalReference, Guid ClientRequestId);
+
+/// <summary>مطابق حرفيًا لـProcessReturnCommand بالباك إند.</summary>
+public sealed record ProcessReturnRequestDto(
+    Guid OriginalSaleInvoiceId, Guid ClientRequestId, ReturnReasonDto Reason, string? Notes,
+    List<ProcessReturnItemRequestDto> Items, List<ProcessReturnRefundRequestDto> Refunds);
+
+/// <summary>مطابق حرفيًا لـProcessReturnResponse بالباك إند - OriginalInvoiceNewStatus نص (JsonStringEnumConverter بالباك إند).</summary>
+public sealed record ProcessReturnResponseDto(
+    Guid ReturnInvoiceId, string InvoiceNumber, decimal TotalAmount, decimal TotalRefundedAmount,
+    string OriginalInvoiceNewStatus, bool WasReplay, List<string> ReviewFlags);
+
+public sealed record ProcessReturnResult(bool Success, ProcessReturnResponseDto? Response, string? ErrorMessage);
+
+/// <summary>مطابق حرفيًا لـVoidSaleRequest (السجل الداخلي بـSalesEndpoints.cs) - SaleInvoiceId يجي من المسار لا من الجسم.</summary>
+public sealed record VoidSaleRequestDto(VoidReasonDto Reason, string? Notes);
+
+/// <summary>مطابق حرفيًا لـVoidSaleResponse بالباك إند.</summary>
+public sealed record VoidSaleResponseDto(
+    Guid SaleInvoiceId, string InvoiceNumber, int StockMovementsReversed, int PaymentsReversed, decimal CashReturnedToDrawer);
+
+public sealed record VoidSaleResult(bool Success, VoidSaleResponseDto? Response, string? ErrorMessage);
+
 /// <summary>
 /// أبسط عميل ممكن — ميثودان أصليان (SendPendingSaleAsync) + ميثودا
 /// مزامنة الكتالوج المضافتان هون.
@@ -70,6 +153,19 @@ public sealed record PaymentMethodDto(Guid Id, string Name, bool RequiresExterna
 public sealed class ApiClient
 {
     private readonly HttpClient _http;
+
+    /// <summary>
+    /// تُستخدم بس لطلبات الإرجاع/الإلغاء الصادرة (POST) - تحتاج تحويل
+    /// الـenum لنص ("Defective" لا 1)، لأن الباك إند مسجِّل JsonStringEnumConverter
+    /// عالميًا (راجع تعليق مطابق بـProgram.cs) وبيتوقع نفس اسم عضو
+    /// الـenum بالـC# حرفيًا. camelCase لبقية الحقول - نفس نمط JsonOptions
+    /// بـSaleWindow.xaml.cs.
+    /// </summary>
+    private static readonly JsonSerializerOptions RequestJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new JsonStringEnumConverter() }
+    };
 
     public ApiClient(AppConfig config)
     {
@@ -363,6 +459,121 @@ public sealed class ApiClient
         catch (Exception ex)
         {
             return new UploadInvoiceDraftResult(false, $"تعذّر الاتصال بالسيرفر: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// GET /sales?search=... — أساس شاشتَي الإرجاع والإلغاء: البحث يغطّي
+    /// رقم الفاتورة ورقم هاتف/اسم الزبون معًا (راجع GetSaleInvoicesHandler
+    /// بالباك إند). branchId يُمرَّر لو الجلسة مربوطة بفرع - يقصر البحث
+    /// على فواتير نفس الفرع فقط (كاشير فرع ما يقدر يرجّع/يلغي فاتورة فرع تاني).
+    /// </summary>
+    public async Task<SaleInvoiceSearchResult> SearchSaleInvoicesAsync(string searchTerm, Guid? branchId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var url = $"sales?pageNumber=1&pageSize=20&search={Uri.EscapeDataString(searchTerm)}";
+            if (branchId is { } b)
+            {
+                url += $"&branchId={b}";
+            }
+
+            var response = await _http.GetAsync(url, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadFromJsonAsync<PagedResultDto<SaleInvoiceListItemDto>>(cancellationToken: cancellationToken);
+                return body is null
+                    ? new SaleInvoiceSearchResult(false, null, "رد غير متوقَّع من السيرفر.")
+                    : new SaleInvoiceSearchResult(true, body, null);
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            return new SaleInvoiceSearchResult(false, null, $"{(int)response.StatusCode}: {errorBody}");
+        }
+        catch (Exception ex)
+        {
+            return new SaleInvoiceSearchResult(false, null, $"تعذّر الاتصال بالسيرفر: {ex.Message}");
+        }
+    }
+
+    /// <summary>GET /sales/{id} — تفاصيل الفاتورة كاملة بأصنافها، أساس اختيار كمية الإرجاع لكل سطر.</summary>
+    public async Task<SaleInvoiceDetailResult> GetSaleInvoiceByIdAsync(Guid saleInvoiceId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await _http.GetAsync($"sales/{saleInvoiceId}", cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadFromJsonAsync<SaleInvoiceDetailDto>(cancellationToken: cancellationToken);
+                return body is null
+                    ? new SaleInvoiceDetailResult(false, null, "رد غير متوقَّع من السيرفر.")
+                    : new SaleInvoiceDetailResult(true, body, null);
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            return new SaleInvoiceDetailResult(false, null, $"{(int)response.StatusCode}: {errorBody}");
+        }
+        catch (Exception ex)
+        {
+            return new SaleInvoiceDetailResult(false, null, $"تعذّر الاتصال بالسيرفر: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// POST /api/v1/returns — يحرس الكمية ذريًا بالباك إند، يرجّع البضاعة
+    /// للمخزون، ويسجّل الاسترجاع - كله بمعاملة واحدة (راجع ProcessReturnHandler).
+    /// عملية أونلاين فقط، بلا طابور محلي (راجع تعليق أعلى الملف).
+    /// </summary>
+    public async Task<ProcessReturnResult> ProcessReturnAsync(ProcessReturnRequestDto request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await _http.PostAsJsonAsync("returns", request, RequestJsonOptions, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadFromJsonAsync<ProcessReturnResponseDto>(cancellationToken: cancellationToken);
+                return body is null
+                    ? new ProcessReturnResult(false, null, "رد غير متوقَّع من السيرفر.")
+                    : new ProcessReturnResult(true, body, null);
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            return new ProcessReturnResult(false, null, $"{(int)response.StatusCode}: {errorBody}");
+        }
+        catch (Exception ex)
+        {
+            return new ProcessReturnResult(false, null, $"تعذّر الاتصال بالسيرفر: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// POST /api/v1/sales/{id}/void — الفاتورة تبقى محفوظة بحالة Voided،
+    /// ويُعكس المخزون والدفعات وحركات الدرج بمعاملة واحدة (راجع VoidSaleHandler).
+    /// عملية أونلاين فقط، بلا طابور محلي.
+    /// </summary>
+    public async Task<VoidSaleResult> VoidSaleAsync(Guid saleInvoiceId, VoidSaleRequestDto request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await _http.PostAsJsonAsync($"sales/{saleInvoiceId}/void", request, RequestJsonOptions, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadFromJsonAsync<VoidSaleResponseDto>(cancellationToken: cancellationToken);
+                return body is null
+                    ? new VoidSaleResult(false, null, "رد غير متوقَّع من السيرفر.")
+                    : new VoidSaleResult(true, body, null);
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            return new VoidSaleResult(false, null, $"{(int)response.StatusCode}: {errorBody}");
+        }
+        catch (Exception ex)
+        {
+            return new VoidSaleResult(false, null, $"تعذّر الاتصال بالسيرفر: {ex.Message}");
         }
     }
 }

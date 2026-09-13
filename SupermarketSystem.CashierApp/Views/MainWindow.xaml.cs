@@ -45,6 +45,24 @@ public partial class MainWindow : Window
         uploadWindow.ShowDialog();
     }
 
+    /// <summary>
+    /// كانت مفقودة كليًا - راجع تعليق ReturnWindow.xaml.cs لتفاصيل الفجوة
+    /// وقرارات التصميم. Modal بلا إغلاق MainWindow (زي UploadInvoiceWindow،
+    /// لا زي StartSaleButton) - عملية ثانوية عرضية، لا الشاشة الرئيسية للكاشير.
+    /// </summary>
+    private void ReturnButton_Click(object sender, RoutedEventArgs e)
+    {
+        var returnWindow = new ReturnWindow(_apiClient, _authSession) { Owner = this };
+        returnWindow.ShowDialog();
+    }
+
+    /// <summary>نفس منطق ReturnButton_Click بالضبط - راجع تعليق VoidSaleWindow.xaml.cs.</summary>
+    private void VoidSaleButton_Click(object sender, RoutedEventArgs e)
+    {
+        var voidWindow = new VoidSaleWindow(_apiClient, _authSession) { Owner = this };
+        voidWindow.ShowDialog();
+    }
+
     private void AdminAccessButton_Click(object sender, RoutedEventArgs e)
     {
         var passwordPrompt = new AdminPasswordWindow { Owner = this };

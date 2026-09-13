@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="نظام الكاشير"
-        Width="640" Height="420"
+        Width="900" Height="420"
         WindowStartupLocation="CenterScreen"
         FlowDirection="RightToLeft">
 
@@ -16,10 +16,17 @@
 
         <TextBlock x:Name="WelcomeText" Grid.Row="0" FontSize="18" FontWeight="Bold" Foreground="#1F1B16" />
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="StartSaleButton" Width="200" Height="46" FontSize="15" Margin="0,0,12,0"
+            <Button x:Name="StartSaleButton" Width="190" Height="46" FontSize="15" Margin="0,0,12,0"
                     Content="بدء البيع" Click="StartSaleButton_Click" />
-            <Button x:Name="UploadInvoiceButton" Width="200" Height="46" FontSize="15"
+            <Button x:Name="UploadInvoiceButton" Width="190" Height="46" FontSize="15" Margin="0,0,12,0"
                     Content="رفع فاتورة (AI)" Click="UploadInvoiceButton_Click" />
+            <!-- كانت مفقودة كليًا - أخطر فجوة وظيفية بالتطبيق (راجع ReturnWindow.xaml.cs).
+                 بلا حماية باسوورد إدارة عمدًا: صلاحية Returns.Process أصلًا من صلاحيات دور "كاشير" الافتراضي. -->
+            <Button x:Name="ReturnButton" Width="190" Height="46" FontSize="15" Margin="0,0,12,0"
+                    Content="↩ معالجة إرجاع" Style="{StaticResource SecondaryButton}" Click="ReturnButton_Click" />
+            <!-- نفس منطق زر الإرجاع - صلاحية Sales.Void أصلًا من صلاحيات دور "كاشير" الافتراضي. -->
+            <Button x:Name="VoidSaleButton" Width="190" Height="46" FontSize="15"
+                    Content="✕ إلغاء فاتورة" Style="{StaticResource SecondaryButton}" Click="VoidSaleButton_Click" />
         </StackPanel>
 
         <!-- بلا نص واضح عمدًا - الحماية هي الباسوورد، لا إخفاء الزر -->
