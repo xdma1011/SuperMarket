@@ -70,6 +70,8 @@ public class SaleInvoiceItemConfiguration : IEntityTypeConfiguration<SaleInvoice
         builder.Property(i => i.Quantity).HasColumnType("decimal(18,4)").IsRequired();
         builder.Property(i => i.UnitPriceSnapshot).HasColumnType("decimal(18,4)").IsRequired();
         builder.Property(i => i.DiscountSnapshot).HasColumnType("decimal(18,4)").IsRequired();
+        builder.Property(i => i.PromotionAmount).HasColumnType("decimal(18,4)").IsRequired();
+        builder.Property(i => i.PromotionTitleSnapshot).HasMaxLength(200);
         builder.Property(i => i.LineTotal).HasColumnType("decimal(18,4)").IsRequired();
         builder.Property(i => i.QuantityReturned).HasColumnType("decimal(18,4)").IsRequired();
 
@@ -78,6 +80,50 @@ public class SaleInvoiceItemConfiguration : IEntityTypeConfiguration<SaleInvoice
         builder.HasOne<Product>().WithMany().HasForeignKey(i => i.ProductId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<ProductUnit>().WithMany().HasForeignKey(i => i.ProductUnitId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Discount>().WithMany().HasForeignKey(i => i.DiscountId).OnDelete(DeleteBehavior.SetNull);
+        // Traceability فقط - نفس مبدأ DiscountId بالضبط (§13.6). حذف
+        // العرض لاحقًا ما يمسح أي فاتورة قديمة، بس يفصل مرجعها الحي.
+        builder.HasOne<Promotion>().WithMany().HasForeignKey(i => i.PromotionId).OnDelete(DeleteBehavior.SetNull);
+    }
+}
+
+public class PromotionConfiguration : IEntityTypeConfiguration<Promotion>
+{
+    public void Configure(EntityTypeBuilder<Promotion> builder)
+    {
+        builder.ToTable("Promotions");
+        builder.HasKey(p => p.Id);
+
+        builder.Property(p => p.Title).IsRequired().HasMaxLength(200);
+        builder.Property(p => p.BundlePrice).HasColumnType("decimal(18,4)").IsRequired();
+        builder.Property(p => p.MaxQuantityPerInvoice).HasColumnType("decimal(18,4)");
+        builder.Property(p => p.StartAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(p => p.EndAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(p => p.RowVersion).IsRowVersion();
+        builder.Property(p => p.CreatedAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(p => p.UpdatedAtUtc).HasColumnType("datetime2");
+
+        // الاستعلام الحرج بـCompleteSaleCommand: منتج + نافذة الوقت - هذا
+        // الفهرس هو اللي بيخليه رخيص، لأنه ينفَّذ على كل بيع.
+        builder.HasIndex(p => new { p.ProductId, p.StartAtUtc, p.EndAtUtc });
+
+        builder.HasOne<Product>().WithMany().HasForeignKey(p => p.ProductId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasMany(p => p.Branches).WithOne().HasForeignKey(pb => pb.PromotionId).OnDelete(DeleteBehavior.Cascade);
+        builder.Navigation(p => p.Branches).HasField("_branches").UsePropertyAccessMode(PropertyAccessMode.Field);
+    }
+}
+
+public class PromotionBranchConfiguration : IEntityTypeConfiguration<PromotionBranch>
+{
+    public void Configure(EntityTypeBuilder<PromotionBranch> builder)
+    {
+        builder.ToTable("PromotionBranches");
+        builder.HasKey(pb => pb.Id);
+
+        // فرع معيّن ما يتكرر لنفس العرض إلا بصف وحيد (تفعيل/تعطيل بدله، لا صف إضافي).
+        builder.HasIndex(pb => new { pb.PromotionId, pb.BranchId }).IsUnique();
+
+        builder.HasOne<Branch>().WithMany().HasForeignKey(pb => pb.BranchId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 

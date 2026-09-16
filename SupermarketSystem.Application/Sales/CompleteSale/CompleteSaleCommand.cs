@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Policies;
+using SupermarketSystem.Application.Common.Promotions;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Domain.CashManagement;
 using SupermarketSystem.Domain.Common;
@@ -250,7 +251,7 @@ public sealed class CompleteSaleHandler
         var unitIds = command.Items.Select(i => i.ProductUnitId).Distinct().ToList();
         var units = await _context.ProductUnits.AsNoTracking()
             .Where(u => unitIds.Contains(u.Id))
-            .Select(u => new { u.Id, u.ProductId, u.ConversionFactorToBase })
+            .Select(u => new { u.Id, u.ProductId, u.ConversionFactorToBase, u.IsBaseUnit })
             .ToDictionaryAsync(u => u.Id, cancellationToken);
 
         var productIds = command.Items.Select(i => i.ProductId).Distinct().ToList();
@@ -264,6 +265,26 @@ public sealed class CompleteSaleHandler
             .Where(p => productIds.Contains(p.Id))
             .Select(p => new { p.Id, p.Name, p.Status, p.IsBatchTracked })
             .ToDictionaryAsync(p => p.Id, cancellationToken);
+
+        // PROMOTION ASSUMPTION: عرض الكمية (Promotion) يُطبَّق حصرًا لو
+        // الكاشير باع بالوحدة الأساسية للمنتج (IsBaseUnit) - لو باع بوحدة
+        // تانية (كرتونة مثلًا، بمعامل تحويل مختلف)، العرض ما ينطبق إطلاقًا
+        // (قرار مبسَّط مقصود، تفاديًا لتعقيد "شو معنى N بوحدة غير أساسية").
+        // نفس المبدأ: أقصى عرض واحد نشط فعليًا لكل (منتج، فرع) بنفس اللحظة
+        // - لو تصادف أكتر من صف (خطأ إداري بإدخال عروض متداخلة تواريخها)،
+        // نأخذ الأقدم إنشاءً بهدوء بدل ما نفشل البيع بالكامل.
+        var nowUtc = _dateTimeProvider.UtcNow;
+        var activePromotionsByProduct = await _context.Promotions.AsNoTracking()
+            .Where(p => productIds.Contains(p.ProductId) && p.StartAtUtc <= nowUtc && p.EndAtUtc >= nowUtc)
+            .Join(_context.PromotionBranches.AsNoTracking().Where(pb => pb.BranchId == command.BranchId && pb.IsActive),
+                p => p.Id, pb => pb.PromotionId,
+                (p, pb) => new { p.ProductId, PromotionId = p.Id, p.Title, p.BundleQuantity, p.BundlePrice, p.MaxQuantityPerInvoice, p.CreatedAtUtc })
+            .OrderBy(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+
+        var promotionByProduct = activePromotionsByProduct
+            .GroupBy(x => x.ProductId)
+            .ToDictionary(g => g.Key, g => g.First());
 
         var reviewFlags = new List<string>();
         var resolvedLines = new List<ResolvedSaleLine>();
@@ -324,9 +345,32 @@ public sealed class CompleteSaleHandler
             var unitPrice = productBranch.SellingPrice * unit.ConversionFactorToBase;
             var grossLineTotal = unitPrice * item.Quantity;
 
+            // عرض الكمية (Promotion) - راجع تعليق PROMOTION ASSUMPTION فوق.
+            // هذا حساب سعر تلقائي (زي سعر ProductBranch نفسه)، مش خصم يدوي
+            // من الكاشير - ما يمر على PosPolicy إطلاقًا (معتمَد مسبقًا من
+            // الأدمن وقت إنشاء العرض، لا قرار لحظي من الكاشير يحتاج مراجعة).
+            decimal promotionAmount = 0m;
+            Guid? promotionId = null;
+            string? promotionTitleSnapshot = null;
+
+            if (unit.IsBaseUnit && promotionByProduct.TryGetValue(item.ProductId, out var promo))
+            {
+                var outcome = PromotionPricingCalculator.Calculate(
+                    item.Quantity, unitPrice, promo.BundleQuantity, promo.BundlePrice, promo.MaxQuantityPerInvoice);
+
+                if (outcome.PromotionAmount > 0)
+                {
+                    promotionAmount = outcome.PromotionAmount;
+                    promotionId = promo.PromotionId;
+                    promotionTitleSnapshot = promo.Title;
+                }
+            }
+
+            var netLineTotalAfterPromotion = grossLineTotal - promotionAmount;
+
             if (item.ManualDiscountAmount > 0)
             {
-                if (item.ManualDiscountAmount > grossLineTotal)
+                if (item.ManualDiscountAmount > netLineTotalAfterPromotion)
                 {
                     return Result.Failure<CompleteSaleResponse>(
                         Error.BusinessRule("Sale.DiscountExceedsLineTotal", $"Discount on '{product.Name}' exceeds the line total."));
@@ -337,7 +381,7 @@ public sealed class CompleteSaleHandler
                 // denial is a final answer, never a wait-for-manager state
                 // (Architecture Review §13/§16.7).
                 var decision = await _posPolicyService.EvaluateAsync(
-                    PosOperation.ManualDiscount, item.ManualDiscountAmount, grossLineTotal, cancellationToken);
+                    PosOperation.ManualDiscount, item.ManualDiscountAmount, netLineTotalAfterPromotion, cancellationToken);
 
                 if (!decision.IsAllowed)
                 {
@@ -358,7 +402,10 @@ public sealed class CompleteSaleHandler
                 item.Quantity,
                 item.Quantity * unit.ConversionFactorToBase,
                 unitPrice,
-                item.ManualDiscountAmount));
+                item.ManualDiscountAmount,
+                promotionAmount,
+                promotionId,
+                promotionTitleSnapshot));
         }
 
         // --- 4. Totals, then the payment-completeness rule ---
@@ -502,7 +549,8 @@ public sealed class CompleteSaleHandler
                 // (§13.6) — the absence of a rule reference IS the signal.
                 var invoiceItem = invoice.AddItem(
                     line.ProductId, line.ProductUnitId, line.Quantity,
-                    line.UnitPrice, line.ManualDiscountAmount, discountId: null);
+                    line.UnitPrice, line.ManualDiscountAmount, discountId: null,
+                    line.PromotionAmount, line.PromotionId, line.PromotionTitleSnapshot);
 
                 movements.Add(new StockMovement(
                     line.ProductId,
@@ -595,8 +643,11 @@ public sealed class CompleteSaleHandler
         decimal Quantity,
         decimal QuantityBase,
         decimal UnitPrice,
-        decimal ManualDiscountAmount)
+        decimal ManualDiscountAmount,
+        decimal PromotionAmount,
+        Guid? PromotionId,
+        string? PromotionTitleSnapshot)
     {
-        public decimal LineTotal => (UnitPrice * Quantity) - ManualDiscountAmount;
+        public decimal LineTotal => (UnitPrice * Quantity) - ManualDiscountAmount - PromotionAmount;
     }
 }

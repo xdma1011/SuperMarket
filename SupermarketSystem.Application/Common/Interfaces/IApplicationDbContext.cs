@@ -78,6 +78,8 @@ public interface IApplicationDbContext
     DbSet<SaleInvoicePayment> SaleInvoicePayments { get; }
     DbSet<SuspendedSale> SuspendedSales { get; }
     DbSet<Discount> Discounts { get; }
+    DbSet<Promotion> Promotions { get; }
+    DbSet<PromotionBranch> PromotionBranches { get; }
     DbSet<ReturnInvoice> ReturnInvoices { get; }
     DbSet<ReturnInvoiceItem> ReturnInvoiceItems { get; }
     DbSet<ReturnInvoicePayment> ReturnInvoicePayments { get; }

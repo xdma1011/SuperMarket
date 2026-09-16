@@ -118,9 +118,13 @@ public class SaleInvoice : AuditableEntity, IBranchOwned, IHasRowVersion
         TotalReturnedAmount = 0;
     }
 
-    public SaleInvoiceItem AddItem(Guid productId, Guid productUnitId, decimal quantity, decimal unitPriceSnapshot, decimal discountSnapshot, Guid? discountId)
+    public SaleInvoiceItem AddItem(
+        Guid productId, Guid productUnitId, decimal quantity, decimal unitPriceSnapshot, decimal discountSnapshot, Guid? discountId,
+        decimal promotionAmount = 0m, Guid? promotionId = null, string? promotionTitleSnapshot = null)
     {
-        var item = new SaleInvoiceItem(Id, productId, productUnitId, quantity, unitPriceSnapshot, discountSnapshot, discountId);
+        var item = new SaleInvoiceItem(
+            Id, productId, productUnitId, quantity, unitPriceSnapshot, discountSnapshot, discountId,
+            promotionAmount, promotionId, promotionTitleSnapshot);
         _items.Add(item);
         TotalAmount += item.LineTotal;
         return item;
@@ -250,17 +254,34 @@ public class SaleInvoiceItem : Entity
     public decimal Quantity { get; private set; }
     public decimal UnitPriceSnapshot { get; private set; }
     public decimal DiscountSnapshot { get; private set; }
+
+    /// <summary>مبلغ التوفير من عرض كمية (Promotion) تلقائي - منفصل كليًا عن DiscountSnapshot (خصم يدوي من الكاشير). صفر لو ما في عرض انطبق على هذا السطر.</summary>
+    public decimal PromotionAmount { get; private set; }
+
+    /// <summary>Traceability فقط (SetNull on delete) - نفس مبدأ DiscountId بالضبط. راجع Promotion.cs.</summary>
+    public Guid? PromotionId { get; private set; }
+
+    /// <summary>Snapshot لعنوان العرض وقت البيع - يضل ثابت للأبد حتى لو العرض الحي اتحذف أو انتهت مدته لاحقًا.</summary>
+    public string? PromotionTitleSnapshot { get; private set; }
+
     public decimal LineTotal { get; private set; }
     public Guid? DiscountId { get; private set; }
     public decimal QuantityReturned { get; private set; }
 
     private SaleInvoiceItem() { } // EF Core
 
-    internal SaleInvoiceItem(Guid saleInvoiceId, Guid productId, Guid productUnitId, decimal quantity, decimal unitPriceSnapshot, decimal discountSnapshot, Guid? discountId)
+    internal SaleInvoiceItem(
+        Guid saleInvoiceId, Guid productId, Guid productUnitId, decimal quantity, decimal unitPriceSnapshot, decimal discountSnapshot, Guid? discountId,
+        decimal promotionAmount = 0m, Guid? promotionId = null, string? promotionTitleSnapshot = null)
     {
         if (quantity <= 0)
         {
             throw new DomainException("Sale quantity must be positive.");
+        }
+
+        if (promotionAmount < 0)
+        {
+            throw new DomainException("Promotion amount cannot be negative.");
         }
 
         SaleInvoiceId = saleInvoiceId;
@@ -270,7 +291,10 @@ public class SaleInvoiceItem : Entity
         UnitPriceSnapshot = unitPriceSnapshot;
         DiscountSnapshot = discountSnapshot;
         DiscountId = discountId;
-        LineTotal = (quantity * unitPriceSnapshot) - discountSnapshot;
+        PromotionAmount = promotionAmount;
+        PromotionId = promotionId;
+        PromotionTitleSnapshot = promotionTitleSnapshot;
+        LineTotal = (quantity * unitPriceSnapshot) - discountSnapshot - promotionAmount;
         QuantityReturned = 0;
     }
 

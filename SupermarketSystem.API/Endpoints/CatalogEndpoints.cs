@@ -17,6 +17,10 @@ using SupermarketSystem.Application.Catalog.UpdateProductCategory;
 using SupermarketSystem.Application.Catalog.RequestPriceChange;
 using SupermarketSystem.Application.Catalog.GetPendingPriceChangeRequests;
 using SupermarketSystem.Application.Catalog.DecidePriceChangeRequest;
+using SupermarketSystem.Application.Catalog.CreatePromotion;
+using SupermarketSystem.Application.Catalog.UpdatePromotion;
+using SupermarketSystem.Application.Catalog.SetPromotionBranchActive;
+using SupermarketSystem.Application.Catalog.GetProductPromotions;
 using SupermarketSystem.Application.Common.Pagination;
 
 namespace SupermarketSystem.API.Endpoints;
@@ -240,6 +244,76 @@ public static class CatalogEndpoints
         .Produces(StatusCodes.Status204NoContent)
         .ProducesProblem(StatusCodes.Status404NotFound);
 
+        products.MapGet("/{productId:guid}/promotions", async (
+            Guid productId,
+            GetProductPromotionsHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(new GetProductPromotionsQuery(productId), cancellationToken);
+            return Results.Ok(result);
+        })
+        .WithName("GetProductPromotions")
+        .WithSummary("كل عروض الكمية (Bundle) لهذا المنتج، بحالة كل فرع فيها - إدارة كاملة، لا الشغّال حاليًا بس.")
+        .Produces<IReadOnlyList<ProductPromotionDto>>(StatusCodes.Status200OK);
+
+        products.MapPost("/{productId:guid}/promotions", async (
+            Guid productId,
+            CreatePromotionRequest request,
+            CreatePromotionHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var command = new CreatePromotionCommand(
+                productId, request.Title, request.BundleQuantity, request.BundlePrice,
+                request.MaxQuantityPerInvoice, request.StartAtUtc, request.EndAtUtc, request.BranchIds);
+
+            var result = await handler.HandleAsync(command, cancellationToken);
+            return result.ToHttpResult(response => Results.Created($"/api/v1/products/{productId}/promotions/{response.PromotionId}", response));
+        })
+        .WithName("CreatePromotion")
+        .WithSummary("ينشئ عرض كمية جديد (N بسعر كذا) لمنتج - بلا تحديد فروع (BranchIds فاضية/null) = ينطبق على كل الفروع الفعّالة حاليًا.")
+        .Produces<CreatePromotionResponse>(StatusCodes.Status201Created)
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status404NotFound);
+
+        app.MapPut("/api/v1/promotions/{promotionId:guid}", async (
+            Guid promotionId,
+            UpdatePromotionRequest request,
+            UpdatePromotionHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var command = new UpdatePromotionCommand(
+                promotionId, request.Title, request.BundleQuantity, request.BundlePrice,
+                request.MaxQuantityPerInvoice, request.StartAtUtc, request.EndAtUtc);
+
+            var result = await handler.HandleAsync(command, cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithTags("Catalog")
+        .RequirePermission(PermissionCodes.CatalogManage)
+        .WithName("UpdatePromotion")
+        .WithSummary("يعدّل تفاصيل عرض قائم (عنوان/كمية/سعر/حد أعلى/فترة) - بلا أثر على فواتير قديمة (Snapshot ثابت) ولا ربط الفروع.")
+        .Produces(StatusCodes.Status204NoContent)
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status404NotFound);
+
+        app.MapPost("/api/v1/promotions/{promotionId:guid}/branches/{branchId:guid}/active-state", async (
+            Guid promotionId,
+            Guid branchId,
+            SetPromotionBranchActiveRequest request,
+            SetPromotionBranchActiveHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(
+                new SetPromotionBranchActiveCommand(promotionId, branchId, request.IsActive), cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithTags("Catalog")
+        .RequirePermission(PermissionCodes.CatalogManage)
+        .WithName("SetPromotionBranchActive")
+        .WithSummary("يشغّل/يوقف عرض قائم بفرع معيّن - يحتفظ بالعرض معرَّفًا، بلا حذف؛ يضيف الفرع للعرض تلقائيًا لو ما كان مربوطًا فيه أصلًا.")
+        .Produces(StatusCodes.Status204NoContent)
+        .ProducesProblem(StatusCodes.Status404NotFound);
+
         // خارج مجموعة products عمدًا - صلاحيتها Catalog.Manage، بينما تعديل
         // السعر له صلاحيتان منفصلتان (Direct/Request)، والفلاتر تتراكم (AND)
         // لا تتجاوز بعض (CLAUDE.md §3.4) - لو حطينا هون جوّا المجموعة كان
@@ -323,4 +397,14 @@ public static class CatalogEndpoints
     public sealed record UpdateProductRequest(string Name, Guid CategoryId, decimal? SuggestedRetailPrice, int? ExpectedShelfLifeDays);
     public sealed record AddProductUnitRequest(string UnitName, decimal ConversionFactorToBase, string? BarcodeValue);
     public sealed record UpdateProductUnitBarcodeRequest(string? BarcodeValue);
+
+    public sealed record CreatePromotionRequest(
+        string Title, int BundleQuantity, decimal BundlePrice, decimal? MaxQuantityPerInvoice,
+        DateTime StartAtUtc, DateTime EndAtUtc, IReadOnlyList<Guid>? BranchIds);
+
+    public sealed record UpdatePromotionRequest(
+        string Title, int BundleQuantity, decimal BundlePrice, decimal? MaxQuantityPerInvoice,
+        DateTime StartAtUtc, DateTime EndAtUtc);
+
+    public sealed record SetPromotionBranchActiveRequest(bool IsActive);
 }

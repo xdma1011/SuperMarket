@@ -8,9 +8,18 @@ namespace SupermarketSystem.Application.Catalog.GetPublicCatalog;
 
 public sealed record GetPublicCatalogQuery(Guid BranchId, Guid? CategoryId, PagedRequest Paging);
 
+/// <summary>
+/// ActivePromotion* بلا null = فيه عرض كمية شغّال الآن بهذا الفرع لهذا
+/// المنتج (راجع Promotion.cs) - العرض يُطبَّق فقط لما الزبون يطلب
+/// بالوحدة الأساسية (نفس PROMOTION ASSUMPTION بـCompleteSaleCommand)،
+/// وهذا الكتالوج أصلًا Base-unit-centric بالكامل فمافي حاجة لأي شرط
+/// إضافي هون. السعر النهائي الفعلي وقت الطلب يُحسب سيرفر-سايد دايمًا
+/// (§3.6) - هاي الحقول للعرض فقط، لا حجز سعر.
+/// </summary>
 public sealed record PublicCatalogItemDto(
     Guid ProductId, string Name, string? Description, string CategoryName,
-    decimal Price, string? PrimaryImageUrl, Guid BaseUnitId, string BaseUnitName);
+    decimal Price, string? PrimaryImageUrl, Guid BaseUnitId, string BaseUnitName,
+    string? ActivePromotionTitle, int? ActivePromotionBundleQuantity, decimal? ActivePromotionBundlePrice);
 
 /// <summary>
 /// كتالوج تصفّح عام لتطبيق الزبائن - بلا تحقق هوية (تصفّح لا يحتاج
@@ -24,11 +33,13 @@ public sealed class GetPublicCatalogHandler
 {
     private readonly IApplicationDbContext _context;
     private readonly ISettingsProvider _settingsProvider;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public GetPublicCatalogHandler(IApplicationDbContext context, ISettingsProvider settingsProvider)
+    public GetPublicCatalogHandler(IApplicationDbContext context, ISettingsProvider settingsProvider, IDateTimeProvider dateTimeProvider)
     {
         _context = context;
         _settingsProvider = settingsProvider;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<PagedResult<PublicCatalogItemDto>> HandleAsync(GetPublicCatalogQuery query, CancellationToken cancellationToken)
@@ -103,10 +114,34 @@ public sealed class GetPublicCatalogHandler
             })
             .ToListAsync(cancellationToken);
 
+        var pageProductIds = pageResults.Select(x => x.Id).ToList();
+        var nowUtc = _dateTimeProvider.UtcNow;
+
+        // نفس منطق CompleteSaleCommand بالضبط (راجع PROMOTION ASSUMPTION
+        // هناك) - IgnoreQueryFilters على PromotionBranches لنفس سبب باقي
+        // هذا الاستعلام: تصفّح عام بلا مصادقة، بلا HttpContext.User، فمرشِّح
+        // الفرع العام بيرجّع صفر دايمًا بدونه.
+        var activePromotionByProduct = await _context.Promotions.AsNoTracking()
+            .Where(p => pageProductIds.Contains(p.ProductId) && p.StartAtUtc <= nowUtc && p.EndAtUtc >= nowUtc)
+            .Join(_context.PromotionBranches.AsNoTracking().IgnoreQueryFilters()
+                    .Where(pb => pb.BranchId == query.BranchId && pb.IsActive),
+                p => p.Id, pb => pb.PromotionId,
+                (p, pb) => new { p.ProductId, p.Title, p.BundleQuantity, p.BundlePrice, p.CreatedAtUtc })
+            .ToListAsync(cancellationToken);
+
+        var promotionByProduct = activePromotionByProduct
+            .GroupBy(x => x.ProductId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedAtUtc).First());
+
         var items = pageResults
-            .Select(x => new PublicCatalogItemDto(
-                x.Id, x.Name, x.Description, x.CategoryName, x.SellingPrice, x.PrimaryImageUrl,
-                x.BaseUnit?.Id ?? Guid.Empty, x.BaseUnit?.UnitName ?? ""))
+            .Select(x =>
+            {
+                promotionByProduct.TryGetValue(x.Id, out var promo);
+                return new PublicCatalogItemDto(
+                    x.Id, x.Name, x.Description, x.CategoryName, x.SellingPrice, x.PrimaryImageUrl,
+                    x.BaseUnit?.Id ?? Guid.Empty, x.BaseUnit?.UnitName ?? "",
+                    promo?.Title, promo?.BundleQuantity, promo?.BundlePrice);
+            })
             .ToList();
 
         return new PagedResult<PublicCatalogItemDto>(items, totalCount, paging.PageNumber, paging.PageSize);

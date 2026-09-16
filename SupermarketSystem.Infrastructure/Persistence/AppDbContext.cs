@@ -90,6 +90,8 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<SaleInvoicePayment> SaleInvoicePayments => Set<SaleInvoicePayment>();
     public DbSet<SuspendedSale> SuspendedSales => Set<SuspendedSale>();
     public DbSet<Discount> Discounts => Set<Discount>();
+    public DbSet<Promotion> Promotions => Set<Promotion>();
+    public DbSet<PromotionBranch> PromotionBranches => Set<PromotionBranch>();
     public DbSet<ReturnInvoice> ReturnInvoices => Set<ReturnInvoice>();
     public DbSet<ReturnInvoiceItem> ReturnInvoiceItems => Set<ReturnInvoiceItem>();
     public DbSet<ReturnInvoicePayment> ReturnInvoicePayments => Set<ReturnInvoicePayment>();
