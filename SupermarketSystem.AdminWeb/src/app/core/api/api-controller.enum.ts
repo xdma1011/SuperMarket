@@ -11,6 +11,7 @@ export enum ApiController {
   CashClosings = 'cash-closings',
   Customers = 'customers',
   Driver = 'driver',
+  Finance = 'finance',
   Inventory = 'inventory',
   ProductCategories = 'product-categories',
   PriceChangeRequests = 'price-change-requests',

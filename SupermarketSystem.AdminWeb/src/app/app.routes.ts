@@ -159,6 +159,11 @@ export const routes: Routes = [
         path: 'price-change-requests',
         canActivate: [requirePermissionGuard('Catalog.ChangePriceDirect')],
         loadComponent: () => import('./features/price-change-requests/price-change-requests.component').then(m => m.PriceChangeRequestsComponent)
+      },
+      {
+        path: 'finance',
+        canActivate: [requirePermissionGuard('Finance.Manage')],
+        loadComponent: () => import('./features/finance/finance.component').then(m => m.FinanceComponent)
       }
     ]
   },

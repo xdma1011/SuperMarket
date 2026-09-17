@@ -6,6 +6,7 @@ using SupermarketSystem.Domain.CashManagement;
 using SupermarketSystem.Domain.Catalog;
 using SupermarketSystem.Domain.Common;
 using SupermarketSystem.Domain.Customers;
+using SupermarketSystem.Domain.Finance;
 using SupermarketSystem.Domain.Identity;
 using SupermarketSystem.Domain.Inventory;
 using SupermarketSystem.Domain.Notifications;
@@ -83,6 +84,10 @@ public interface IApplicationDbContext
     DbSet<ReturnInvoice> ReturnInvoices { get; }
     DbSet<ReturnInvoiceItem> ReturnInvoiceItems { get; }
     DbSet<ReturnInvoicePayment> ReturnInvoicePayments { get; }
+
+    // Finance
+    DbSet<Expense> Expenses { get; }
+    DbSet<CapitalTransaction> CapitalTransactions { get; }
 
     // Payments
     DbSet<PaymentMethod> PaymentMethods { get; }

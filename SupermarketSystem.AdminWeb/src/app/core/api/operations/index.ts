@@ -5,6 +5,7 @@ export * from './cash-closings.operations';
 export * from './catalog.operations';
 export * from './customers.operations';
 export * from './driver.operations';
+export * from './finance.operations';
 export * from './inventory.operations';
 export * from './notifications.operations';
 export * from './orders.operations';

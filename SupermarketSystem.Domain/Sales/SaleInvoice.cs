@@ -120,11 +120,11 @@ public class SaleInvoice : AuditableEntity, IBranchOwned, IHasRowVersion
 
     public SaleInvoiceItem AddItem(
         Guid productId, Guid productUnitId, decimal quantity, decimal unitPriceSnapshot, decimal discountSnapshot, Guid? discountId,
-        decimal promotionAmount = 0m, Guid? promotionId = null, string? promotionTitleSnapshot = null)
+        decimal promotionAmount = 0m, Guid? promotionId = null, string? promotionTitleSnapshot = null, decimal? unitCostSnapshot = null)
     {
         var item = new SaleInvoiceItem(
             Id, productId, productUnitId, quantity, unitPriceSnapshot, discountSnapshot, discountId,
-            promotionAmount, promotionId, promotionTitleSnapshot);
+            promotionAmount, promotionId, promotionTitleSnapshot, unitCostSnapshot);
         _items.Add(item);
         TotalAmount += item.LineTotal;
         return item;
@@ -264,6 +264,16 @@ public class SaleInvoiceItem : Entity
     /// <summary>Snapshot لعنوان العرض وقت البيع - يضل ثابت للأبد حتى لو العرض الحي اتحذف أو انتهت مدته لاحقًا.</summary>
     public string? PromotionTitleSnapshot { get; private set; }
 
+    /// <summary>
+    /// تكلفة الوحدة وقت البيع بالضبط (Snapshot، زي UnitPriceSnapshot) -
+    /// أساس حساب الربح الحقيقي (GetMonthlyProfitStatement). null يعني
+    /// "التكلفة غير معروفة وقتها" (منتج ما اشتُري له فاتورة شراء أصلًا
+    /// قبل هالبيع) - تقارير الربح تستثني هالسطر من حساب التكلفة صراحة
+    /// وتُظهره منفصلًا كـ"تكلفة غير معروفة"، بدل افتراض تكلفة صفر (كان
+    /// رح يضخّم الربح بشكل مضلِّل). راجع تعليق PROFIT ASSUMPTION بـCompleteSaleCommand.
+    /// </summary>
+    public decimal? UnitCostSnapshot { get; private set; }
+
     public decimal LineTotal { get; private set; }
     public Guid? DiscountId { get; private set; }
     public decimal QuantityReturned { get; private set; }
@@ -272,7 +282,7 @@ public class SaleInvoiceItem : Entity
 
     internal SaleInvoiceItem(
         Guid saleInvoiceId, Guid productId, Guid productUnitId, decimal quantity, decimal unitPriceSnapshot, decimal discountSnapshot, Guid? discountId,
-        decimal promotionAmount = 0m, Guid? promotionId = null, string? promotionTitleSnapshot = null)
+        decimal promotionAmount = 0m, Guid? promotionId = null, string? promotionTitleSnapshot = null, decimal? unitCostSnapshot = null)
     {
         if (quantity <= 0)
         {
@@ -282,6 +292,11 @@ public class SaleInvoiceItem : Entity
         if (promotionAmount < 0)
         {
             throw new DomainException("Promotion amount cannot be negative.");
+        }
+
+        if (unitCostSnapshot is < 0)
+        {
+            throw new DomainException("Unit cost snapshot cannot be negative.");
         }
 
         SaleInvoiceId = saleInvoiceId;
@@ -294,6 +309,7 @@ public class SaleInvoiceItem : Entity
         PromotionAmount = promotionAmount;
         PromotionId = promotionId;
         PromotionTitleSnapshot = promotionTitleSnapshot;
+        UnitCostSnapshot = unitCostSnapshot;
         LineTotal = (quantity * unitPriceSnapshot) - discountSnapshot - promotionAmount;
         QuantityReturned = 0;
     }

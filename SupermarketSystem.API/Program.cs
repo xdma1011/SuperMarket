@@ -128,6 +128,7 @@ app.MapStocktakeEndpoints();
 app.MapNotificationEndpoints();
 app.MapBackupEndpoints();
 app.MapReportingEndpoints();
+app.MapFinanceEndpoints();
 
 app.Run();
 

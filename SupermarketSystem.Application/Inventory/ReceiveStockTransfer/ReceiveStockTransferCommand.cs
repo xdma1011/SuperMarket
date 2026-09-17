@@ -72,7 +72,19 @@ public sealed class ReceiveStockTransferHandler
 
                 if (existingBatch is null)
                 {
-                    var newBatch = new ProductBatch(item.ProductId, transfer.DestinationBranchId, item.BatchNumber, item.BatchExpiryDate, unitCost: 0m);
+                    // التكلفة تترحّل من دفعة المصدر - نقل بين فروع مش شراء
+                    // جديد، فلا تكلفة جديدة فعليًا تُدفَع. صفر هون كان
+                    // بيخلي CompleteSaleCommand يسجّل UnitCostSnapshot=0
+                    // لأي بيع من هالدفعة لاحقًا (ربح مُضخَّم وهميًا) - راجع
+                    // تعليق PROFIT ASSUMPTION بـCompleteSaleCommand.
+                    var sourceUnitCost = item.SourceProductBatchId is { } sourceBatchId
+                        ? await _context.ProductBatches.AsNoTracking()
+                            .Where(b => b.Id == sourceBatchId)
+                            .Select(b => (decimal?)b.UnitCost)
+                            .FirstOrDefaultAsync(cancellationToken)
+                        : null;
+
+                    var newBatch = new ProductBatch(item.ProductId, transfer.DestinationBranchId, item.BatchNumber, item.BatchExpiryDate, unitCost: sourceUnitCost ?? 0m);
                     _context.ProductBatches.Add(newBatch);
                     destinationBatchId = newBatch.Id;
                 }

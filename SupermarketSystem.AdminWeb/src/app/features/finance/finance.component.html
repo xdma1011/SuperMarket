@@ -1,0 +1,345 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">المالية</span>
+    <h1>المالية</h1>
+    <span class="subtitle">كشف الربح الشهري، المصاريف التشغيلية، وحركات رأس المال - Master Admin حصرًا.</span>
+  </div>
+</div>
+
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<div class="tabs">
+  <button type="button" [class.active]="activeTab() === 'statement'" (click)="setTab('statement')">كشف الربح الشهري</button>
+  <button type="button" [class.active]="activeTab() === 'expenses'" (click)="setTab('expenses')">المصاريف</button>
+  <button type="button" [class.active]="activeTab() === 'capital'" (click)="setTab('capital')">حركات رأس المال</button>
+</div>
+
+@if (activeTab() === 'statement') {
+  <section class="panel">
+    <div class="filter-row">
+      <select [(ngModel)]="statementBranchId">
+        @for (b of branches(); track b.id) {
+          <option [value]="b.id">{{ b.name }}</option>
+        }
+      </select>
+      <select [(ngModel)]="statementMonth">
+        @for (m of monthNames; track $index) {
+          <option [value]="$index + 1">{{ m }}</option>
+        }
+      </select>
+      <input type="number" [(ngModel)]="statementYear" placeholder="السنة" style="width: 100px" />
+      <button type="button" class="btn-primary" [disabled]="statementLoading()" (click)="loadStatement()">
+        {{ statementLoading() ? 'جارٍ الجلب…' : 'عرض الكشف' }}
+      </button>
+    </div>
+
+    @if (statementError()) {
+      <p class="form-error">{{ statementError() }}</p>
+    }
+
+    @if (statement(); as s) {
+      @if (s.itemsExcludedNoCostHistory > 0) {
+        <div class="alert-banner warn">
+          تنبيه: {{ s.itemsExcludedNoCostHistory }} سطر بيع بهالشهر بلا تكلفة معروفة (منتج بيع قبل أي فاتورة شراء مسجَّلة له) -
+          مُستبعدة كليًا من تكلفة البضاعة المباعة أدناه، يعني الربح الحقيقي الفعلي أقل من الرقم المعروض هون.
+        </div>
+      }
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <span class="kpi-label">صافي الإيراد</span>
+          <span class="kpi-value">{{ s.netRevenue | number: '1.2-2' }}</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">تكلفة البضاعة المباعة</span>
+          <span class="kpi-value">{{ s.costOfGoodsSold | number: '1.2-2' }}</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">الربح الإجمالي</span>
+          <span class="kpi-value">{{ s.grossProfit | number: '1.2-2' }}</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">إجمالي المصاريف</span>
+          <span class="kpi-value">{{ s.totalExpenses | number: '1.2-2' }}</span>
+        </div>
+        <div class="kpi-card highlight">
+          <span class="kpi-label">صافي ربح الشهر</span>
+          <span class="kpi-value">{{ s.netProfit | number: '1.2-2' }}</span>
+        </div>
+      </div>
+
+      <div class="detail-grid">
+        <div class="detail-row"><span>إجمالي المبيعات</span><span class="mono">{{ s.totalSales | number: '1.2-2' }}</span></div>
+        <div class="detail-row"><span>إجمالي المرتجعات</span><span class="mono">{{ s.totalReturnedAmount | number: '1.2-2' }}</span></div>
+      </div>
+
+      @if (s.expensesByCategory.length > 0) {
+        <h3 class="section-title">المصاريف حسب التصنيف</h3>
+        <div class="detail-grid">
+          @for (e of s.expensesByCategory; track e.category) {
+            <div class="detail-row"><span>{{ categoryLabels[e.category] }}</span><span class="mono">{{ e.amount | number: '1.2-2' }}</span></div>
+          }
+        </div>
+      }
+    } @else if (!statementLoading() && !statementError()) {
+      <div class="no-results">
+        <span class="no-results-sub">اختر الفرع والشهر ثم اضغط "عرض الكشف".</span>
+      </div>
+    }
+  </section>
+}
+
+@if (activeTab() === 'expenses') {
+  <div class="head-actions" style="margin-bottom: 14px">
+    <button type="button" class="btn-primary" (click)="openExpenseForm()">مصروف جديد</button>
+  </div>
+
+  <div class="filter-row">
+    <select [(ngModel)]="filterExpenseBranchId" (ngModelChange)="onExpensesFilterChange()">
+      <option value="">كل الفروع</option>
+      @for (b of branches(); track b.id) {
+        <option [value]="b.id">{{ b.name }}</option>
+      }
+    </select>
+  </div>
+
+  <section class="table-panel">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>الفرع</th>
+            <th>التصنيف</th>
+            <th>المبلغ</th>
+            <th>تاريخ الدفع</th>
+            <th>الفترة</th>
+            <th>ملاحظات</th>
+            <th>سجّله</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (e of expenses(); track e.id) {
+            <tr>
+              <td>{{ branchName(e.branchId) }}</td>
+              <td>{{ categoryLabels[e.category] }}</td>
+              <td class="mono">{{ e.amount | number: '1.2-2' }}</td>
+              <td class="mono">{{ e.paymentDateUtc | date: 'yyyy-MM-dd' }}</td>
+              <td class="mono">{{ monthNames[e.periodMonth - 1] }} {{ e.periodYear }}</td>
+              <td>{{ e.notes || '—' }}</td>
+              <td>{{ e.recordedByUsername }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (!expensesLoading() && expenses().length === 0) {
+        <div class="no-results">
+          <span class="no-results-title">لا يوجد مصاريف مسجَّلة بعد</span>
+        </div>
+      }
+      @if (expensesLoading()) {
+        <div class="no-results"><span class="no-results-sub">جارٍ التحميل…</span></div>
+      }
+    </div>
+
+    @if (expensesTotalCount() > 0) {
+      <app-pagination
+        [pageNumber]="expensesPageNumber()"
+        [pageSize]="expensesPageSize()"
+        [totalCount]="expensesTotalCount()"
+        (changed)="onExpensesPageChanged($event)"
+      ></app-pagination>
+    }
+  </section>
+}
+
+@if (activeTab() === 'capital') {
+  <div class="head-actions" style="margin-bottom: 14px">
+    <button type="button" class="btn-primary" (click)="openCapitalForm()">حركة رأس مال جديدة</button>
+  </div>
+
+  <div class="filter-row">
+    <select [(ngModel)]="filterCapitalBranchId" (ngModelChange)="onCapitalFilterChange()">
+      <option value="">كل الفروع</option>
+      @for (b of branches(); track b.id) {
+        <option [value]="b.id">{{ b.name }}</option>
+      }
+    </select>
+  </div>
+
+  <section class="table-panel">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>الفرع</th>
+            <th>النوع</th>
+            <th>المبلغ</th>
+            <th>التاريخ</th>
+            <th>ملاحظات</th>
+            <th>سجّله</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (c of capitalTransactions(); track c.id) {
+            <tr>
+              <td>{{ branchName(c.branchId) }}</td>
+              <td>
+                <span class="status-chip" [class.inactive]="c.type === 2">{{ typeLabels[c.type] }}</span>
+              </td>
+              <td class="mono">{{ c.amount | number: '1.2-2' }}</td>
+              <td class="mono">{{ c.occurredAtUtc | date: 'yyyy-MM-dd' }}</td>
+              <td>{{ c.notes || '—' }}</td>
+              <td>{{ c.recordedByUsername }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (!capitalLoading() && capitalTransactions().length === 0) {
+        <div class="no-results">
+          <span class="no-results-title">لا يوجد حركات رأس مال مسجَّلة بعد</span>
+        </div>
+      }
+      @if (capitalLoading()) {
+        <div class="no-results"><span class="no-results-sub">جارٍ التحميل…</span></div>
+      }
+    </div>
+
+    @if (capitalTotalCount() > 0) {
+      <app-pagination
+        [pageNumber]="capitalPageNumber()"
+        [pageSize]="capitalPageSize()"
+        [totalCount]="capitalTotalCount()"
+        (changed)="onCapitalPageChanged($event)"
+      ></app-pagination>
+    }
+  </section>
+}
+
+@if (expenseFormOpen()) {
+  <div class="modal-backdrop" (click)="closeExpenseForm()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div class="modal-title-group">
+          <h2>مصروف جديد</h2>
+          <span class="modal-hint">فترة المصروف (الشهر اللي يخصه) قد تختلف عن تاريخ الدفع الفعلي - مثلًا إيجار يُدفع اليوم لشهر قادم.</span>
+        </div>
+        <button type="button" class="icon-btn" (click)="closeExpenseForm()" aria-label="إغلاق">×</button>
+      </div>
+
+      @if (expenseFormError()) {
+        <p class="form-error">{{ expenseFormError() }}</p>
+      }
+
+      <div class="modal-fields">
+        <label class="field">
+          <span>الفرع</span>
+          <select [(ngModel)]="newExpenseBranchId">
+            @for (b of branches(); track b.id) {
+              <option [value]="b.id">{{ b.name }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span>التصنيف</span>
+          <select [(ngModel)]="newExpenseCategory">
+            <option [value]="1">إيجار</option>
+            <option [value]="2">كهرباء</option>
+            <option [value]="3">ماء</option>
+            <option [value]="4">راتب</option>
+            <option [value]="5">أخرى</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>المبلغ</span>
+          <input type="number" min="0.01" step="0.01" [(ngModel)]="newExpenseAmount" placeholder="0.00" />
+        </label>
+        <label class="field">
+          <span>تاريخ الدفع الفعلي</span>
+          <input type="date" [(ngModel)]="newExpensePaymentDate" />
+        </label>
+        <label class="field">
+          <span>شهر الفترة</span>
+          <select [(ngModel)]="newExpensePeriodMonth">
+            @for (m of monthNames; track $index) {
+              <option [value]="$index + 1">{{ m }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span>سنة الفترة</span>
+          <input type="number" [(ngModel)]="newExpensePeriodYear" />
+        </label>
+        <label class="field" style="grid-column: span 2">
+          <span>ملاحظات (اختياري)</span>
+          <input type="text" [(ngModel)]="newExpenseNotes" placeholder="—" />
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" [disabled]="expenseSubmitting()" (click)="submitExpense()">
+          {{ expenseSubmitting() ? 'جارٍ الحفظ…' : 'تسجيل المصروف' }}
+        </button>
+        <button type="button" class="btn-ghost" (click)="closeExpenseForm()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (capitalFormOpen()) {
+  <div class="modal-backdrop" (click)="closeCapitalForm()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div class="modal-title-group">
+          <h2>حركة رأس مال جديدة</h2>
+          <span class="modal-hint">سحب/إضافة يدوي صريح فقط - مستقل كليًا عن كشف الربح الشهري، ما بيتغيّر تلقائيًا أبدًا.</span>
+        </div>
+        <button type="button" class="icon-btn" (click)="closeCapitalForm()" aria-label="إغلاق">×</button>
+      </div>
+
+      @if (capitalFormError()) {
+        <p class="form-error">{{ capitalFormError() }}</p>
+      }
+
+      <div class="modal-fields">
+        <label class="field">
+          <span>الفرع</span>
+          <select [(ngModel)]="newCapitalBranchId">
+            @for (b of branches(); track b.id) {
+              <option [value]="b.id">{{ b.name }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span>النوع</span>
+          <select [(ngModel)]="newCapitalType">
+            <option [value]="1">إضافة</option>
+            <option [value]="2">سحب</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>المبلغ</span>
+          <input type="number" min="0.01" step="0.01" [(ngModel)]="newCapitalAmount" placeholder="0.00" />
+        </label>
+        <label class="field">
+          <span>التاريخ</span>
+          <input type="date" [(ngModel)]="newCapitalOccurredAt" />
+        </label>
+        <label class="field" style="grid-column: span 2">
+          <span>ملاحظات (اختياري)</span>
+          <input type="text" [(ngModel)]="newCapitalNotes" placeholder="—" />
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" [disabled]="capitalSubmitting()" (click)="submitCapitalTransaction()">
+          {{ capitalSubmitting() ? 'جارٍ الحفظ…' : 'تسجيل الحركة' }}
+        </button>
+        <button type="button" class="btn-ghost" (click)="closeCapitalForm()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+}

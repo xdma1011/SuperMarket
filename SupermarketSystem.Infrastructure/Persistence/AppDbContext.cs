@@ -8,6 +8,7 @@ using SupermarketSystem.Domain.CashManagement;
 using SupermarketSystem.Domain.Catalog;
 using SupermarketSystem.Domain.Common;
 using SupermarketSystem.Domain.Customers;
+using SupermarketSystem.Domain.Finance;
 using SupermarketSystem.Domain.Identity;
 using SupermarketSystem.Domain.Inventory;
 using SupermarketSystem.Domain.Notifications;
@@ -95,6 +96,10 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ReturnInvoice> ReturnInvoices => Set<ReturnInvoice>();
     public DbSet<ReturnInvoiceItem> ReturnInvoiceItems => Set<ReturnInvoiceItem>();
     public DbSet<ReturnInvoicePayment> ReturnInvoicePayments => Set<ReturnInvoicePayment>();
+
+    // Finance
+    public DbSet<Expense> Expenses => Set<Expense>();
+    public DbSet<CapitalTransaction> CapitalTransactions => Set<CapitalTransaction>();
 
     // Payments
     public DbSet<PaymentMethod> PaymentMethods => Set<PaymentMethod>();

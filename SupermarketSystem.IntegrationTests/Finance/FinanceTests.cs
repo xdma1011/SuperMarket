@@ -1,0 +1,271 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using SupermarketSystem.Application.Common.Pagination;
+using SupermarketSystem.Application.Finance.CreateCapitalTransaction;
+using SupermarketSystem.Application.Finance.CreateExpense;
+using SupermarketSystem.Application.Finance.GetCapitalTransactions;
+using SupermarketSystem.Application.Finance.GetExpenses;
+using SupermarketSystem.Application.Finance.GetMonthlyProfitStatement;
+using SupermarketSystem.Application.Inventory.ReceiveStockTransfer;
+using SupermarketSystem.Application.Sales.CompleteSale;
+using SupermarketSystem.Domain.Finance;
+using SupermarketSystem.Domain.Inventory;
+using SupermarketSystem.Domain.Purchasing;
+using SupermarketSystem.IntegrationTests.Common;
+using Xunit;
+
+namespace SupermarketSystem.IntegrationTests.Finance;
+
+/// <summary>
+/// مصاريف تشغيلية، حركات رأس مال، وحساب الربح الحقيقي الشهري - طلب صاحب
+/// المشروع المباشر (17/9/2026): "بدقة شديدة". يغطي تحديدًا: UnitCostSnapshot
+/// (متوسط مرجّح وقت البيع للمنتجات غير المتتبَّعة، تكلفة الدفعة بالضبط
+/// للمتتبَّعة، null صريح بلا تاريخ شراء)، تعريف كل رقم بكشف الربح، وإصلاح
+/// ReceiveStockTransferCommand (كان يصفّر تكلفة الدفعة الجديدة دايمًا).
+/// </summary>
+[Collection(DatabaseCollection.Name)]
+public sealed class FinanceTests : IntegrationTestBase
+{
+    public FinanceTests(DatabaseFixture fixture) : base(fixture) { }
+
+    [Fact]
+    public async Task تسجيل_مصروف_ثم_جلبه_بفلترة_الفترة()
+    {
+        using var scope = CreateScope();
+        await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+
+        var createHandler = scope.ServiceProvider.GetRequiredService<CreateExpenseHandler>();
+        var result = await createHandler.HandleAsync(new CreateExpenseCommand(
+            Fixture.TestBranchId, ExpenseCategory.Rent, 200m, DateTime.UtcNow, 2026, 10, "إيجار تشرين أول"),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+
+        var getHandler = scope.ServiceProvider.GetRequiredService<GetExpensesHandler>();
+        var list = await getHandler.HandleAsync(
+            new GetExpensesQuery(new PagedRequest(), Fixture.TestBranchId, 2026, 10, null), CancellationToken.None);
+
+        var item = Assert.Single(list.Items);
+        Assert.Equal(ExpenseCategory.Rent, item.Category);
+        Assert.Equal(200m, item.Amount);
+    }
+
+    [Fact]
+    public async Task تسجيل_حركة_رأس_مال_ثم_جلبها()
+    {
+        using var scope = CreateScope();
+        await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+
+        var createHandler = scope.ServiceProvider.GetRequiredService<CreateCapitalTransactionHandler>();
+        var result = await createHandler.HandleAsync(new CreateCapitalTransactionCommand(
+            Fixture.TestBranchId, CapitalTransactionType.Deposit, 1000m, DateTime.UtcNow, "ضخ رأس مال إضافي"),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+
+        var getHandler = scope.ServiceProvider.GetRequiredService<GetCapitalTransactionsHandler>();
+        var list = await getHandler.HandleAsync(
+            new GetCapitalTransactionsQuery(new PagedRequest(), Fixture.TestBranchId), CancellationToken.None);
+
+        var item = Assert.Single(list.Items);
+        Assert.Equal(CapitalTransactionType.Deposit, item.Type);
+        Assert.Equal(1000m, item.Amount);
+    }
+
+    [Fact]
+    public async Task البيع_غير_متتبع_الدفعات_ياخذ_متوسط_تكلفة_مرجّح_من_فواتير_الشراء()
+    {
+        using var scope = CreateScope();
+        await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+        var db = CreateDbContext(scope);
+        var (product, unit) = await TestDataBuilder.CreateActiveProductAsync(db, "منتج تكلفة متوسطة");
+        await TestDataBuilder.CreateProductBranchAsync(db, product.Id, Fixture.TestBranchId, sellingPrice: 5m);
+        await TestDataBuilder.SetStockAsync(db, product.Id, Fixture.TestBranchId, 100m);
+
+        var supplier = await TestDataBuilder.CreateSupplierAsync(db);
+
+        // فاتورة شراء أولى: 10 وحدة بتكلفة 2 دينار = 20
+        var invoice1 = new PurchaseInvoice(Fixture.TestBranchId, supplier.Id, "PI-TEST-1", null);
+        invoice1.AddItem(product.Id, unit.Id, null, 10m, 2m);
+        invoice1.MarkReceived();
+        db.PurchaseInvoices.Add(invoice1);
+        await db.SaveChangesAsync();
+
+        // فاتورة شراء ثانية: 10 وحدة بتكلفة 4 دنانير = 40
+        var invoice2 = new PurchaseInvoice(Fixture.TestBranchId, supplier.Id, "PI-TEST-2", null);
+        invoice2.AddItem(product.Id, unit.Id, null, 10m, 4m);
+        invoice2.MarkReceived();
+        db.PurchaseInvoices.Add(invoice2);
+        await db.SaveChangesAsync();
+
+        // متوسط مرجّح متوقَّع = (20 + 40) / 20 = 3 دنانير للوحدة
+
+        var saleHandler = scope.ServiceProvider.GetRequiredService<CompleteSaleHandler>();
+        var result = await saleHandler.HandleAsync(new CompleteSaleCommand(
+            Fixture.TestBranchId, Guid.NewGuid(), CustomerId: null, InvoiceLevelDiscountAmount: 0m,
+            Items: new[] { new CompleteSaleItemDto(product.Id, unit.Id, Quantity: 1m, ManualDiscountAmount: 0m, ProductBatchId: null) },
+            Payments: new[] { new CompleteSalePaymentDto(TestDataBuilder.CashPaymentMethodId, 5m, null, Guid.NewGuid()) }),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+
+        var item = await db.SaleInvoiceItems.AsNoTracking().FirstAsync(i => i.SaleInvoiceId == result.Value.SaleInvoiceId);
+        Assert.Equal(3m, item.UnitCostSnapshot);
+    }
+
+    [Fact]
+    public async Task البيع_من_منتج_متتبع_الدفعات_ياخذ_تكلفة_الدفعة_بالضبط()
+    {
+        using var scope = CreateScope();
+        await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+        var db = CreateDbContext(scope);
+        var (product, unit) = await TestDataBuilder.CreateActiveProductAsync(db, "منتج دفعات تكلفة", isBatchTracked: true);
+        await TestDataBuilder.CreateProductBranchAsync(db, product.Id, Fixture.TestBranchId, sellingPrice: 5m);
+        var batch = await TestDataBuilder.CreateBatchAsync(db, product.Id, Fixture.TestBranchId, "BATCH-1", unitCost: 2.5m);
+        await TestDataBuilder.SetStockAsync(db, product.Id, Fixture.TestBranchId, 50m, batch.Id);
+
+        var saleHandler = scope.ServiceProvider.GetRequiredService<CompleteSaleHandler>();
+        var result = await saleHandler.HandleAsync(new CompleteSaleCommand(
+            Fixture.TestBranchId, Guid.NewGuid(), CustomerId: null, InvoiceLevelDiscountAmount: 0m,
+            Items: new[] { new CompleteSaleItemDto(product.Id, unit.Id, Quantity: 1m, ManualDiscountAmount: 0m, ProductBatchId: batch.Id) },
+            Payments: new[] { new CompleteSalePaymentDto(TestDataBuilder.CashPaymentMethodId, 5m, null, Guid.NewGuid()) }),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+
+        var item = await db.SaleInvoiceItems.AsNoTracking().FirstAsync(i => i.SaleInvoiceId == result.Value.SaleInvoiceId);
+        Assert.Equal(2.5m, item.UnitCostSnapshot);
+    }
+
+    [Fact]
+    public async Task البيع_بلا_تاريخ_شراء_سابق_يسجّل_تكلفة_null_لا_صفر()
+    {
+        using var scope = CreateScope();
+        await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+        var db = CreateDbContext(scope);
+        var (product, unit) = await TestDataBuilder.CreateActiveProductAsync(db, "منتج بلا تاريخ شراء");
+        await TestDataBuilder.CreateProductBranchAsync(db, product.Id, Fixture.TestBranchId, sellingPrice: 5m);
+        await TestDataBuilder.SetStockAsync(db, product.Id, Fixture.TestBranchId, 100m);
+
+        var saleHandler = scope.ServiceProvider.GetRequiredService<CompleteSaleHandler>();
+        var result = await saleHandler.HandleAsync(new CompleteSaleCommand(
+            Fixture.TestBranchId, Guid.NewGuid(), CustomerId: null, InvoiceLevelDiscountAmount: 0m,
+            Items: new[] { new CompleteSaleItemDto(product.Id, unit.Id, Quantity: 1m, ManualDiscountAmount: 0m, ProductBatchId: null) },
+            Payments: new[] { new CompleteSalePaymentDto(TestDataBuilder.CashPaymentMethodId, 5m, null, Guid.NewGuid()) }),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+
+        var item = await db.SaleInvoiceItems.AsNoTracking().FirstAsync(i => i.SaleInvoiceId == result.Value.SaleInvoiceId);
+        Assert.Null(item.UnitCostSnapshot);
+    }
+
+    [Fact]
+    public async Task كشف_الربح_الشهري_يحسب_الإيراد_والتكلفة_والمصاريف_بدقة()
+    {
+        using var scope = CreateScope();
+        await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+        var db = CreateDbContext(scope);
+        var (product, unit) = await TestDataBuilder.CreateActiveProductAsync(db, "منتج كشف ربح");
+        await TestDataBuilder.CreateProductBranchAsync(db, product.Id, Fixture.TestBranchId, sellingPrice: 5m);
+        await TestDataBuilder.SetStockAsync(db, product.Id, Fixture.TestBranchId, 100m);
+
+        var supplier = await TestDataBuilder.CreateSupplierAsync(db);
+        var invoice = new PurchaseInvoice(Fixture.TestBranchId, supplier.Id, "PI-PROFIT-1", null);
+        invoice.AddItem(product.Id, unit.Id, null, 100m, 3m); // تكلفة الوحدة = 3
+        invoice.MarkReceived();
+        db.PurchaseInvoices.Add(invoice);
+        await db.SaveChangesAsync();
+
+        var saleHandler = scope.ServiceProvider.GetRequiredService<CompleteSaleHandler>();
+        var saleResult = await saleHandler.HandleAsync(new CompleteSaleCommand(
+            Fixture.TestBranchId, Guid.NewGuid(), CustomerId: null, InvoiceLevelDiscountAmount: 0m,
+            Items: new[] { new CompleteSaleItemDto(product.Id, unit.Id, Quantity: 10m, ManualDiscountAmount: 0m, ProductBatchId: null) },
+            Payments: new[] { new CompleteSalePaymentDto(TestDataBuilder.CashPaymentMethodId, 50m, null, Guid.NewGuid()) }),
+            CancellationToken.None);
+        Assert.True(saleResult.IsSuccess);
+        // إيراد = 50، تكلفة البضاعة = 10 × 3 = 30، ربح إجمالي = 20
+
+        var now = DateTime.UtcNow;
+        var expenseHandler = scope.ServiceProvider.GetRequiredService<CreateExpenseHandler>();
+        await expenseHandler.HandleAsync(new CreateExpenseCommand(
+            Fixture.TestBranchId, ExpenseCategory.Electricity, 5m, now, now.Year, now.Month, null), CancellationToken.None);
+
+        var statementHandler = scope.ServiceProvider.GetRequiredService<GetMonthlyProfitStatementHandler>();
+        var statement = await statementHandler.HandleAsync(
+            new GetMonthlyProfitStatementQuery(Fixture.TestBranchId, now.Year, now.Month), CancellationToken.None);
+
+        Assert.True(statement.IsSuccess);
+        Assert.Equal(50m, statement.Value.TotalSales);
+        Assert.Equal(30m, statement.Value.CostOfGoodsSold);
+        Assert.Equal(20m, statement.Value.GrossProfit);
+        Assert.Equal(5m, statement.Value.TotalExpenses);
+        Assert.Equal(15m, statement.Value.NetProfit);
+        Assert.Equal(0, statement.Value.ItemsExcludedNoCostHistory);
+    }
+
+    [Fact]
+    public async Task كشف_الربح_يستثني_تكلفة_سطر_بلا_تاريخ_شراء_من_المجموع_ويعلّمه()
+    {
+        using var scope = CreateScope();
+        await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+        var db = CreateDbContext(scope);
+        var (product, unit) = await TestDataBuilder.CreateActiveProductAsync(db, "منتج بلا تاريخ شراء لكشف الربح");
+        await TestDataBuilder.CreateProductBranchAsync(db, product.Id, Fixture.TestBranchId, sellingPrice: 5m);
+        await TestDataBuilder.SetStockAsync(db, product.Id, Fixture.TestBranchId, 100m);
+
+        var saleHandler = scope.ServiceProvider.GetRequiredService<CompleteSaleHandler>();
+        var saleResult = await saleHandler.HandleAsync(new CompleteSaleCommand(
+            Fixture.TestBranchId, Guid.NewGuid(), CustomerId: null, InvoiceLevelDiscountAmount: 0m,
+            Items: new[] { new CompleteSaleItemDto(product.Id, unit.Id, Quantity: 2m, ManualDiscountAmount: 0m, ProductBatchId: null) },
+            Payments: new[] { new CompleteSalePaymentDto(TestDataBuilder.CashPaymentMethodId, 10m, null, Guid.NewGuid()) }),
+            CancellationToken.None);
+        Assert.True(saleResult.IsSuccess);
+
+        var now = DateTime.UtcNow;
+        var statementHandler = scope.ServiceProvider.GetRequiredService<GetMonthlyProfitStatementHandler>();
+        var statement = await statementHandler.HandleAsync(
+            new GetMonthlyProfitStatementQuery(Fixture.TestBranchId, now.Year, now.Month), CancellationToken.None);
+
+        Assert.True(statement.IsSuccess);
+        Assert.Equal(10m, statement.Value.TotalSales);
+        Assert.Equal(0m, statement.Value.CostOfGoodsSold);
+        Assert.Equal(1, statement.Value.ItemsExcludedNoCostHistory);
+        // بلا تكلفة معروفة، الربح المعروض هون أعلى من الحقيقي فعليًا -
+        // بالضبط ما تعليق GetMonthlyProfitStatementQuery بيحذّر منه.
+        Assert.Equal(10m, statement.Value.GrossProfit);
+    }
+
+    [Fact]
+    public async Task استلام_نقل_مخزون_ينقل_تكلفة_دفعة_المصدر_لا_صفر()
+    {
+        // يتحقّق من إصلاح ReceiveStockTransferCommand - قبل الإصلاح كانت
+        // الدفعة الجديدة بالفرع الوجهة تُنشأ بتكلفة 0 دايمًا بغض النظر عن
+        // تكلفة دفعة المصدر الفعلية (كان رح يضخّم ربح أي بيع لاحق من هالدفعة
+        // بالفرع الوجهة بشكل وهمي - راجع تعليق PROFIT ASSUMPTION بـCompleteSaleCommand).
+        using var scope = CreateScope();
+        await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+        var db = CreateDbContext(scope);
+
+        var (product, unit) = await TestDataBuilder.CreateActiveProductAsync(db, "منتج نقل دفعة", isBatchTracked: true);
+        var destinationBranch = await TestDataBuilder.CreateBranchAsync(db, "فرع وجهة نقل تكلفة", "TRC");
+
+        var sourceBatch = await TestDataBuilder.CreateBatchAsync(db, product.Id, Fixture.TestBranchId, "SRC-BATCH", unitCost: 7m);
+
+        var transfer = new StockTransfer(Fixture.TestBranchId, destinationBranch.Id, "TR-TEST-1", Fixture.AdminUserId, DateTime.UtcNow);
+        transfer.AddItem(product.Id, unit.Id, quantityBase: 5m, sourceBatch.Id, "SRC-BATCH", null);
+        db.StockTransfers.Add(transfer);
+        await db.SaveChangesAsync();
+
+        var receiveHandler = scope.ServiceProvider.GetRequiredService<ReceiveStockTransferHandler>();
+        var receiveResult = await receiveHandler.HandleAsync(
+            new ReceiveStockTransferCommand(transfer.Id), CancellationToken.None);
+
+        Assert.True(receiveResult.IsSuccess);
+
+        var destinationBatch = await db.ProductBatches.AsNoTracking()
+            .FirstAsync(b => b.ProductId == product.Id && b.BranchId == destinationBranch.Id && b.BatchNumber == "SRC-BATCH");
+
+        Assert.Equal(7m, destinationBatch.UnitCost);
+    }
+}

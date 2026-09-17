@@ -4,6 +4,7 @@ using SupermarketSystem.Domain.Branches;
 using SupermarketSystem.Domain.CashManagement;
 using SupermarketSystem.Domain.Catalog;
 using SupermarketSystem.Domain.Common;
+using SupermarketSystem.Domain.Finance;
 using SupermarketSystem.Domain.Identity;
 using SupermarketSystem.Domain.Inventory;
 using SupermarketSystem.Domain.Purchasing;
@@ -114,6 +115,18 @@ public class BranchOwnedBranchDocumentSequenceConfiguration : IEntityTypeConfigu
 public class BranchOwnedUserBranchConfiguration : IEntityTypeConfiguration<UserBranch>
 {
     public void Configure(EntityTypeBuilder<UserBranch> builder) =>
+        builder.HasOne<Branch>().WithMany().HasForeignKey(e => e.BranchId).OnDelete(DeleteBehavior.Restrict);
+}
+
+public class BranchOwnedExpenseConfiguration : IEntityTypeConfiguration<Expense>
+{
+    public void Configure(EntityTypeBuilder<Expense> builder) =>
+        builder.HasOne<Branch>().WithMany().HasForeignKey(e => e.BranchId).OnDelete(DeleteBehavior.Restrict);
+}
+
+public class BranchOwnedCapitalTransactionConfiguration : IEntityTypeConfiguration<CapitalTransaction>
+{
+    public void Configure(EntityTypeBuilder<CapitalTransaction> builder) =>
         builder.HasOne<Branch>().WithMany().HasForeignKey(e => e.BranchId).OnDelete(DeleteBehavior.Restrict);
 }
 

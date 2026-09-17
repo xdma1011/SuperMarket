@@ -7,6 +7,7 @@ using SupermarketSystem.Domain.CashManagement;
 using SupermarketSystem.Domain.Common;
 using SupermarketSystem.Domain.Identity;
 using SupermarketSystem.Domain.Inventory;
+using SupermarketSystem.Domain.Purchasing;
 using SupermarketSystem.Domain.Sales;
 
 namespace SupermarketSystem.Application.Sales.CompleteSale;
@@ -151,10 +152,28 @@ public static class CompleteSaleValidator
 /// that is a model change — an extra price column on ProductUnit or a
 /// per-unit price table — not something to fudge here.
 ///
-/// COSTING: still no FIFO/weighted-average (Architecture Review §12). For
-/// batch-tracked products the caller states which batch is being sold; the
-/// system does not choose. Auto-selection would be an implicit costing
-/// policy, which the brief explicitly forbids inventing.
+/// COSTING: batch selection itself is still manual (Architecture Review
+/// §12) — for batch-tracked products the caller states which batch is being
+/// sold; the system does not choose. Auto-selection would be an implicit
+/// costing policy, which the brief explicitly forbids inventing.
+///
+/// PROFIT ASSUMPTION — UnitCostSnapshot (added for GetMonthlyProfitStatement):
+/// for a batch-tracked line, ProductBatch.UnitCost is used as-is; for a
+/// non-batch line, a weighted average is computed from Received purchase
+/// invoices up to this exact sale's moment (same style as
+/// GetCurrentCapitalValueQuery.cs's WeightedAverageCost, just time-bounded
+/// instead of all-time so a later purchase can never retroactively change a
+/// past sale's recorded cost). Both are treated as the cost of ONE BASE
+/// UNIT — same convention CapitalValue/SupplierPriceComparison already use
+/// implicitly — then scaled by the sale line's ConversionFactorToBase
+/// exactly like UnitPriceSnapshot. Known blind spot inherited from that
+/// same existing convention, not introduced here: if a product is ever
+/// purchased in more than one ProductUnit across its history, the average
+/// silently mixes them. A product with zero purchase history before this
+/// sale (no Received purchase invoice yet for a non-batch product)
+/// snapshots null, not zero — GetMonthlyProfitStatement must exclude
+/// null-cost lines from cost totals explicitly rather than assume free
+/// stock.
 /// </summary>
 public sealed class CompleteSaleHandler
 {
@@ -274,6 +293,32 @@ public sealed class CompleteSaleHandler
         // - لو تصادف أكتر من صف (خطأ إداري بإدخال عروض متداخلة تواريخها)،
         // نأخذ الأقدم إنشاءً بهدوء بدل ما نفشل البيع بالكامل.
         var nowUtc = _dateTimeProvider.UtcNow;
+
+        // --- تكلفة الوحدة وقت البيع (UnitCostSnapshot) - راجع تعليق PROFIT ASSUMPTION فوق ---
+        var batchIds = command.Items.Where(i => i.ProductBatchId is not null)
+            .Select(i => i.ProductBatchId!.Value).Distinct().ToList();
+        var batchUnitCosts = batchIds.Count == 0
+            ? new Dictionary<Guid, decimal>()
+            : await _context.ProductBatches.AsNoTracking()
+                .Where(b => batchIds.Contains(b.Id))
+                .Select(b => new { b.Id, b.UnitCost })
+                .ToDictionaryAsync(b => b.Id, b => b.UnitCost, cancellationToken);
+
+        var nonBatchProductIds = command.Items.Where(i => i.ProductBatchId is null)
+            .Select(i => i.ProductId).Distinct().ToList();
+        var weightedAverageCosts = nonBatchProductIds.Count == 0
+            ? new Dictionary<Guid, decimal>()
+            : await _context.PurchaseInvoiceItems.AsNoTracking()
+                .Where(i => nonBatchProductIds.Contains(i.ProductId))
+                .Join(
+                    _context.PurchaseInvoices.AsNoTracking()
+                        .Where(pi => pi.Status == PurchaseInvoiceStatus.Received && pi.CreatedAtUtc <= nowUtc),
+                    i => i.PurchaseInvoiceId, pi => pi.Id,
+                    (i, pi) => new { i.ProductId, i.Quantity, i.UnitCost })
+                .GroupBy(x => x.ProductId)
+                .Select(g => new { ProductId = g.Key, TotalQuantity = g.Sum(x => x.Quantity), TotalCost = g.Sum(x => x.Quantity * x.UnitCost) })
+                .ToDictionaryAsync(x => x.ProductId, x => x.TotalCost / x.TotalQuantity, cancellationToken);
+
         var activePromotionsByProduct = await _context.Promotions.AsNoTracking()
             .Where(p => productIds.Contains(p.ProductId) && p.StartAtUtc <= nowUtc && p.EndAtUtc >= nowUtc)
             .Join(_context.PromotionBranches.AsNoTracking().Where(pb => pb.BranchId == command.BranchId && pb.IsActive),
@@ -345,6 +390,15 @@ public sealed class CompleteSaleHandler
             var unitPrice = productBranch.SellingPrice * unit.ConversionFactorToBase;
             var grossLineTotal = unitPrice * item.Quantity;
 
+            // تكلفة الوحدة وقت البيع - راجع تعليق PROFIT ASSUMPTION فوق.
+            decimal? unitCostSnapshotBaseUnit = item.ProductBatchId is { } batchId
+                ? (batchUnitCosts.TryGetValue(batchId, out var batchCost) ? batchCost : null)
+                : (weightedAverageCosts.TryGetValue(item.ProductId, out var avgCost) ? avgCost : null);
+
+            decimal? unitCostSnapshot = unitCostSnapshotBaseUnit is { } costBaseUnit
+                ? costBaseUnit * unit.ConversionFactorToBase
+                : null;
+
             // عرض الكمية (Promotion) - راجع تعليق PROMOTION ASSUMPTION فوق.
             // هذا حساب سعر تلقائي (زي سعر ProductBranch نفسه)، مش خصم يدوي
             // من الكاشير - ما يمر على PosPolicy إطلاقًا (معتمَد مسبقًا من
@@ -405,7 +459,8 @@ public sealed class CompleteSaleHandler
                 item.ManualDiscountAmount,
                 promotionAmount,
                 promotionId,
-                promotionTitleSnapshot));
+                promotionTitleSnapshot,
+                unitCostSnapshot));
         }
 
         // --- 4. Totals, then the payment-completeness rule ---
@@ -550,7 +605,8 @@ public sealed class CompleteSaleHandler
                 var invoiceItem = invoice.AddItem(
                     line.ProductId, line.ProductUnitId, line.Quantity,
                     line.UnitPrice, line.ManualDiscountAmount, discountId: null,
-                    line.PromotionAmount, line.PromotionId, line.PromotionTitleSnapshot);
+                    line.PromotionAmount, line.PromotionId, line.PromotionTitleSnapshot,
+                    line.UnitCostSnapshot);
 
                 movements.Add(new StockMovement(
                     line.ProductId,
@@ -646,7 +702,8 @@ public sealed class CompleteSaleHandler
         decimal ManualDiscountAmount,
         decimal PromotionAmount,
         Guid? PromotionId,
-        string? PromotionTitleSnapshot)
+        string? PromotionTitleSnapshot,
+        decimal? UnitCostSnapshot)
     {
         public decimal LineTotal => (UnitPrice * Quantity) - ManualDiscountAmount - PromotionAmount;
     }

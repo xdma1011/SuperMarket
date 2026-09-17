@@ -72,6 +72,7 @@ public class SaleInvoiceItemConfiguration : IEntityTypeConfiguration<SaleInvoice
         builder.Property(i => i.DiscountSnapshot).HasColumnType("decimal(18,4)").IsRequired();
         builder.Property(i => i.PromotionAmount).HasColumnType("decimal(18,4)").IsRequired();
         builder.Property(i => i.PromotionTitleSnapshot).HasMaxLength(200);
+        builder.Property(i => i.UnitCostSnapshot).HasColumnType("decimal(18,4)");
         builder.Property(i => i.LineTotal).HasColumnType("decimal(18,4)").IsRequired();
         builder.Property(i => i.QuantityReturned).HasColumnType("decimal(18,4)").IsRequired();
 
