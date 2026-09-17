@@ -557,4 +557,128 @@ describe('CatalogComponent', () => {
       expect(component.branchPriceError()).toBe('تعذّر إرسال تعديل السعر - قد لا تملك الصلاحية اللازمة.');
     });
   });
+
+  describe('إدارة العروض - openAddPromotionForm / submitNewPromotion / togglePromotionBranchActive / isPromotionExpired', () => {
+    const samplePromotion = {
+      promotionId: 'promo1',
+      title: '3 بدينار',
+      bundleQuantity: 3,
+      bundlePrice: 1,
+      maxQuantityPerInvoice: null,
+      startAtUtc: '2026-01-01T00:00:00Z',
+      endAtUtc: '2099-01-01T00:00:00Z',
+      branches: [{ promotionBranchId: 'pbr1', branchId: 'b1', branchName: 'الرئيسي', isActive: true }]
+    };
+
+    it('openAddPromotionForm يفتح النموذج ويصفّر الحقول بتواريخ افتراضية معقولة', () => {
+      component.editingProductId = 'p1';
+      component.openAddPromotionForm();
+
+      expect(component.addPromotionFormOpen()).toBeTrue();
+      expect(component.newPromotionTitle).toBe('');
+      expect(component.newPromotionStartDate).toBeTruthy();
+      expect(component.newPromotionEndDate).toBeTruthy();
+      expect(component.newPromotionEndDate > component.newPromotionStartDate).toBeTrue();
+    });
+
+    it('submitNewPromotion يرفض بلا عنوان أو كمية أو سعر صالح', async () => {
+      component.newPromotionTitle = '';
+      component.newPromotionBundleQuantity = null;
+      component.newPromotionBundlePrice = null;
+      component.newPromotionStartDate = '2026-01-01';
+      component.newPromotionEndDate = '2026-02-01';
+
+      await component.submitNewPromotion();
+
+      expect(component.addPromotionError()).toBe('عبّي العنوان والكمية والسعر وفترة الصلاحية بشكل صحيح.');
+      expect(apiClientSpy.post).not.toHaveBeenCalled();
+    });
+
+    it('submitNewPromotion يرفض لو تاريخ النهاية قبل أو يساوي تاريخ البداية', async () => {
+      component.newPromotionTitle = '3 بدينار';
+      component.newPromotionBundleQuantity = 3;
+      component.newPromotionBundlePrice = 1;
+      component.newPromotionStartDate = '2026-02-01';
+      component.newPromotionEndDate = '2026-01-01';
+
+      await component.submitNewPromotion();
+
+      expect(component.addPromotionError()).toBe('تاريخ النهاية لازم يكون بعد تاريخ البداية.');
+      expect(apiClientSpy.post).not.toHaveBeenCalled();
+    });
+
+    it('submitNewPromotion ينشئ عرضًا بلا فروع محدَّدة (branchIds: null) عشان ينطبق على كل الفروع الفعّالة', async () => {
+      component.editingProductId = 'p1';
+      component.newPromotionTitle = '3 بدينار';
+      component.newPromotionBundleQuantity = 3;
+      component.newPromotionBundlePrice = 1;
+      component.newPromotionMaxQuantityPerInvoice = 6;
+      component.newPromotionStartDate = '2026-01-01';
+      component.newPromotionEndDate = '2026-02-01';
+      apiClientSpy.post.and.returnValue(of({}));
+      apiClientSpy.get.and.returnValue(of([samplePromotion]));
+
+      await component.submitNewPromotion();
+
+      expect(apiClientSpy.post).toHaveBeenCalledWith(
+        jasmine.anything(),
+        jasmine.anything(),
+        jasmine.objectContaining({
+          title: '3 بدينار',
+          bundleQuantity: 3,
+          bundlePrice: 1,
+          maxQuantityPerInvoice: 6,
+          branchIds: null
+        }),
+        { productId: 'p1' }
+      );
+      expect(component.addPromotionFormOpen()).toBeFalse();
+      expect(component.productPromotions().length).toBe(1);
+    });
+
+    it('submitNewPromotion يعرض رسالة الخطأ التفصيلية من الباك إند لو موجودة', async () => {
+      component.newPromotionTitle = '3 بدينار';
+      component.newPromotionBundleQuantity = 3;
+      component.newPromotionBundlePrice = 1;
+      component.newPromotionStartDate = '2026-01-01';
+      component.newPromotionEndDate = '2026-02-01';
+      apiClientSpy.post.and.returnValue(throwError(() => ({ error: { detail: 'خطأ محدَّد.' } })));
+
+      await component.submitNewPromotion();
+
+      expect(component.addPromotionError()).toBe('خطأ محدَّد.');
+    });
+
+    it('togglePromotionBranchActive يرسل عكس الحالة الحالية لهذا الفرع بالذات', async () => {
+      component.editingProductId = 'p1';
+      apiClientSpy.post.and.returnValue(of({}));
+      apiClientSpy.get.and.returnValue(of([samplePromotion]));
+
+      await component.togglePromotionBranchActive(samplePromotion, samplePromotion.branches[0]);
+
+      expect(apiClientSpy.post).toHaveBeenCalledWith(
+        jasmine.anything(),
+        jasmine.anything(),
+        { isActive: false },
+        { promotionId: 'promo1', branchId: 'b1' }
+      );
+      expect(component.togglingPromotionBranchId()).toBeNull();
+    });
+
+    it('togglePromotionBranchActive يعرض رسالة خطأ عربية عند الفشل', async () => {
+      apiClientSpy.post.and.returnValue(throwError(() => new Error('network')));
+
+      await component.togglePromotionBranchActive(samplePromotion, samplePromotion.branches[0]);
+
+      expect(component.addPromotionError()).toBe('تعذّر تغيير حالة العرض بهذا الفرع.');
+    });
+
+    it('isPromotionExpired يرجّع true لعرض تاريخ نهايته بالماضي', () => {
+      expect(component.isPromotionExpired({ ...samplePromotion, endAtUtc: '2000-01-01T00:00:00Z' })).toBeTrue();
+    });
+
+    it('isPromotionExpired يرجّع false لعرض تاريخ نهايته بالمستقبل', () => {
+      expect(component.isPromotionExpired({ ...samplePromotion, endAtUtc: '2099-01-01T00:00:00Z' })).toBeFalse();
+    });
+  });
 });

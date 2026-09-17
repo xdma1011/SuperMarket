@@ -15,6 +15,7 @@ export enum ApiController {
   ProductCategories = 'product-categories',
   PriceChangeRequests = 'price-change-requests',
   Products = 'products',
+  Promotions = 'promotions',
   PurchaseInvoices = 'purchase-invoices',
   Notifications = 'notifications',
   Orders = 'orders',

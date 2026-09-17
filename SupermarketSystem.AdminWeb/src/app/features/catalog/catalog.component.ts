@@ -4,7 +4,13 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
-import { ProductCategoriesOperation, ProductsOperation, BranchesOperation, UnitsOfMeasureOperation } from '../../core/api/operations';
+import {
+  ProductCategoriesOperation,
+  ProductsOperation,
+  BranchesOperation,
+  UnitsOfMeasureOperation,
+  PromotionsOperation
+} from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
 import { BarcodeScannerComponent } from './barcode-scanner/barcode-scanner.component';
 
@@ -47,6 +53,24 @@ interface ProductBranchItemDto {
 interface BranchDto {
   id: string;
   name: string;
+}
+
+interface PromotionBranchDto {
+  promotionBranchId: string;
+  branchId: string;
+  branchName: string;
+  isActive: boolean;
+}
+
+interface ProductPromotionDto {
+  promotionId: string;
+  title: string;
+  bundleQuantity: number;
+  bundlePrice: number;
+  maxQuantityPerInvoice: number | null;
+  startAtUtc: string;
+  endAtUtc: string;
+  branches: PromotionBranchDto[];
 }
 
 interface UnitOfMeasureDto {
@@ -132,6 +156,20 @@ export class CatalogComponent implements OnInit {
   /** مرجع موحَّد لأسماء الوحدات - كانت الحقول (baseUnitName/newUnitName) نص حر بلا أي قائمة، راجع UnitOfMeasure.cs بالباك إند. */
   readonly unitsOfMeasure = signal<UnitOfMeasureDto[]>([]);
 
+  // === قسم إدارة العروض (داخل نموذج تعديل منتج فقط) - عرض كمية تلقائي
+  // (N بسعر كذا)، يُحسب سيرفر-سايد وقت البيع، راجع Promotion.cs بالباك إند.
+  readonly productPromotions = signal<ProductPromotionDto[]>([]);
+  readonly addPromotionFormOpen = signal(false);
+  readonly addPromotionSubmitting = signal(false);
+  readonly addPromotionError = signal<string | null>(null);
+  readonly togglingPromotionBranchId = signal<string | null>(null);
+  newPromotionTitle = '';
+  newPromotionBundleQuantity: number | null = null;
+  newPromotionBundlePrice: number | null = null;
+  newPromotionMaxQuantityPerInvoice: number | null = null;
+  newPromotionStartDate = '';
+  newPromotionEndDate = '';
+
   constructor(private readonly apiClient: ApiClient) {}
 
   ngOnInit(): void {
@@ -207,6 +245,18 @@ export class CatalogComponent implements OnInit {
     this.addUnitFormOpen.set(false);
     this.loadProductUnits(product.id);
     this.loadProductBranches(product.id);
+    this.loadProductPromotions(product.id);
+  }
+
+  private async loadProductPromotions(productId: string): Promise<void> {
+    try {
+      const promotions = await firstValueFrom(
+        this.apiClient.get<ProductPromotionDto[]>(ApiController.Products, ProductsOperation.GetPromotions, { productId })
+      );
+      this.productPromotions.set(promotions);
+    } catch {
+      this.productPromotions.set([]);
+    }
   }
 
   private async loadProductBranches(productId: string): Promise<void> {
@@ -253,6 +303,15 @@ export class CatalogComponent implements OnInit {
     this.editingBranchPriceId = '';
     this.editingBranchPriceValue = null;
     this.branchPriceMessage.set(null);
+    this.productPromotions.set([]);
+    this.addPromotionFormOpen.set(false);
+    this.addPromotionError.set(null);
+    this.newPromotionTitle = '';
+    this.newPromotionBundleQuantity = null;
+    this.newPromotionBundlePrice = null;
+    this.newPromotionMaxQuantityPerInvoice = null;
+    this.newPromotionStartDate = '';
+    this.newPromotionEndDate = '';
   }
 
   async submitProduct(): Promise<void> {
@@ -650,5 +709,96 @@ export class CatalogComponent implements OnInit {
     } finally {
       this.branchPriceSaving.set(false);
     }
+  }
+
+  // === إدارة العروض (عرض كمية تلقائي - "N بسعر كذا") ===
+
+  openAddPromotionForm(): void {
+    this.addPromotionFormOpen.set(true);
+    this.addPromotionError.set(null);
+    this.newPromotionTitle = '';
+    this.newPromotionBundleQuantity = null;
+    this.newPromotionBundlePrice = null;
+    this.newPromotionMaxQuantityPerInvoice = null;
+
+    const today = new Date();
+    const inMonth = new Date(today);
+    inMonth.setMonth(inMonth.getMonth() + 1);
+    this.newPromotionStartDate = today.toISOString().slice(0, 10);
+    this.newPromotionEndDate = inMonth.toISOString().slice(0, 10);
+  }
+
+  closeAddPromotionForm(): void {
+    this.addPromotionFormOpen.set(false);
+  }
+
+  async submitNewPromotion(): Promise<void> {
+    if (
+      !this.newPromotionTitle.trim() ||
+      !this.newPromotionBundleQuantity ||
+      this.newPromotionBundleQuantity <= 0 ||
+      this.newPromotionBundlePrice === null ||
+      this.newPromotionBundlePrice < 0 ||
+      !this.newPromotionStartDate ||
+      !this.newPromotionEndDate
+    ) {
+      this.addPromotionError.set('عبّي العنوان والكمية والسعر وفترة الصلاحية بشكل صحيح.');
+      return;
+    }
+
+    if (this.newPromotionEndDate <= this.newPromotionStartDate) {
+      this.addPromotionError.set('تاريخ النهاية لازم يكون بعد تاريخ البداية.');
+      return;
+    }
+
+    this.addPromotionSubmitting.set(true);
+    this.addPromotionError.set(null);
+
+    try {
+      await firstValueFrom(
+        this.apiClient.post(ApiController.Products, ProductsOperation.CreatePromotion, {
+          title: this.newPromotionTitle.trim(),
+          bundleQuantity: this.newPromotionBundleQuantity,
+          bundlePrice: this.newPromotionBundlePrice,
+          maxQuantityPerInvoice: this.newPromotionMaxQuantityPerInvoice,
+          startAtUtc: `${this.newPromotionStartDate}T00:00:00.000Z`,
+          endAtUtc: `${this.newPromotionEndDate}T23:59:59.000Z`,
+          branchIds: null
+        }, { productId: this.editingProductId })
+      );
+
+      this.addPromotionFormOpen.set(false);
+      await this.loadProductPromotions(this.editingProductId);
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === 'object' && 'error' in err
+          ? (err as { error?: { detail?: string } }).error?.detail
+          : null;
+      this.addPromotionError.set(message ?? 'تعذّر إنشاء العرض.');
+    } finally {
+      this.addPromotionSubmitting.set(false);
+    }
+  }
+
+  async togglePromotionBranchActive(promotion: ProductPromotionDto, branch: PromotionBranchDto): Promise<void> {
+    this.togglingPromotionBranchId.set(branch.promotionBranchId);
+    this.addPromotionError.set(null);
+
+    try {
+      await firstValueFrom(
+        this.apiClient.post(ApiController.Promotions, PromotionsOperation.SetBranchActive, {
+          isActive: !branch.isActive
+        }, { promotionId: promotion.promotionId, branchId: branch.branchId })
+      );
+      await this.loadProductPromotions(this.editingProductId);
+    } catch {
+      this.addPromotionError.set('تعذّر تغيير حالة العرض بهذا الفرع.');
+    } finally {
+      this.togglingPromotionBranchId.set(null);
+    }
+  }
+
+  isPromotionExpired(promotion: ProductPromotionDto): boolean {
+    return new Date(promotion.endAtUtc).getTime() < Date.now();
   }
 }

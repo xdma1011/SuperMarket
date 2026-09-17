@@ -326,6 +326,88 @@
             </div>
           }
         </div>
+
+        <div class="units-section">
+          <div class="units-header">
+            <span>العروض (كمية بسعر ثابت)</span>
+            <button type="button" class="icon-add-btn" (click)="openAddPromotionForm()" title="إضافة عرض" aria-label="إضافة عرض">+</button>
+          </div>
+
+          @if (productPromotions().length === 0) {
+            <p class="empty-branches-hint">ما في عروض لهذا المنتج حاليًا.</p>
+          }
+
+          @if (addPromotionError()) {
+            <p class="form-error">{{ addPromotionError() }}</p>
+          }
+
+          <div class="units-list">
+            @for (promo of productPromotions(); track promo.promotionId) {
+              <div class="unit-row" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                  <span class="unit-name">{{ promo.title }}</span>
+                  <span class="unit-factor mono">{{ promo.bundleQuantity }} بـ {{ promo.bundlePrice | number: '1.2-2' }}</span>
+                  @if (promo.maxQuantityPerInvoice) {
+                    <span class="status-chip">حد أعلى: {{ promo.maxQuantityPerInvoice }}/فاتورة</span>
+                  }
+                  <span class="status-chip" [class.inactive]="isPromotionExpired(promo)">
+                    {{ (promo.startAtUtc | date: 'yyyy-MM-dd') }} → {{ (promo.endAtUtc | date: 'yyyy-MM-dd') }}
+                    {{ isPromotionExpired(promo) ? '(منتهي)' : '' }}
+                  </span>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                  @for (b of promo.branches; track b.promotionBranchId) {
+                    <span class="status-chip" [class.inactive]="!b.isActive" style="display: inline-flex; align-items: center; gap: 6px;">
+                      {{ b.branchName }}: {{ b.isActive ? 'شغّال' : 'موقَف' }}
+                      <button type="button" class="link-btn" [disabled]="togglingPromotionBranchId() === b.promotionBranchId"
+                              (click)="togglePromotionBranchActive(promo, b)">
+                        {{ b.isActive ? 'إيقاف' : 'تشغيل' }}
+                      </button>
+                    </span>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+
+          @if (addPromotionFormOpen()) {
+            <div class="add-unit-form">
+              <div class="add-unit-fields">
+                <label class="field">
+                  <span>عنوان العرض</span>
+                  <input type="text" [(ngModel)]="newPromotionTitle" placeholder="مثلاً: 3 بدينار" />
+                </label>
+                <label class="field">
+                  <span>الكمية المطلوبة (N)</span>
+                  <input type="number" [(ngModel)]="newPromotionBundleQuantity" placeholder="3" min="1" step="1" />
+                </label>
+                <label class="field">
+                  <span>سعر الحزمة الكاملة</span>
+                  <input type="number" [(ngModel)]="newPromotionBundlePrice" placeholder="1.00" min="0" step="0.01" />
+                </label>
+                <label class="field">
+                  <span>حد أعلى بالفاتورة (اختياري)</span>
+                  <input type="number" [(ngModel)]="newPromotionMaxQuantityPerInvoice" placeholder="بلا حد" min="1" step="1" />
+                </label>
+                <label class="field">
+                  <span>تاريخ البداية</span>
+                  <input type="date" [(ngModel)]="newPromotionStartDate" />
+                </label>
+                <label class="field">
+                  <span>تاريخ النهاية</span>
+                  <input type="date" [(ngModel)]="newPromotionEndDate" />
+                </label>
+              </div>
+              <p class="empty-branches-hint">بلا تحديد فروع - ينطبق تلقائيًا على كل الفروع الفعّالة حاليًا. تقدر توقفه بفرع معيّن بعدين من القائمة فوق.</p>
+              <div class="add-unit-actions">
+                <button type="button" class="btn-primary small" [disabled]="addPromotionSubmitting()" (click)="submitNewPromotion()">
+                  {{ addPromotionSubmitting() ? 'جارٍ الإضافة…' : 'إضافة العرض' }}
+                </button>
+                <button type="button" class="btn-ghost small" (click)="closeAddPromotionForm()">إلغاء</button>
+              </div>
+            </div>
+          }
+        </div>
       }
 
       <div class="modal-actions">
