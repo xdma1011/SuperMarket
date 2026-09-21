@@ -39,12 +39,14 @@ describe('ReportsComponent', () => {
   });
 
   describe('isSpecial', () => {
-    it('يرجّع true للتقارير الخاصة الثلاثة', () => {
+    it('يرجّع true للتقارير الخاصة الأربعة', () => {
       component.activeReportId.set('sales-summary');
       expect(component.isSpecial()).toBeTrue();
       component.activeReportId.set('capital-value');
       expect(component.isSpecial()).toBeTrue();
       component.activeReportId.set('supplier-debts');
+      expect(component.isSpecial()).toBeTrue();
+      component.activeReportId.set('product-margin');
       expect(component.isSpecial()).toBeTrue();
     });
 
@@ -146,6 +148,38 @@ describe('ReportsComponent', () => {
       await component.loadActiveReport();
 
       expect(component.errorMessage()).toBe('تعذّر تحميل ملخّص المبيعات.');
+    });
+
+    it('يحمّل تقرير هامش الربح لكل منتج لتقرير product-margin', async () => {
+      component.activeReportId.set('product-margin');
+      component.selectedBranchId = 'b1';
+      apiClientSpy.get.and.returnValue(
+        of({ items: { items: [], totalCount: 0 }, totalNetRevenue: 100, totalCost: 60, totalMargin: 40 })
+      );
+
+      await component.loadActiveReport();
+
+      expect(component.productMargin()?.totalMargin).toBe(40);
+    });
+
+    it('يرفض تحميل تقرير هامش الربح بلا فرع محدَّد', async () => {
+      component.activeReportId.set('product-margin');
+      component.selectedBranchId = '';
+
+      await component.loadActiveReport();
+
+      expect(component.errorMessage()).toBe('هذا التقرير يحتاج تحديد فرع أولًا.');
+      expect(component.productMargin()).toBeNull();
+    });
+
+    it('يعرض رسالة خطأ عربية واضحة عند فشل تحميل تقرير هامش الربح', async () => {
+      component.activeReportId.set('product-margin');
+      component.selectedBranchId = 'b1';
+      apiClientSpy.get.and.returnValue(throwError(() => new Error('network')));
+
+      await component.loadActiveReport();
+
+      expect(component.errorMessage()).toBe('تعذّر تحميل تقرير هامش الربح لكل منتج.');
     });
   });
 

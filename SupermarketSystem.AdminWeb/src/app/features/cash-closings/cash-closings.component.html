@@ -29,6 +29,7 @@
         <tr>
           <th>الفرع</th>
           <th>اليوم التجاري</th>
+          <th>الوردية</th>
           <th>وقت التقفيل</th>
           <th>الكاش المتوقع</th>
           <th>الكاش المعدود</th>
@@ -40,6 +41,7 @@
           <tr>
             <td>{{ c.branchName }}</td>
             <td class="mono">{{ c.businessDate }}</td>
+            <td class="mono">{{ c.shiftNumber }}</td>
             <td class="mono">{{ c.closedAtUtc | date: 'yyyy-MM-dd HH:mm' }}</td>
             <td class="mono">{{ c.expectedCash | number: '1.2-2' }}</td>
             <td class="mono">{{ c.countedCash | number: '1.2-2' }}</td>
@@ -104,6 +106,10 @@
         <label class="field">
           <span>اليوم التجاري</span>
           <input type="date" [(ngModel)]="businessDate" />
+        </label>
+        <label class="field">
+          <span>رقم الوردية</span>
+          <input type="number" min="1" step="1" [(ngModel)]="shiftNumber" placeholder="1" />
         </label>
         <label class="field" style="grid-column: span 2">
           <span>الكاش المعدود فعليًا بالدرج</span>

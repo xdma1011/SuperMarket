@@ -2,7 +2,7 @@
   <div class="head-text">
     <span class="crumb">التقارير</span>
     <h1>مركز التقارير</h1>
-    <span class="subtitle">15 تقريرًا — مبيعات، مخزون، موردين، وأداء.</span>
+    <span class="subtitle">16 تقريرًا — مبيعات، مخزون، موردين، وأداء.</span>
   </div>
 </div>
 
@@ -16,6 +16,9 @@
     </button>
     <button type="button" class="nav-item" [class.active]="activeReportId() === 'supplier-debts'" (click)="selectReport('supplier-debts')">
       ديون الموردين
+    </button>
+    <button type="button" class="nav-item" [class.active]="activeReportId() === 'product-margin'" (click)="selectReport('product-margin')">
+      هامش الربح لكل منتج
     </button>
     <div class="nav-divider"></div>
     @for (r of standardReports; track r.id) {
@@ -139,6 +142,92 @@
               [pageNumber]="pageNumber()"
               [pageSize]="pageSize()"
               [totalCount]="c.items.totalCount"
+              (changed)="onPageChanged($event)"
+            ></app-pagination>
+          }
+        </section>
+      }
+    } @else if (activeReportId() === 'product-margin') {
+      <div class="date-filter">
+        <label>
+          <span>الفرع</span>
+          <select [(ngModel)]="selectedBranchId" (ngModelChange)="onBranchChanged()">
+            @for (b of branches(); track b.id) {
+              <option [value]="b.id">{{ b.name }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          <span>من</span>
+          <input type="date" [(ngModel)]="fromDate" (ngModelChange)="onDateRangeChanged()" />
+        </label>
+        <label>
+          <span>إلى</span>
+          <input type="date" [(ngModel)]="toDate" (ngModelChange)="onDateRangeChanged()" />
+        </label>
+      </div>
+
+      @if (productMargin(); as m) {
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <span class="kpi-label">صافي الإيراد</span>
+            <span class="kpi-value">{{ m.totalNetRevenue | number: '1.2-2' }}</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">التكلفة</span>
+            <span class="kpi-value">{{ m.totalCost | number: '1.2-2' }}</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">الهامش</span>
+            <span class="kpi-value">{{ m.totalMargin | number: '1.2-2' }}</span>
+          </div>
+        </div>
+
+        <section class="table-panel">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>المنتج</th>
+                  <th>الكمية المباعة</th>
+                  <th>الإيراد الصافي</th>
+                  <th>التكلفة</th>
+                  <th>الهامش</th>
+                  <th>نسبة الهامش</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of m.items.items; track item.productId) {
+                  <tr>
+                    <td>
+                      {{ item.productName }}
+                      @if (item.linesExcludedNoCostHistory > 0) {
+                        <span class="status-chip inactive" title="{{ item.linesExcludedNoCostHistory }} سطر بلا تكلفة معروفة - الهامش الفعلي أقل">⚠</span>
+                      }
+                    </td>
+                    <td class="mono">{{ item.quantitySold | number }}</td>
+                    <td class="mono">{{ item.netRevenue | number: '1.2-2' }}</td>
+                    <td class="mono">{{ item.cost | number: '1.2-2' }}</td>
+                    <td class="mono">{{ item.margin | number: '1.2-2' }}</td>
+                    <td class="mono">{{ item.marginPercent !== null ? (item.marginPercent | number: '1.1-1') + '%' : '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+
+            @if (m.items.items.length === 0) {
+              <div class="no-results">
+                <span class="no-results-title">لا توجد بيانات</span>
+                <span class="no-results-sub">جرّب توسيع نطاق التاريخ.</span>
+              </div>
+            }
+          </div>
+
+          @if (m.items.totalCount > 0) {
+            <app-pagination
+              [pageNumber]="pageNumber()"
+              [pageSize]="pageSize()"
+              [totalCount]="m.items.totalCount"
               (changed)="onPageChanged($event)"
             ></app-pagination>
           }

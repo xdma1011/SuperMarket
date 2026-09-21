@@ -59,6 +59,9 @@ interface GetMonthlyProfitStatementResponse {
   grossProfit: number;
   totalExpenses: number;
   expensesByCategory: ExpenseByCategoryDto[];
+  stocktakeSurplusValue: number;
+  stocktakeShortageValue: number;
+  stocktakeMovementsExcludedNoCostHistory: number;
   netProfit: number;
 }
 

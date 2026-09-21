@@ -43,6 +43,24 @@ interface GetCurrentCapitalValueResponse {
   productsExcludedNoCostHistory: number;
 }
 
+interface ProductMarginItemDto {
+  productId: string;
+  productName: string;
+  quantitySold: number;
+  netRevenue: number;
+  cost: number;
+  margin: number;
+  marginPercent: number | null;
+  linesExcludedNoCostHistory: number;
+}
+
+interface GetProductMarginReportResponse {
+  items: PagedResult<ProductMarginItemDto>;
+  totalNetRevenue: number;
+  totalCost: number;
+  totalMargin: number;
+}
+
 interface SupplierDebtDto {
   supplierId: string;
   supplierName: string;
@@ -57,12 +75,12 @@ interface GetSupplierDebtsResponse {
   grandTotalDebt: number;
 }
 
-type SpecialReportId = 'sales-summary' | 'capital-value' | 'supplier-debts';
+type SpecialReportId = 'sales-summary' | 'capital-value' | 'supplier-debts' | 'product-margin';
 
 /**
- * كل تقرير عادي (12 من أصل 15) بيرندر من REPORT_CONFIGS بلا أي كود
- * خاص. الثلاثة الخاصة (ملخّص المبيعات، رأس المال، ديون الموردين) شكلهم
- * مختلف كليًا، فمعالجان بمنطق منفصل بنفس المكوّن.
+ * كل تقرير عادي بيرندر من REPORT_CONFIGS بلا أي كود خاص. الأربعة
+ * الخاصة (ملخّص المبيعات، رأس المال، ديون الموردين، هامش الربح لكل
+ * منتج) شكلهم مختلف كليًا، فمعالجان بمنطق منفصل بنفس المكوّن.
  */
 @Component({
   selector: 'app-reports',
@@ -74,7 +92,7 @@ type SpecialReportId = 'sales-summary' | 'capital-value' | 'supplier-debts';
 export class ReportsComponent implements OnInit {
   readonly standardReports = REPORT_CONFIGS;
   readonly activeReportId = signal<string>(REPORT_CONFIGS[0].id);
-  private readonly SPECIAL_IDS: SpecialReportId[] = ['sales-summary', 'capital-value', 'supplier-debts'];
+  private readonly SPECIAL_IDS: SpecialReportId[] = ['sales-summary', 'capital-value', 'supplier-debts', 'product-margin'];
   readonly isSpecial = computed(() => this.SPECIAL_IDS.includes(this.activeReportId() as SpecialReportId));
 
   readonly loading = signal(false);
@@ -94,6 +112,7 @@ export class ReportsComponent implements OnInit {
   readonly salesSummary = signal<GetSalesSummaryResponse | null>(null);
   readonly capitalValue = signal<GetCurrentCapitalValueResponse | null>(null);
   readonly supplierDebts = signal<GetSupplierDebtsResponse | null>(null);
+  readonly productMargin = signal<GetProductMarginReportResponse | null>(null);
 
   constructor(private readonly apiClient: ApiClient) {}
 
@@ -132,6 +151,7 @@ export class ReportsComponent implements OnInit {
     if (id === 'sales-summary') return this.loadSalesSummary();
     if (id === 'capital-value') return this.loadCapitalValue();
     if (id === 'supplier-debts') return this.loadSupplierDebts();
+    if (id === 'product-margin') return this.loadProductMargin();
     return this.loadStandardReport();
   }
 
@@ -214,6 +234,38 @@ export class ReportsComponent implements OnInit {
     } catch {
       this.errorMessage.set('تعذّر تحميل تقرير رأس المال.');
       this.capitalValue.set(null);
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  private async loadProductMargin(): Promise<void> {
+    if (!this.selectedBranchId) {
+      this.errorMessage.set('هذا التقرير يحتاج تحديد فرع أولًا.');
+      this.productMargin.set(null);
+      return;
+    }
+
+    this.loading.set(true);
+    this.errorMessage.set(null);
+
+    try {
+      const result = await firstValueFrom(
+        this.apiClient.get<GetProductMarginReportResponse>(
+          ApiController.Reports, ReportsOperation.ProductMargin, undefined,
+          {
+            pageNumber: this.pageNumber(),
+            pageSize: this.pageSize(),
+            branchId: this.selectedBranchId,
+            fromUtc: new Date(this.fromDate).toISOString(),
+            toUtc: new Date(this.toDate).toISOString()
+          }
+        )
+      );
+      this.productMargin.set(result);
+    } catch {
+      this.errorMessage.set('تعذّر تحميل تقرير هامش الربح لكل منتج.');
+      this.productMargin.set(null);
     } finally {
       this.loading.set(false);
     }

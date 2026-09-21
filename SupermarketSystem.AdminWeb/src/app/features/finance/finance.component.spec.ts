@@ -69,7 +69,9 @@ describe('FinanceComponent', () => {
         branchId: 'b1', year: 2026, month: 9,
         totalSales: 100, totalReturnedAmount: 0, netRevenue: 100,
         costOfGoodsSold: 60, itemsExcludedNoCostHistory: 0, grossProfit: 40,
-        totalExpenses: 10, expensesByCategory: [{ category: 1 as const, amount: 10 }], netProfit: 30
+        totalExpenses: 10, expensesByCategory: [{ category: 1 as const, amount: 10 }],
+        stocktakeSurplusValue: 5, stocktakeShortageValue: 15, stocktakeMovementsExcludedNoCostHistory: 1,
+        netProfit: 30
       };
       apiClientSpy.get.and.returnValue(of(response));
 
@@ -77,6 +79,9 @@ describe('FinanceComponent', () => {
 
       expect(component.statement()?.netProfit).toBe(30);
       expect(component.statement()?.grossProfit).toBe(40);
+      expect(component.statement()?.stocktakeSurplusValue).toBe(5);
+      expect(component.statement()?.stocktakeShortageValue).toBe(15);
+      expect(component.statement()?.stocktakeMovementsExcludedNoCostHistory).toBe(1);
       expect(component.statementError()).toBeNull();
     });
 

@@ -92,6 +92,14 @@ describe('CashClosingsComponent', () => {
       expect(component.countedCash).toBeNull();
       expect(component.countedDetails().length).toBe(1);
     });
+
+    it('يصفّر رقم الوردية لـ1', () => {
+      component.shiftNumber = 3;
+
+      component.openForm();
+
+      expect(component.shiftNumber).toBe(1);
+    });
   });
 
   describe('submit', () => {
@@ -112,6 +120,29 @@ describe('CashClosingsComponent', () => {
       await component.submit();
 
       expect(apiClientSpy.post).not.toHaveBeenCalled();
+    });
+
+    it('يرفض رقم وردية أقل من 1', async () => {
+      component.selectedBranchId = 'b1';
+      component.countedCash = 50;
+      component.shiftNumber = 0;
+
+      await component.submit();
+
+      expect(component.formError()).toContain('رقم الوردية');
+      expect(apiClientSpy.post).not.toHaveBeenCalled();
+    });
+
+    it('يرسل رقم الوردية ضمن الطلب', async () => {
+      component.selectedBranchId = 'b1';
+      component.countedCash = 100;
+      component.shiftNumber = 2;
+      apiClientSpy.post.and.returnValue(of({}));
+
+      await component.submit();
+
+      const [, , body] = apiClientSpy.post.calls.mostRecent().args;
+      expect((body as { shiftNumber: number }).shiftNumber).toBe(2);
     });
 
     it('يرسل فقط تفاصيل countedDetails غير null، ويصفّي الباقي', async () => {

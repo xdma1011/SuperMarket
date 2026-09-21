@@ -22,6 +22,7 @@ interface CashClosingListItemDto {
   branchId: string;
   branchName: string;
   businessDate: string;
+  shiftNumber: number;
   closedAtUtc: string;
   expectedCash: number;
   countedCash: number;
@@ -66,6 +67,7 @@ export class CashClosingsComponent implements OnInit {
   selectedBranchId = '';
   filterBranchId = '';
   businessDate = new Date().toISOString().slice(0, 10);
+  shiftNumber = 1;
   countedCash: number | null = null;
 
   constructor(private readonly apiClient: ApiClient) {}
@@ -129,6 +131,7 @@ export class CashClosingsComponent implements OnInit {
     this.formOpen.set(true);
     this.formError.set(null);
     this.businessDate = new Date().toISOString().slice(0, 10);
+    this.shiftNumber = 1;
     this.countedCash = null;
     this.countedDetails.set(this.paymentMethods().map(pm => ({ paymentMethodId: pm.id, paymentMethodName: pm.name, countedAmount: null })));
   }
@@ -143,6 +146,11 @@ export class CashClosingsComponent implements OnInit {
       return;
     }
 
+    if (!this.shiftNumber || this.shiftNumber < 1) {
+      this.formError.set('رقم الوردية يجب أن يكون 1 على الأقل.');
+      return;
+    }
+
     this.submitting.set(true);
     this.formError.set(null);
 
@@ -151,6 +159,7 @@ export class CashClosingsComponent implements OnInit {
         this.apiClient.post(ApiController.CashClosings, CashClosingsOperation.Complete, {
           branchId: this.selectedBranchId,
           businessDate: this.businessDate,
+          shiftNumber: this.shiftNumber,
           countedCash: this.countedCash,
           countedDetails: this.countedDetails()
             .filter(d => d.countedAmount !== null)

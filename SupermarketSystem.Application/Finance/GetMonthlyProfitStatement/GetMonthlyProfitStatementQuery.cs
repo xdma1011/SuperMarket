@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Domain.Finance;
+using SupermarketSystem.Domain.Inventory;
+using SupermarketSystem.Domain.Purchasing;
 using SupermarketSystem.Domain.Sales;
 
 namespace SupermarketSystem.Application.Finance.GetMonthlyProfitStatement;
@@ -33,7 +35,24 @@ public sealed record ExpenseByCategoryDto(ExpenseCategory Category, decimal Amou
 /// - GrossProfit = NetRevenue - CostOfGoodsSold.
 /// - TotalExpenses: مصاريف Expense بنفس (BranchId، PeriodYear، PeriodMonth)
 ///   المطلوبة - لا PaymentDateUtc (راجع تعليق Expense.cs بالـDomain).
-/// - NetProfit = GrossProfit - TotalExpenses. هذا الرقم النهائي "ربح الشهر".
+/// - StocktakeSurplusValue/StocktakeShortageValue: قرار صاحب المشروع
+///   الصريح (21/9/2026) - فروقات الجرد (`StockMovement` بنوع
+///   `StocktakeCorrectionIncrease`/`StocktakeCorrectionDecrease`) بشهر
+///   *اعتماد* الجرد نفسه (لا تاريخ دفع منفصل، الحدث لحظي). التقييم بنفس
+///   منطق `UnitCostSnapshot` بالضبط (تكلفة الدفعة المباشرة للمتتبَّع،
+///   متوسط مرجّح من فواتير الشراء المستلمة لغير المتتبَّع) - بس بفارق
+///   جوهري واحد: هذا رقم **محسوب لحظيًا بكل استدعاء للتقرير، لا Snapshot
+///   مجمَّد** (`StockMovement` ما بتحمل تكلفة مخزَّنة وقتها زي
+///   `SaleInvoiceItem.UnitCostSnapshot`) - فلو انضافت فاتورة شراء بتاريخ
+///   رجعي (Backdated) لنفس الشهر بعد ما اتشاف التقرير، الرقم ممكن يتغيّر
+///   بمرّة تانية. المتوسط المرجّح هون محسوب حتى *نهاية* الشهر المطلوب
+///   (`periodEndUtc`)، لا لحظة كل حركة بالضبط - تبسيط مقصود لتفادي استعلام
+///   منفصل لكل حركة جرد، مقبول لأنه أصلًا رقم غير مجمَّد بطبيعته.
+///   `StocktakeMovementsExcludedNoCostHistory`: نفس فلسفة
+///   `ItemsExcludedNoCostHistory` بالضبط - حركة جرد لمنتج بلا تاريخ شراء
+///   سابق تُستبعَد كليًا، لا تُحتسب بتكلفة صفر.
+/// - NetProfit = GrossProfit - TotalExpenses + StocktakeSurplusValue -
+///   StocktakeShortageValue. هذا الرقم النهائي "ربح الشهر".
 /// </summary>
 public sealed class GetMonthlyProfitStatementHandler
 {
@@ -97,13 +116,88 @@ public sealed class GetMonthlyProfitStatementHandler
             .ToListAsync(cancellationToken);
 
         var totalExpenses = expensesByCategory.Sum(e => e.Amount);
-        var netProfit = grossProfit - totalExpenses;
+
+        var (stocktakeSurplusValue, stocktakeShortageValue, stocktakeMovementsExcludedNoCostHistory) =
+            await GetStocktakeVarianceAsync(query.BranchId, periodStartUtc, periodEndUtc, cancellationToken);
+
+        var netProfit = grossProfit - totalExpenses + stocktakeSurplusValue - stocktakeShortageValue;
 
         return Result.Success(new GetMonthlyProfitStatementResponse(
             query.BranchId, query.Year, query.Month,
             totalSales, totalReturnedAmount, netRevenue,
             costOfGoodsSold, itemsExcludedNoCostHistory, grossProfit,
-            totalExpenses, expensesByCategory, netProfit));
+            totalExpenses, expensesByCategory,
+            stocktakeSurplusValue, stocktakeShortageValue, stocktakeMovementsExcludedNoCostHistory,
+            netProfit));
+    }
+
+    private async Task<(decimal SurplusValue, decimal ShortageValue, int ExcludedNoCostHistory)> GetStocktakeVarianceAsync(
+        Guid branchId, DateTime periodStartUtc, DateTime periodEndUtc, CancellationToken cancellationToken)
+    {
+        var movements = await _context.StockMovements.AsNoTracking()
+            .Where(m => m.BranchId == branchId
+                        && (m.MovementType == MovementType.StocktakeCorrectionIncrease || m.MovementType == MovementType.StocktakeCorrectionDecrease)
+                        && m.OccurredAtUtc >= periodStartUtc && m.OccurredAtUtc < periodEndUtc)
+            .Select(m => new { m.MovementType, m.ProductId, m.ProductBatchId, m.QuantityBase })
+            .ToListAsync(cancellationToken);
+
+        if (movements.Count == 0)
+        {
+            return (0m, 0m, 0);
+        }
+
+        var batchIds = movements.Where(m => m.ProductBatchId is not null)
+            .Select(m => m.ProductBatchId!.Value).Distinct().ToList();
+        var batchUnitCosts = batchIds.Count == 0
+            ? new Dictionary<Guid, decimal>()
+            : await _context.ProductBatches.AsNoTracking()
+                .Where(b => batchIds.Contains(b.Id))
+                .Select(b => new { b.Id, b.UnitCost })
+                .ToDictionaryAsync(b => b.Id, b => b.UnitCost, cancellationToken);
+
+        var nonBatchProductIds = movements.Where(m => m.ProductBatchId is null)
+            .Select(m => m.ProductId).Distinct().ToList();
+        var weightedAverageCosts = nonBatchProductIds.Count == 0
+            ? new Dictionary<Guid, decimal>()
+            : await _context.PurchaseInvoiceItems.AsNoTracking()
+                .Where(i => nonBatchProductIds.Contains(i.ProductId))
+                .Join(
+                    _context.PurchaseInvoices.AsNoTracking()
+                        .Where(pi => pi.Status == PurchaseInvoiceStatus.Received && pi.CreatedAtUtc < periodEndUtc),
+                    i => i.PurchaseInvoiceId, pi => pi.Id,
+                    (i, pi) => new { i.ProductId, i.Quantity, i.UnitCost })
+                .GroupBy(x => x.ProductId)
+                .Select(g => new { ProductId = g.Key, TotalQuantity = g.Sum(x => x.Quantity), TotalCost = g.Sum(x => x.Quantity * x.UnitCost) })
+                .ToDictionaryAsync(x => x.ProductId, x => x.TotalCost / x.TotalQuantity, cancellationToken);
+
+        var surplusValue = 0m;
+        var shortageValue = 0m;
+        var excludedCount = 0;
+
+        foreach (var movement in movements)
+        {
+            decimal? unitCost = movement.ProductBatchId is { } batchId
+                ? (batchUnitCosts.TryGetValue(batchId, out var batchCost) ? batchCost : null)
+                : (weightedAverageCosts.TryGetValue(movement.ProductId, out var avgCost) ? avgCost : null);
+
+            if (unitCost is null)
+            {
+                excludedCount++;
+                continue;
+            }
+
+            var value = movement.QuantityBase * unitCost.Value;
+            if (movement.MovementType == MovementType.StocktakeCorrectionIncrease)
+            {
+                surplusValue += value;
+            }
+            else
+            {
+                shortageValue += value;
+            }
+        }
+
+        return (surplusValue, shortageValue, excludedCount);
     }
 }
 
@@ -119,4 +213,7 @@ public sealed record GetMonthlyProfitStatementResponse(
     decimal GrossProfit,
     decimal TotalExpenses,
     IReadOnlyList<ExpenseByCategoryDto> ExpensesByCategory,
+    decimal StocktakeSurplusValue,
+    decimal StocktakeShortageValue,
+    int StocktakeMovementsExcludedNoCostHistory,
     decimal NetProfit);

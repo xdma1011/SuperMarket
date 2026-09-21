@@ -4,6 +4,7 @@ using SupermarketSystem.Application.Common.Pagination;
 using SupermarketSystem.Application.Reporting.GetBestCashiers;
 using SupermarketSystem.Application.Reporting.GetBestCustomers;
 using SupermarketSystem.Application.Reporting.GetCurrentCapitalValue;
+using SupermarketSystem.Application.Reporting.GetProductMarginReport;
 using SupermarketSystem.Application.Reporting.GetManualDiscounts;
 using SupermarketSystem.Application.Reporting.GetNegativeStock;
 using SupermarketSystem.Application.Reporting.GetRecentReturns;
@@ -258,6 +259,20 @@ public static class ReportingEndpoints
         .WithName("GetCurrentCapitalValue")
         .WithSummary("قيمة رأس المال الحالي بالمخزون - متوسط مرجّح للتكلفة × الكمية الحالية.")
         .Produces<GetCurrentCapitalValueResponse>(StatusCodes.Status200OK);
+
+        group.MapGet("/product-margin", async (
+            int? pageNumber, int? pageSize, string? search, string? sortBy, string? sortDirection,
+            Guid? branchId, DateTime fromUtc, DateTime toUtc,
+            GetProductMarginReportHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var paging = PagingBinder.Build(pageNumber, pageSize, search, sortBy, sortDirection);
+            var result = await handler.HandleAsync(new GetProductMarginReportQuery(paging, branchId, fromUtc, toUtc), cancellationToken);
+            return Results.Ok(result);
+        })
+        .WithName("GetProductMarginReport")
+        .WithSummary("هامش الربح لكل منتج بفترة معيّنة - إيراد صافٍ ناقص تكلفة (UnitCostSnapshot)، مرتّب تنازليًا حسب الإيراد.")
+        .Produces<GetProductMarginReportResponse>(StatusCodes.Status200OK);
 
         return app;
     }

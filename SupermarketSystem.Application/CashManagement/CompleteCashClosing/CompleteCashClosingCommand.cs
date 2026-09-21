@@ -15,14 +15,18 @@ public sealed record CompleteCashClosingCountDto(Guid PaymentMethodId, decimal C
 
 public sealed record CompleteCashClosingCommand(
     Guid BranchId,
-    // اليوم/الوردية التجارية اللي هذا التقفيل بيغطيها — يُحدَّد صراحة من
-    // المستخدم، ما يُشتق من وقت التقفيل نفسه (نفس مبدأ BusinessDate
-    // بـCashClosing، شفناه سابقًا بإصلاح unique index).
+    // اليوم التجاري اللي هذا التقفيل بيغطيه — يُحدَّد صراحة من المستخدم،
+    // ما يُشتق من وقت التقفيل نفسه (نفس مبدأ BusinessDate بـCashClosing،
+    // شفناه سابقًا بإصلاح unique index).
     DateOnly BusinessDate,
     // إجمالي الكاش المعدود فعليًا بالدرج وقت التقفيل.
     decimal CountedCash,
     // عدّ اختياري لأي طريقة دفع تانية (فارغة = ما تم عدّها، طبيعي لفيزا/CliQ).
-    IReadOnlyList<CompleteCashClosingCountDto> CountedDetails);
+    IReadOnlyList<CompleteCashClosingCountDto> CountedDetails,
+    // رقم الوردية ضمن نفس اليوم التجاري - افتراضي 1 (يوم بوردية وحدة).
+    // راجع تعليق CashClosing.ShiftNumber بالـDomain - القيد الفريد الفعلي
+    // (BranchId, BusinessDate, ShiftNumber)، لا (BranchId, BusinessDate) وحدها.
+    int ShiftNumber = 1);
 
 public sealed record CompleteCashClosingDetailResponseDto(
     Guid PaymentMethodId,
@@ -38,6 +42,7 @@ public sealed record CompleteCashClosingResponse(
     Guid CashClosingId,
     Guid BranchId,
     DateOnly BusinessDate,
+    int ShiftNumber,
     // متوقع الكاش الفعلي بالدرج — محسوب من CashDrawerLog (السجل التاريخي
     // الكامل)، مش من فواتير البيع فقط — لأنه في حركات تانية بتأثر عالدرج
     // بلا ما تكون فاتورة بيع أصلًا (سحب/إيداع يدوي PayIn/PayOut، عكس دفعة
@@ -75,6 +80,11 @@ public static class CompleteCashClosingValidator
         if (command.CountedCash < 0)
         {
             return Error.Validation("CashClosing.CountedCashNegative", "المبلغ المعدود لا يمكن أن يكون سالبًا.");
+        }
+
+        if (command.ShiftNumber < 1)
+        {
+            return Error.Validation("CashClosing.ShiftNumberInvalid", "رقم الوردية يجب أن يكون 1 على الأقل.");
         }
 
         foreach (var detail in command.CountedDetails)
@@ -176,14 +186,15 @@ public sealed class CompleteCashClosingHandler
         }
 
         // فحص أوّلي ودّي — الحارس الحقيقي هو الـunique index على
-        // (BranchId, BusinessDate) بقاعدة البيانات؛ هذا الفحص بس لإرجاع
-        // خطأ واضح بدل استثناء SQL خام لو صار سباق تزامن نادر.
+        // (BranchId, BusinessDate, ShiftNumber) بقاعدة البيانات؛ هذا الفحص
+        // بس لإرجاع خطأ واضح بدل استثناء SQL خام لو صار سباق تزامن نادر.
         var alreadyClosed = await _context.CashClosings.AsNoTracking()
-            .AnyAsync(c => c.BranchId == command.BranchId && c.BusinessDate == command.BusinessDate, cancellationToken);
+            .AnyAsync(c => c.BranchId == command.BranchId && c.BusinessDate == command.BusinessDate
+                           && c.ShiftNumber == command.ShiftNumber, cancellationToken);
         if (alreadyClosed)
         {
             return Result.Failure<CompleteCashClosingResponse>(
-                Error.Conflict("CashClosing.AlreadyClosed", $"يوجد تقفيل مسبق لهذا الفرع بتاريخ {command.BusinessDate}."));
+                Error.Conflict("CashClosing.AlreadyClosed", $"يوجد تقفيل مسبق لهذا الفرع بتاريخ {command.BusinessDate} للوردية {command.ShiftNumber}."));
         }
 
         // === تحديد بداية الفترة: نهاية آخر تقفيل لنفس الفرع (لو وُجد) ===
@@ -245,7 +256,8 @@ public sealed class CompleteCashClosingHandler
         var closedAtUtc = _dateTimeProvider.UtcNow;
 
         var cashClosing = new CashClosing(
-            command.BranchId, actorUserId, command.BusinessDate, closedAtUtc, expectedCash, command.CountedCash);
+            command.BranchId, actorUserId, command.BusinessDate, closedAtUtc, expectedCash, command.CountedCash,
+            command.ShiftNumber);
 
         var responseDetails = new List<CompleteCashClosingDetailResponseDto>();
 
@@ -311,6 +323,7 @@ public sealed class CompleteCashClosingHandler
             cashClosing.Id,
             cashClosing.BranchId,
             cashClosing.BusinessDate,
+            cashClosing.ShiftNumber,
             cashClosing.ExpectedCash,
             cashClosing.CountedCash,
             cashClosing.Variance,

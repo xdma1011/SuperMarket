@@ -25,6 +25,17 @@ public class CashClosing : AuditableEntity, IBranchOwned, IHasRowVersion
     /// </summary>
     public DateOnly BusinessDate { get; private set; }
 
+    /// <summary>
+    /// رقم الوردية ضمن نفس اليوم التجاري - افتراضيًا 1 (يوم بوردية وحدة،
+    /// السلوك التاريخي قبل 21/9/2026). "واحد بس لكل (فرع، يوم، وردية)"
+    /// هو القيد الفريد الفعلي الآن، لا (فرع، يوم) وحدها - طلب صاحب المشروع
+    /// الصريح: تسليم/استلام صندوق منفصل بين وردية صباح ومساء بنفس اليوم.
+    /// "المتوقع" (ExpectedCash) يبقى محسوبًا زمنيًا (منذ آخر تقفيل فعليًا
+    /// بـClosedAtUtc، بلا علاقة برقم الوردية) - رقم الوردية بس تسمية/قيد
+    /// تفرّد، لا حد فاصل زمني بحد ذاته.
+    /// </summary>
+    public int ShiftNumber { get; private set; }
+
     public DateTime ClosedAtUtc { get; private set; }
     public decimal ExpectedCash { get; private set; }
     public decimal CountedCash { get; private set; }
@@ -36,11 +47,19 @@ public class CashClosing : AuditableEntity, IBranchOwned, IHasRowVersion
 
     private CashClosing() { } // EF Core
 
-    public CashClosing(Guid branchId, Guid userId, DateOnly businessDate, DateTime closedAtUtc, decimal expectedCash, decimal countedCash)
+    public CashClosing(
+        Guid branchId, Guid userId, DateOnly businessDate, DateTime closedAtUtc, decimal expectedCash, decimal countedCash,
+        int shiftNumber = 1)
     {
+        if (shiftNumber < 1)
+        {
+            throw new DomainException("Shift number must be at least 1.");
+        }
+
         BranchId = branchId;
         UserId = userId;
         BusinessDate = businessDate;
+        ShiftNumber = shiftNumber;
         ClosedAtUtc = closedAtUtc;
         ExpectedCash = expectedCash;
         CountedCash = countedCash;

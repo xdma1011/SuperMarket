@@ -37,6 +37,7 @@ public class CashClosingConfiguration : IEntityTypeConfiguration<CashClosing>
         builder.HasKey(c => c.Id);
 
         builder.Property(c => c.BusinessDate).HasColumnType("date").IsRequired();
+        builder.Property(c => c.ShiftNumber).IsRequired();
         builder.Property(c => c.ClosedAtUtc).HasColumnType("datetime2").IsRequired();
         builder.Property(c => c.ExpectedCash).HasColumnType("decimal(18,4)").IsRequired();
         builder.Property(c => c.CountedCash).HasColumnType("decimal(18,4)").IsRequired();
@@ -46,10 +47,13 @@ public class CashClosingConfiguration : IEntityTypeConfiguration<CashClosing>
 
         builder.Ignore(c => c.Variance);
 
-        // One closing per branch per business day — enforced against the
-        // explicit BusinessDate, not ClosedAtUtc (an exact timestamp can
-        // never collide, so a unique index on it enforces nothing).
-        builder.HasIndex(c => new { c.BranchId, c.BusinessDate }).IsUnique();
+        // One closing per branch per business day PER SHIFT — enforced
+        // against (BranchId, BusinessDate, ShiftNumber), not ClosedAtUtc
+        // (an exact timestamp can never collide, so a unique index on it
+        // enforces nothing). كان (BranchId, BusinessDate) بس قبل 21/9/2026 -
+        // وسّعناه بطلب صاحب المشروع الصريح لدعم تسليم/استلام صندوق منفصل
+        // بين وردية صباح ومساء بنفس اليوم.
+        builder.HasIndex(c => new { c.BranchId, c.BusinessDate, c.ShiftNumber }).IsUnique();
 
         builder.HasOne<User>().WithMany().HasForeignKey(c => c.UserId).OnDelete(DeleteBehavior.Restrict);
         // Branch FK (Restrict) configured on the Branches side.

@@ -100,6 +100,7 @@ using SupermarketSystem.Application.Reviews.MarkSaleInvoiceReviewed;
 using SupermarketSystem.Application.Reviews.MarkStockMovementReviewed;
 using SupermarketSystem.Application.Reporting.GetBestCashiers;
 using SupermarketSystem.Application.Reporting.GetCurrentCapitalValue;
+using SupermarketSystem.Application.Reporting.GetProductMarginReport;
 using SupermarketSystem.Application.Reporting.GetBestCustomers;
 using SupermarketSystem.Application.Reporting.GetManualDiscounts;
 using SupermarketSystem.Application.Reporting.GetNegativeStock;
@@ -299,6 +300,7 @@ public static class DependencyInjection
         services.AddScoped<GetSupplierPriceComparisonHandler>();
         services.AddScoped<GetRecentReturnedItemsHandler>();
         services.AddScoped<GetCurrentCapitalValueHandler>();
+        services.AddScoped<GetProductMarginReportHandler>();
         services.AddScoped<GetNotificationsHandler>();
 
         services.AddScoped<TriggerBackupHandler>();

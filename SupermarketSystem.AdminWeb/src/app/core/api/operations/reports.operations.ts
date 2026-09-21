@@ -13,5 +13,6 @@ export enum ReportsOperation {
   SupplierPriceComparison = 'suppliers/price-comparison',
   RecentReturnedItems = 'returns/recent-items',
   CurrentCapitalValue = 'inventory/capital-value',
-  ConsumptionLevels = 'products/consumption-levels'
+  ConsumptionLevels = 'products/consumption-levels',
+  ProductMargin = 'product-margin'
 }

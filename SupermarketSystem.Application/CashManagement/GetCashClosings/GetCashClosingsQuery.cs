@@ -11,6 +11,7 @@ public sealed record CashClosingListItemDto(
     Guid BranchId,
     string BranchName,
     DateOnly BusinessDate,
+    int ShiftNumber,
     DateTime ClosedAtUtc,
     decimal ExpectedCash,
     decimal CountedCash,
@@ -38,8 +39,8 @@ public sealed class GetCashClosingsHandler
         }
 
         closings = paging.IsDescending
-            ? closings.OrderByDescending(c => c.BusinessDate).ThenByDescending(c => c.Id)
-            : closings.OrderBy(c => c.BusinessDate).ThenBy(c => c.Id);
+            ? closings.OrderByDescending(c => c.BusinessDate).ThenByDescending(c => c.ShiftNumber).ThenByDescending(c => c.Id)
+            : closings.OrderBy(c => c.BusinessDate).ThenBy(c => c.ShiftNumber).ThenBy(c => c.Id);
 
         var totalCount = await closings.CountAsync(cancellationToken);
 
@@ -51,6 +52,7 @@ public sealed class GetCashClosingsHandler
                 c.Id,
                 c.BranchId,
                 c.BusinessDate,
+                c.ShiftNumber,
                 c.ClosedAtUtc,
                 c.ExpectedCash,
                 c.CountedCash,
@@ -69,6 +71,7 @@ public sealed class GetCashClosingsHandler
                 r.BranchId,
                 branchNames.GetValueOrDefault(r.BranchId, "(غير معروف)"),
                 r.BusinessDate,
+                r.ShiftNumber,
                 r.ClosedAtUtc,
                 r.ExpectedCash,
                 r.CountedCash,

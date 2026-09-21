@@ -6,7 +6,11 @@ using SupermarketSystem.Application.Finance.CreateExpense;
 using SupermarketSystem.Application.Finance.GetCapitalTransactions;
 using SupermarketSystem.Application.Finance.GetExpenses;
 using SupermarketSystem.Application.Finance.GetMonthlyProfitStatement;
+using SupermarketSystem.Application.Inventory.ApproveStocktake;
+using SupermarketSystem.Application.Inventory.CompleteStocktake;
+using SupermarketSystem.Application.Inventory.CreateStocktake;
 using SupermarketSystem.Application.Inventory.ReceiveStockTransfer;
+using SupermarketSystem.Application.Inventory.RecordStocktakeCount;
 using SupermarketSystem.Application.Sales.CompleteSale;
 using SupermarketSystem.Domain.Finance;
 using SupermarketSystem.Domain.Inventory;
@@ -267,5 +271,114 @@ public sealed class FinanceTests : IntegrationTestBase
             .FirstAsync(b => b.ProductId == product.Id && b.BranchId == destinationBranch.Id && b.BatchNumber == "SRC-BATCH");
 
         Assert.Equal(7m, destinationBatch.UnitCost);
+    }
+
+    [Fact]
+    public async Task فروقات_الجرد_نقص_وزيادة_تُحتسب_ضمن_كشف_الربح_الشهري()
+    {
+        using var scope = CreateScope();
+        await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+        var db = CreateDbContext(scope);
+
+        var (shortageProduct, shortageUnit) = await TestDataBuilder.CreateActiveProductAsync(db, "منتج نقص جرد");
+        await TestDataBuilder.CreateProductBranchAsync(db, shortageProduct.Id, Fixture.TestBranchId, sellingPrice: 5m);
+        await TestDataBuilder.SetStockAsync(db, shortageProduct.Id, Fixture.TestBranchId, 30m);
+
+        var (surplusProduct, surplusUnit) = await TestDataBuilder.CreateActiveProductAsync(db, "منتج زيادة جرد");
+        await TestDataBuilder.CreateProductBranchAsync(db, surplusProduct.Id, Fixture.TestBranchId, sellingPrice: 5m);
+        await TestDataBuilder.SetStockAsync(db, surplusProduct.Id, Fixture.TestBranchId, 10m);
+
+        var supplier = await TestDataBuilder.CreateSupplierAsync(db);
+
+        var shortageInvoice = new PurchaseInvoice(Fixture.TestBranchId, supplier.Id, "PI-STOCKTAKE-SHORTAGE", null);
+        shortageInvoice.AddItem(shortageProduct.Id, shortageUnit.Id, null, 30m, 3m); // تكلفة الوحدة = 3
+        shortageInvoice.MarkReceived();
+        db.PurchaseInvoices.Add(shortageInvoice);
+
+        var surplusInvoice = new PurchaseInvoice(Fixture.TestBranchId, supplier.Id, "PI-STOCKTAKE-SURPLUS", null);
+        surplusInvoice.AddItem(surplusProduct.Id, surplusUnit.Id, null, 10m, 2m); // تكلفة الوحدة = 2
+        surplusInvoice.MarkReceived();
+        db.PurchaseInvoices.Add(surplusInvoice);
+
+        await db.SaveChangesAsync();
+
+        var createHandler = scope.ServiceProvider.GetRequiredService<CreateStocktakeHandler>();
+        var created = await createHandler.HandleAsync(
+            new CreateStocktakeCommand(Fixture.TestBranchId, IncludeAllProductsAtBranch: true, ProductIds: null),
+            CancellationToken.None);
+        Assert.True(created.IsSuccess);
+
+        var stocktakeItems = await db.StocktakeItems.AsNoTracking()
+            .Where(i => i.StocktakeId == created.Value.StocktakeId).ToListAsync();
+        var shortageItem = stocktakeItems.Single(i => i.ProductId == shortageProduct.Id);
+        var surplusItem = stocktakeItems.Single(i => i.ProductId == surplusProduct.Id);
+
+        var recordHandler = scope.ServiceProvider.GetRequiredService<RecordStocktakeCountHandler>();
+        await recordHandler.HandleAsync(
+            new RecordStocktakeCountCommand(created.Value.StocktakeId, shortageItem.Id, CountedQuantity: 25m), CancellationToken.None); // نقص 5
+        await recordHandler.HandleAsync(
+            new RecordStocktakeCountCommand(created.Value.StocktakeId, surplusItem.Id, CountedQuantity: 15m), CancellationToken.None); // زيادة 5
+
+        var completeHandler = scope.ServiceProvider.GetRequiredService<CompleteStocktakeHandler>();
+        var completed = await completeHandler.HandleAsync(new CompleteStocktakeCommand(created.Value.StocktakeId), CancellationToken.None);
+        Assert.True(completed.IsSuccess);
+
+        var approveHandler = scope.ServiceProvider.GetRequiredService<ApproveStocktakeHandler>();
+        var approved = await approveHandler.HandleAsync(new ApproveStocktakeCommand(created.Value.StocktakeId), CancellationToken.None);
+        Assert.True(approved.IsSuccess);
+
+        var now = DateTime.UtcNow;
+        var statementHandler = scope.ServiceProvider.GetRequiredService<GetMonthlyProfitStatementHandler>();
+        var statement = await statementHandler.HandleAsync(
+            new GetMonthlyProfitStatementQuery(Fixture.TestBranchId, now.Year, now.Month), CancellationToken.None);
+
+        Assert.True(statement.IsSuccess);
+        Assert.Equal(15m, statement.Value.StocktakeShortageValue); // 5 × 3
+        Assert.Equal(10m, statement.Value.StocktakeSurplusValue); // 5 × 2
+        Assert.Equal(0, statement.Value.StocktakeMovementsExcludedNoCostHistory);
+        Assert.Equal(
+            statement.Value.GrossProfit - statement.Value.TotalExpenses + statement.Value.StocktakeSurplusValue - statement.Value.StocktakeShortageValue,
+            statement.Value.NetProfit);
+    }
+
+    [Fact]
+    public async Task فروقات_جرد_منتج_بلا_تاريخ_شراء_تُستبعد_من_صافي_فروقات_الجرد()
+    {
+        using var scope = CreateScope();
+        await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+        var db = CreateDbContext(scope);
+
+        var (product, _) = await TestDataBuilder.CreateActiveProductAsync(db, "منتج جرد بلا تاريخ شراء");
+        await TestDataBuilder.CreateProductBranchAsync(db, product.Id, Fixture.TestBranchId, sellingPrice: 5m);
+        await TestDataBuilder.SetStockAsync(db, product.Id, Fixture.TestBranchId, 20m);
+
+        var createHandler = scope.ServiceProvider.GetRequiredService<CreateStocktakeHandler>();
+        var created = await createHandler.HandleAsync(
+            new CreateStocktakeCommand(Fixture.TestBranchId, IncludeAllProductsAtBranch: true, ProductIds: null),
+            CancellationToken.None);
+        Assert.True(created.IsSuccess);
+
+        var itemId = await db.StocktakeItems.AsNoTracking()
+            .Where(i => i.StocktakeId == created.Value.StocktakeId).Select(i => i.Id).FirstAsync();
+
+        var recordHandler = scope.ServiceProvider.GetRequiredService<RecordStocktakeCountHandler>();
+        await recordHandler.HandleAsync(
+            new RecordStocktakeCountCommand(created.Value.StocktakeId, itemId, CountedQuantity: 15m), CancellationToken.None); // نقص 5
+
+        var completeHandler = scope.ServiceProvider.GetRequiredService<CompleteStocktakeHandler>();
+        await completeHandler.HandleAsync(new CompleteStocktakeCommand(created.Value.StocktakeId), CancellationToken.None);
+
+        var approveHandler = scope.ServiceProvider.GetRequiredService<ApproveStocktakeHandler>();
+        await approveHandler.HandleAsync(new ApproveStocktakeCommand(created.Value.StocktakeId), CancellationToken.None);
+
+        var now = DateTime.UtcNow;
+        var statementHandler = scope.ServiceProvider.GetRequiredService<GetMonthlyProfitStatementHandler>();
+        var statement = await statementHandler.HandleAsync(
+            new GetMonthlyProfitStatementQuery(Fixture.TestBranchId, now.Year, now.Month), CancellationToken.None);
+
+        Assert.True(statement.IsSuccess);
+        Assert.Equal(0m, statement.Value.StocktakeShortageValue);
+        Assert.Equal(0m, statement.Value.StocktakeSurplusValue);
+        Assert.Equal(1, statement.Value.StocktakeMovementsExcludedNoCostHistory);
     }
 }

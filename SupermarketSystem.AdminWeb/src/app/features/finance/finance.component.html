@@ -47,6 +47,12 @@
         </div>
       }
 
+      @if (s.stocktakeMovementsExcludedNoCostHistory > 0) {
+        <div class="alert-banner warn">
+          تنبيه: {{ s.stocktakeMovementsExcludedNoCostHistory }} فرق جرد بهالشهر بلا تكلفة معروفة - مُستبعد كليًا من صافي فروقات الجرد أدناه.
+        </div>
+      }
+
       <div class="kpi-grid">
         <div class="kpi-card">
           <span class="kpi-label">صافي الإيراد</span>
@@ -73,6 +79,8 @@
       <div class="detail-grid">
         <div class="detail-row"><span>إجمالي المبيعات</span><span class="mono">{{ s.totalSales | number: '1.2-2' }}</span></div>
         <div class="detail-row"><span>إجمالي المرتجعات</span><span class="mono">{{ s.totalReturnedAmount | number: '1.2-2' }}</span></div>
+        <div class="detail-row"><span>فائض الجرد (زيادة)</span><span class="mono">+{{ s.stocktakeSurplusValue | number: '1.2-2' }}</span></div>
+        <div class="detail-row"><span>نقص الجرد (خسارة)</span><span class="mono">-{{ s.stocktakeShortageValue | number: '1.2-2' }}</span></div>
       </div>
 
       @if (s.expensesByCategory.length > 0) {
