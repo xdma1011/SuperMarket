@@ -29,7 +29,10 @@ public sealed record CompletePurchaseInvoiceCommand(
     // يصير عندنا فاتورة أصلًا — هذا الحقل يربط الصور المحفوظة تلك بالفاتورة
     // فعليًا وقت إتمامها). اختياري تمامًا — الإدخال اليدوي العادي بلا صور
     // يضل يشتغل بلا أي تغيير.
-    IReadOnlyList<string>? ImageReferences = null);
+    IReadOnlyList<string>? ImageReferences = null,
+    // تاريخ استحقاق دفعة المورد - اختياري تمامًا، يغذّي تقرير
+    // "تنبيه استحقاق دفعة مورد" (GetSupplierPaymentDueQuery) لاحقًا.
+    DateOnly? DueDate = null);
 
 public sealed record CompletePurchaseInvoiceResponse(Guid PurchaseInvoiceId, string InvoiceNumber, decimal TotalAmount);
 
@@ -273,7 +276,7 @@ public sealed class CompletePurchaseInvoiceHandler
         // --- Build the aggregate + its inventory effects, all in one graph ---
 
         var purchaseInvoice = new Domain.Purchasing.PurchaseInvoice(
-            command.BranchId, command.SupplierId, invoiceNumber, command.SupplierInvoiceReference);
+            command.BranchId, command.SupplierId, invoiceNumber, command.SupplierInvoiceReference, command.DueDate);
 
         var actorUserId = _currentUser.UserId ?? Domain.Identity.User.SystemUserId;
         var occurredAtUtc = _dateTimeProvider.UtcNow;

@@ -104,6 +104,7 @@ using SupermarketSystem.Application.Reporting.GetCashierVarianceReport;
 using SupermarketSystem.Application.Reporting.GetCurrentCapitalValue;
 using SupermarketSystem.Application.Reporting.GetExpiringBatches;
 using SupermarketSystem.Application.Reporting.GetWasteLog;
+using SupermarketSystem.Application.Reporting.GetSupplierPaymentDue;
 using SupermarketSystem.Application.Reporting.GetProductMarginReport;
 using SupermarketSystem.Application.Reporting.GetBestCustomers;
 using SupermarketSystem.Application.Reporting.GetManualDiscounts;
@@ -308,6 +309,7 @@ public static class DependencyInjection
         services.AddScoped<GetProductMarginReportHandler>();
         services.AddScoped<GetExpiringBatchesHandler>();
         services.AddScoped<GetWasteLogHandler>();
+        services.AddScoped<GetSupplierPaymentDueHandler>();
         services.AddScoped<GetCashierVarianceReportHandler>();
         services.AddScoped<GetNotificationsHandler>();
 

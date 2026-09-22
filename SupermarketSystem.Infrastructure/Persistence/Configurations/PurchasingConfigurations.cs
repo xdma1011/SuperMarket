@@ -43,6 +43,7 @@ public class PurchaseInvoiceConfiguration : IEntityTypeConfiguration<PurchaseInv
 
         builder.Property(p => p.InvoiceNumber).IsRequired().HasMaxLength(50);
         builder.Property(p => p.SupplierInvoiceReference).HasMaxLength(100);
+        builder.Property(p => p.DueDate).HasColumnType("date");
         builder.Property(p => p.Status).HasConversion<int>().IsRequired();
         builder.Property(p => p.TotalAmount).HasColumnType("decimal(18,4)").IsRequired();
         builder.Property(p => p.RowVersion).IsRowVersion();
@@ -52,6 +53,8 @@ public class PurchaseInvoiceConfiguration : IEntityTypeConfiguration<PurchaseInv
         builder.HasIndex(p => new { p.BranchId, p.InvoiceNumber }).IsUnique();
         builder.HasIndex(p => p.SupplierId);
         builder.HasIndex(p => new { p.BranchId, p.CreatedAtUtc });
+        // يخدم تقرير "تنبيه استحقاق دفعة مورد" (GetSupplierPaymentDueQuery).
+        builder.HasIndex(p => p.DueDate);
 
         builder.HasOne<Supplier>().WithMany().HasForeignKey(p => p.SupplierId).OnDelete(DeleteBehavior.Restrict);
         // Branch FK (Restrict) configured on the Branches side.

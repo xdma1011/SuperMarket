@@ -219,6 +219,19 @@ export const REPORT_CONFIGS: ReportConfig[] = [
     ]
   },
   {
+    id: 'supplier-payment-due',
+    title: 'تنبيه استحقاق دفعة مورد',
+    operation: ReportsOperation.SupplierPaymentDue,
+    requiresBranch: true,
+    columns: [
+      { key: 'supplierName', label: 'المورد', type: 'text' },
+      { key: 'invoiceNumber', label: 'رقم الفاتورة', type: 'text' },
+      { key: 'remainingDebt', label: 'المتبقي', type: 'currency' },
+      { key: 'dueDate', label: 'تاريخ الاستحقاق', type: 'date' },
+      { key: 'daysRemaining', label: 'الأيام المتبقية', type: 'number' }
+    ]
+  },
+  {
     id: 'recent-returned-items',
     title: 'آخر الأصناف المرتجعة',
     operation: ReportsOperation.RecentReturnedItems,

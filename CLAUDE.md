@@ -372,6 +372,18 @@ Frontend وقت الإنجاز.
    جديد). 12 اختبار تكامل جديد (5 للـتلف، 2 للسجل، 1 للمراجعات، زائد
    اختبارات فروقات الصندوق وقرب الصلاحية).
 
+4. **تنبيه استحقاق دفعة مورد** - `PurchaseInvoice.DueDate` (عمود
+   `DateOnly?` جديد، Migration `AddPurchaseInvoiceDueDate` - اختياري
+   تمامًا، ما إلو علاقة بـStatus). `CompletePurchaseInvoiceCommand` قبل
+   `DueDate` اختياريًا وقت إنشاء الفاتورة (حقل جديد بنموذج فاتورة الشراء
+   بلوحة الإدارة). `GetSupplierPaymentDueQuery` (تقرير جديد، "تنبيه
+   استحقاق دفعة مورد") - فواتير `Received` بـ`DueDate` محدَّد وعليها دين
+   متبقٍّ فعلي (`TotalAmount > TotalPaidAmount`) فقط - فاتورة بلا
+   `DueDate` (الحالة الشائعة، دفع فوري بلا مهلة) غايبة عمدًا، مش خطأ.
+   `DaysRemaining` سالب = متجاوزة الاستحقاق فعلًا (بلا فلترة، نفس فلسفة
+   `GetExpiringBatchesQuery.DaysRemaining`). 3 اختبار تكامل جديد + اختبار
+   لحفظ `DueDate` فعليًا بـ`CompletePurchaseInvoiceTests`.
+
 **❓ خطأ صلاحيات حقيقي مكتشَف بالمرور (22/9/2026) — غير متعلّق بأي طلب
 حالي، بانتظار قرارك، لم يُلمَس:** أثناء إضافة صلاحية `Inventory.WasteIssue`
 لدور Master Admin، لاحظت أن صلاحية `Finance.Manage` (المفروض Master Admin

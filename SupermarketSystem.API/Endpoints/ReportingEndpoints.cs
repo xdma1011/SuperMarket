@@ -7,6 +7,7 @@ using SupermarketSystem.Application.Reporting.GetCurrentCapitalValue;
 using SupermarketSystem.Application.Reporting.GetExpiringBatches;
 using SupermarketSystem.Application.Reporting.GetCashierVarianceReport;
 using SupermarketSystem.Application.Reporting.GetWasteLog;
+using SupermarketSystem.Application.Reporting.GetSupplierPaymentDue;
 using SupermarketSystem.Application.Reporting.GetProductMarginReport;
 using SupermarketSystem.Application.Reporting.GetManualDiscounts;
 using SupermarketSystem.Application.Reporting.GetNegativeStock;
@@ -261,6 +262,20 @@ public static class ReportingEndpoints
         .WithName("GetWasteLog")
         .WithSummary("سجل حركات التلف/الهلاك (WasteOut) - منفصل عن سجل الضيافة.")
         .Produces<PagedResult<WasteLogItemDto>>(StatusCodes.Status200OK);
+
+        group.MapGet("/suppliers/payment-due", async (
+            int? pageNumber, int? pageSize, string? search, string? sortBy, string? sortDirection,
+            Guid? branchId,
+            GetSupplierPaymentDueHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var paging = PagingBinder.Build(pageNumber, pageSize, search, sortBy, sortDirection);
+            var result = await handler.HandleAsync(new GetSupplierPaymentDueQuery(paging, branchId), cancellationToken);
+            return Results.Ok(result);
+        })
+        .WithName("GetSupplierPaymentDue")
+        .WithSummary("فواتير شراء لها تاريخ استحقاق محدَّد وعليها دين متبقٍّ - لتنبيه دفعات الموردين المستحقة.")
+        .Produces<PagedResult<SupplierPaymentDueItemDto>>(StatusCodes.Status200OK);
 
         group.MapGet("/suppliers/price-comparison", async (
             int? pageNumber, int? pageSize, string? search, string? sortBy, string? sortDirection,

@@ -104,6 +104,7 @@ export class PurchasingComponent implements OnInit {
   selectedSupplierId = '';
   selectedBranchId = '';
   supplierInvoiceReference = '';
+  dueDate = '';
   lines: DraftLine[] = [];
 
   newLineProductId = '';
@@ -169,6 +170,7 @@ export class PurchasingComponent implements OnInit {
   closeForm(): void {
     this.formOpen.set(false);
     this.supplierInvoiceReference = '';
+    this.dueDate = '';
     this.lines = [];
   }
 
@@ -247,6 +249,7 @@ export class PurchasingComponent implements OnInit {
           branchId: this.selectedBranchId,
           supplierId: this.selectedSupplierId,
           supplierInvoiceReference: this.supplierInvoiceReference.trim() || null,
+          dueDate: this.dueDate || null,
           items: this.lines.map(l => ({
             productId: l.productId,
             productUnitId: l.unitId,

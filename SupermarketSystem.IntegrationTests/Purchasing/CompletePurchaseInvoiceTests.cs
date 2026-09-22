@@ -47,6 +47,30 @@ public sealed class CompletePurchaseInvoiceTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task إتمام_فاتورة_شراء_بتاريخ_استحقاق_يحفظه_فعليًا()
+    {
+        using var scope = CreateScope();
+        await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+        var db = CreateDbContext(scope);
+        var (product, unit) = await TestDataBuilder.CreateActiveProductAsync(db, "منتج شراء باستحقاق");
+        var supplier = await TestDataBuilder.CreateSupplierAsync(db);
+        var dueDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30));
+
+        var handler = scope.ServiceProvider.GetRequiredService<CompletePurchaseInvoiceHandler>();
+        var result = await handler.HandleAsync(
+            new CompletePurchaseInvoiceCommand(
+                Fixture.TestBranchId, supplier.Id, "INV-DUE-001",
+                new[] { new CompletePurchaseInvoiceItemDto(product.Id, unit.Id, 5m, 10m, null, null, null) },
+                DueDate: dueDate),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+
+        var invoice = await db.PurchaseInvoices.AsNoTracking().FirstAsync(pi => pi.Id == result.Value.PurchaseInvoiceId);
+        Assert.Equal(dueDate, invoice.DueDate);
+    }
+
+    [Fact]
     public async Task شراء_منتج_متتبَّع_دفعات_بدون_رقم_دفعة_يفشل_بخطأ_تحقق()
     {
         using var scope = CreateScope();

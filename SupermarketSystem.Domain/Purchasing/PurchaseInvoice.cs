@@ -27,6 +27,13 @@ public class PurchaseInvoice : AuditableEntity, IBranchOwned, IHasRowVersion
     public decimal TotalAmount { get; private set; }
 
     /// <summary>
+    /// تاريخ استحقاق دفعة المورد - اختياري تمامًا (كتير موردين ما عندهم
+    /// مهلة سماح، دفع فوري بس). لا علاقة له بـStatus - فاتورة Received
+    /// بلا DueDate ببساطة ما بتظهر بتقرير "تنبيه استحقاق دفعة مورد".
+    /// </summary>
+    public DateOnly? DueDate { get; private set; }
+
+    /// <summary>
     /// عدّاد محفوظ (guarded running counter)، نفس نمط SaleInvoice.TotalPaidAmount
     /// بالضبط بس بالاتجاه المعاكس — هون "كم دفعنا نحن للمورد"، لا "كم دفع
     /// الزبون لنا". TotalAmount - TotalPaidAmount = المتبقي علينا (الدين).
@@ -49,7 +56,7 @@ public class PurchaseInvoice : AuditableEntity, IBranchOwned, IHasRowVersion
 
     private PurchaseInvoice() { } // EF Core
 
-    public PurchaseInvoice(Guid branchId, Guid supplierId, string invoiceNumber, string? supplierInvoiceReference)
+    public PurchaseInvoice(Guid branchId, Guid supplierId, string invoiceNumber, string? supplierInvoiceReference, DateOnly? dueDate = null)
     {
         BranchId = branchId;
         SupplierId = supplierId;
@@ -58,6 +65,7 @@ public class PurchaseInvoice : AuditableEntity, IBranchOwned, IHasRowVersion
         Status = PurchaseInvoiceStatus.Draft;
         TotalAmount = 0;
         TotalPaidAmount = 0;
+        DueDate = dueDate;
     }
 
     public PurchaseInvoiceItem AddItem(
