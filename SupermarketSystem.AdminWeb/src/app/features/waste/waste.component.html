@@ -1,0 +1,68 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">المخزون / التلف والهلاك</span>
+    <h1>تلف وهلاك</h1>
+    <span class="subtitle">بضاعة تخرج من المخزون بسبب تلف فعلي (انتهاء صلاحية، كسر، تلف تخزين) — منفصل عن الضيافة.</span>
+  </div>
+</div>
+
+@if (successMessage()) {
+  <div class="alert-banner success">{{ successMessage() }}</div>
+}
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+<section class="form-panel">
+  <div class="form-fields">
+    <label class="field">
+      <span>المنتج</span>
+      <select [(ngModel)]="selectedProductId" (ngModelChange)="onProductChange()">
+        @for (p of products(); track p.id) {
+          <option [value]="p.id">{{ p.name }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="field">
+      <span>الفرع</span>
+      <select [(ngModel)]="selectedBranchId">
+        @for (b of branches(); track b.id) {
+          <option [value]="b.id">{{ b.name }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="field">
+      <span>الوحدة</span>
+      <select [(ngModel)]="selectedUnitId" [disabled]="loadingUnits() || units().length === 0">
+        @for (u of units(); track u.id) {
+          <option [value]="u.id">{{ u.unitName }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="field">
+      <span>الكمية</span>
+      <input type="number" [(ngModel)]="quantity" min="0.01" step="1" placeholder="1" />
+    </label>
+
+    <label class="field">
+      <span>السبب</span>
+      <select [(ngModel)]="reason">
+        @for (r of reasons; track r.value) {
+          <option [value]="r.value">{{ r.label }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="field" style="grid-column: span 2">
+      <span>ملاحظات (اختياري)</span>
+      <input type="text" [(ngModel)]="notes" placeholder="تفاصيل إضافية عن سبب التلف" />
+    </label>
+  </div>
+
+  <button type="button" class="btn-primary" [disabled]="submitting() || loading()" (click)="submit()">
+    {{ submitting() ? 'جارٍ التسجيل…' : 'تسجيل التلف/الهلاك' }}
+  </button>
+</section>

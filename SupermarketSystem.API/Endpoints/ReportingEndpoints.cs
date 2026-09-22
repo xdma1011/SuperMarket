@@ -4,6 +4,9 @@ using SupermarketSystem.Application.Common.Pagination;
 using SupermarketSystem.Application.Reporting.GetBestCashiers;
 using SupermarketSystem.Application.Reporting.GetBestCustomers;
 using SupermarketSystem.Application.Reporting.GetCurrentCapitalValue;
+using SupermarketSystem.Application.Reporting.GetExpiringBatches;
+using SupermarketSystem.Application.Reporting.GetCashierVarianceReport;
+using SupermarketSystem.Application.Reporting.GetWasteLog;
 using SupermarketSystem.Application.Reporting.GetProductMarginReport;
 using SupermarketSystem.Application.Reporting.GetManualDiscounts;
 using SupermarketSystem.Application.Reporting.GetNegativeStock;
@@ -216,6 +219,48 @@ public static class ReportingEndpoints
         })
         .WithName("GetReorderNeededProducts")
         .Produces<PagedResult<ReorderNeededItemDto>>(StatusCodes.Status200OK);
+
+        group.MapGet("/inventory/expiring-batches", async (
+            int? pageNumber, int? pageSize, string? search, string? sortBy, string? sortDirection,
+            Guid branchId,
+            GetExpiringBatchesHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var paging = PagingBinder.Build(pageNumber, pageSize, search, sortBy, sortDirection);
+            var result = await handler.HandleAsync(new GetExpiringBatchesQuery(paging, branchId), cancellationToken);
+            return Results.Ok(result);
+        })
+        .WithName("GetExpiringBatches")
+        .WithSummary("دفعات قرب انتهاء الصلاحية برصيد فعلي موجب - الحد الزمني قابل للتعديل من الإعدادات (افتراضي 14 يوم).")
+        .Produces<PagedResult<ExpiringBatchItemDto>>(StatusCodes.Status200OK);
+
+        group.MapGet("/cashiers/variance", async (
+            int? pageNumber, int? pageSize, string? search, string? sortBy, string? sortDirection,
+            Guid? branchId, DateTime fromUtc, DateTime toUtc,
+            GetCashierVarianceReportHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var paging = PagingBinder.Build(pageNumber, pageSize, search, sortBy, sortDirection);
+            var result = await handler.HandleAsync(new GetCashierVarianceReportQuery(paging, branchId, fromUtc, toUtc), cancellationToken);
+            return Results.Ok(result);
+        })
+        .WithName("GetCashierVarianceReport")
+        .WithSummary("فروقات تقفيل الصندوق مجمَّعة لكل كاشير عبر فترة - لكشف نمط عجز متكرر.")
+        .Produces<PagedResult<CashierVarianceItemDto>>(StatusCodes.Status200OK);
+
+        group.MapGet("/inventory/waste-log", async (
+            int? pageNumber, int? pageSize, string? search, string? sortBy, string? sortDirection,
+            Guid? branchId,
+            GetWasteLogHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var paging = PagingBinder.Build(pageNumber, pageSize, search, sortBy, sortDirection);
+            var result = await handler.HandleAsync(new GetWasteLogQuery(paging, branchId), cancellationToken);
+            return Results.Ok(result);
+        })
+        .WithName("GetWasteLog")
+        .WithSummary("سجل حركات التلف/الهلاك (WasteOut) - منفصل عن سجل الضيافة.")
+        .Produces<PagedResult<WasteLogItemDto>>(StatusCodes.Status200OK);
 
         group.MapGet("/suppliers/price-comparison", async (
             int? pageNumber, int? pageSize, string? search, string? sortBy, string? sortDirection,

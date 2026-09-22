@@ -32,6 +32,13 @@ const voidReasonMap: Record<number, string> = {
   3: 'أخرى'
 };
 
+const wasteReasonMap: Record<number, string> = {
+  1: 'منتهي الصلاحية',
+  2: 'مكسور',
+  3: 'تلف تخزين',
+  4: 'أخرى'
+};
+
 /**
  * القالب العام (ReportsComponent) بيقرأ من هالقائمة حصرًا — إضافة تقرير
  * جديد لاحقًا يعني سطر واحد هون. التقريران الخاصان (ملخّص المبيعات،
@@ -169,6 +176,46 @@ export const REPORT_CONFIGS: ReportConfig[] = [
       { key: 'quantity', label: 'الكمية', type: 'number' },
       { key: 'purchaseInvoiceNumber', label: 'رقم الفاتورة', type: 'text' },
       { key: 'purchasedAtUtc', label: 'تاريخ الشراء', type: 'date' }
+    ]
+  },
+  {
+    id: 'expiring-batches',
+    title: 'قرب انتهاء الصلاحية',
+    operation: ReportsOperation.ExpiringBatches,
+    requiresBranch: true,
+    columns: [
+      { key: 'productName', label: 'المنتج', type: 'text' },
+      { key: 'batchNumber', label: 'رقم الدفعة', type: 'text' },
+      { key: 'expiryDate', label: 'تاريخ الانتهاء', type: 'date' },
+      { key: 'daysRemaining', label: 'الأيام المتبقية', type: 'number' },
+      { key: 'quantityOnHand', label: 'الكمية المتوفرة', type: 'number' }
+    ]
+  },
+  {
+    id: 'cashier-variance',
+    title: 'فروقات تقفيل الصندوق لكل كاشير',
+    operation: ReportsOperation.CashierVariance,
+    requiresDateRange: true,
+    columns: [
+      { key: 'username', label: 'الكاشير', type: 'text' },
+      { key: 'closingsCount', label: 'عدد التقفيلات', type: 'number' },
+      { key: 'deficitCount', label: 'مرات العجز', type: 'number' },
+      { key: 'surplusCount', label: 'مرات الزيادة', type: 'number' },
+      { key: 'totalVariance', label: 'إجمالي الفرق', type: 'currency' },
+      { key: 'averageVariance', label: 'متوسط الفرق', type: 'currency' }
+    ]
+  },
+  {
+    id: 'waste-log',
+    title: 'سجل التلف والهلاك',
+    operation: ReportsOperation.WasteLog,
+    requiresBranch: true,
+    columns: [
+      { key: 'productName', label: 'المنتج', type: 'text' },
+      { key: 'quantityBase', label: 'الكمية', type: 'number' },
+      { key: 'reason', label: 'السبب', type: 'enum', enumMap: wasteReasonMap },
+      { key: 'notes', label: 'ملاحظات', type: 'text' },
+      { key: 'occurredAtUtc', label: 'التاريخ', type: 'date' }
     ]
   },
   {

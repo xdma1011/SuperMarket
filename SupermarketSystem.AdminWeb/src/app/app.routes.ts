@@ -106,6 +106,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/complimentary/complimentary.component').then(m => m.ComplimentaryComponent)
       },
       {
+        path: 'waste',
+        canActivate: [requirePermissionGuard('Inventory.WasteIssue')],
+        loadComponent: () => import('./features/waste/waste.component').then(m => m.WasteComponent)
+      },
+      {
         path: 'users',
         canActivate: [requirePermissionGuard('Users.Manage')],
         loadComponent: () => import('./features/users/users.component').then(m => m.UsersComponent)

@@ -41,6 +41,8 @@ public class StockMovementConfiguration : IEntityTypeConfiguration<StockMovement
         // ReferenceId is a deliberate loose reference — no FK (see class remarks in Domain).
         builder.Property(m => m.NeedsReview).IsRequired();
         builder.Property(m => m.ReviewedAtUtc).HasColumnType("datetime2");
+        // Nullable - ذو معنى فقط لـWasteOut (راجع تعليق الخاصية بالـDomain).
+        builder.Property(m => m.WasteReason).HasConversion<int?>();
 
         // "قائمة المراجعات المعلَّقة" (unified reviews page) بتستعلم بهذا
         // الشرط تحديدًا — فهرس مخصص يخليها سريعة حتى مع تراكم آلاف السجلات

@@ -3,6 +3,7 @@ using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Pagination;
 using SupermarketSystem.Application.Inventory.GetCurrentStock;
 using SupermarketSystem.Application.Inventory.RecordComplimentaryIssue;
+using SupermarketSystem.Application.Inventory.RecordWasteIssue;
 
 namespace SupermarketSystem.API.Endpoints;
 
@@ -25,6 +26,27 @@ public static class InventoryAdjustmentEndpoints
         .WithName("RecordComplimentaryIssue")
         .WithSummary("يسجّل خروج بضاعة كضيافة/استهلاك داخلي - ينقص المخزون بلا أي قيد مالي كإيراد.")
         .Produces<RecordComplimentaryIssueResponse>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status404NotFound)
+        .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+
+        // خارج المجموعة عمدًا (لا group.MapPost) — نفس الفخ الموثَّق بـ
+        // CLAUDE.md §3.4: المجموعة مقفولة بصلاحية الضيافة (ComplimentaryIssue)،
+        // فلو استخدمنا group.MapPost هون كانت الصلاحيتان بتتراكمان (AND) لا
+        // WasteIssue وحدها.
+        app.MapPost("/api/v1/inventory/waste-issues", async (
+            RecordWasteIssueCommand command,
+            RecordWasteIssueHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(command, cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithName("RecordWasteIssue")
+        .WithTags("Inventory")
+        .RequirePermission(PermissionCodes.WasteIssue)
+        .WithSummary("يسجّل خروج بضاعة كتلف/هلاك (منتهي، مكسور، تلف تخزين...) - منفصل عن الضيافة، سبب إلزامي.")
+        .Produces<RecordWasteIssueResponse>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status404NotFound)
         .ProducesProblem(StatusCodes.Status422UnprocessableEntity);

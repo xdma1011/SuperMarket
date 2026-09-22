@@ -1,8 +1,8 @@
 import { REPORT_CONFIGS } from './report-configs';
 
 describe('REPORT_CONFIGS', () => {
-  it('يحتوي على 12 تقريرًا عاديًا (بلا الثلاثة الخاصة: ملخّص المبيعات/رأس المال/ديون الموردين)', () => {
-    expect(REPORT_CONFIGS.length).toBe(12);
+  it('يحتوي على 15 تقريرًا عاديًا (بلا التقارير الخاصة: ملخّص المبيعات/رأس المال/ديون الموردين/هامش الربح)', () => {
+    expect(REPORT_CONFIGS.length).toBe(15);
   });
 
   it('كل معرّف تقرير فريد (بلا تكرار)', () => {

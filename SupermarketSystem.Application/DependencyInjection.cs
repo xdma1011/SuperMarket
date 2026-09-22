@@ -43,6 +43,7 @@ using SupermarketSystem.Application.Branches.GetPublicBranches;
 using SupermarketSystem.Application.Inventory.ApproveStocktake;
 using SupermarketSystem.Application.Inventory.GetCurrentStock;
 using SupermarketSystem.Application.Inventory.RecordComplimentaryIssue;
+using SupermarketSystem.Application.Inventory.RecordWasteIssue;
 using SupermarketSystem.Application.Inventory.CompleteStocktake;
 using SupermarketSystem.Application.Inventory.CreateStocktake;
 using SupermarketSystem.Application.Inventory.GetStocktakeById;
@@ -99,7 +100,10 @@ using SupermarketSystem.Application.Reviews.MarkPurchaseInvoiceItemReviewed;
 using SupermarketSystem.Application.Reviews.MarkSaleInvoiceReviewed;
 using SupermarketSystem.Application.Reviews.MarkStockMovementReviewed;
 using SupermarketSystem.Application.Reporting.GetBestCashiers;
+using SupermarketSystem.Application.Reporting.GetCashierVarianceReport;
 using SupermarketSystem.Application.Reporting.GetCurrentCapitalValue;
+using SupermarketSystem.Application.Reporting.GetExpiringBatches;
+using SupermarketSystem.Application.Reporting.GetWasteLog;
 using SupermarketSystem.Application.Reporting.GetProductMarginReport;
 using SupermarketSystem.Application.Reporting.GetBestCustomers;
 using SupermarketSystem.Application.Reporting.GetManualDiscounts;
@@ -278,6 +282,7 @@ public static class DependencyInjection
         services.AddScoped<CompleteStocktakeHandler>();
         services.AddScoped<ApproveStocktakeHandler>();
         services.AddScoped<RecordComplimentaryIssueHandler>();
+        services.AddScoped<RecordWasteIssueHandler>();
         services.AddScoped<GetCurrentStockHandler>();
         services.AddScoped<GetStocktakeByIdHandler>();
         services.AddScoped<GetStocktakesHandler>();
@@ -301,6 +306,9 @@ public static class DependencyInjection
         services.AddScoped<GetRecentReturnedItemsHandler>();
         services.AddScoped<GetCurrentCapitalValueHandler>();
         services.AddScoped<GetProductMarginReportHandler>();
+        services.AddScoped<GetExpiringBatchesHandler>();
+        services.AddScoped<GetWasteLogHandler>();
+        services.AddScoped<GetCashierVarianceReportHandler>();
         services.AddScoped<GetNotificationsHandler>();
 
         services.AddScoped<TriggerBackupHandler>();

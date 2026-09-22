@@ -10,7 +10,8 @@ public enum PendingReviewType
     Return = 1,
     ComplimentaryIssue = 2,
     HighPurchasePrice = 3,
-    Complaint = 4
+    Complaint = 4,
+    WasteIssue = 5
 }
 
 public sealed record PendingReviewItemDto(
@@ -107,26 +108,44 @@ public sealed class GetPendingReviewsHandler
         // تحت الحد اليومي، أو أي تعديل يدوي تاني، ما كانت تظهر أبدًا هون
         // حتى لو صاحب المحل فتح الصفحة كل يوم). NeedsReview ضلّت بالـDTO
         // (مو بالفلتر) عشان الفرونت إند يميّز "العاجل" (تجاوز الحد) عن
-        // "العادي" بصريًا لو حاب - راجع تقرير التسليم. TypeTitle/Title
-        // "ضيافة" ثابت هون لأنه RecordComplimentaryIssueHandler هو
-        // المستخدم الوحيد فعليًا لـManualAdjustment اليوم (تحقّقنا
-        // بـgrep) - لو انضافت ميزة تعديل مخزون يدوي عامة مستقبلًا بنفس
-        // ReferenceType، هاي التسمية لازم تصير مشروطة بـMovementType.
-        var pendingComplimentary = await stockMovements
+        // "العادي" بصريًا لو حاب - راجع تقرير التسليم.
+        //
+        // MovementType يُقرأ خامًا هون (لا .ToString() مترجَم لـSQL - نفس
+        // مبدأ CLAUDE.md §3.1)، ويُترجَم بالذاكرة بعد ToListAsync - كان هذا
+        // ثابتًا على "ضيافة" لما كانت ComplimentaryOut المستخدم الوحيد
+        // لـManualAdjustment؛ صار مشروطًا الآن بعد إضافة WasteOut بنفس
+        // الـReferenceType (بالضبط الحالة اللي حذّر منها التعليق القديم).
+        var manualAdjustmentRows = await stockMovements
             .Where(m => m.ReferenceType == StockMovementReferenceType.ManualAdjustment && m.ReviewedAtUtc == null)
-            .Join(_context.Products.AsNoTracking(), m => m.ProductId, p => p.Id, (m, p) => new { Movement = m, ProductName = p.Name })
-            .Select(x => new PendingReviewItemDto(
-                PendingReviewType.ComplimentaryIssue,
-                "ضيافة",
-                x.Movement.Id,
-                x.ProductName,
-                x.Movement.NeedsReview
-                    ? "تجاوزت الحد اليومي المسموح للضيافة"
-                    : "تعديل مخزون يدوي بانتظار المراجعة",
-                x.Movement.QuantityBase,
-                x.Movement.BranchId,
-                x.Movement.OccurredAtUtc))
+            .Join(_context.Products.AsNoTracking(), m => m.ProductId, p => p.Id,
+                (m, p) => new { m.Id, m.MovementType, m.NeedsReview, m.QuantityBase, m.BranchId, m.OccurredAtUtc, ProductName = p.Name })
             .ToListAsync(cancellationToken);
+
+        var pendingComplimentary = manualAdjustmentRows
+            .Select(x => x.MovementType == MovementType.WasteOut
+                ? new PendingReviewItemDto(
+                    PendingReviewType.WasteIssue,
+                    "تلف/هلاك",
+                    x.Id,
+                    x.ProductName,
+                    x.NeedsReview
+                        ? "تجاوزت الحد اليومي المسموح للتلف/الهلاك"
+                        : "تعديل مخزون يدوي بانتظار المراجعة",
+                    x.QuantityBase,
+                    x.BranchId,
+                    x.OccurredAtUtc)
+                : new PendingReviewItemDto(
+                    PendingReviewType.ComplimentaryIssue,
+                    "ضيافة",
+                    x.Id,
+                    x.ProductName,
+                    x.NeedsReview
+                        ? "تجاوزت الحد اليومي المسموح للضيافة"
+                        : "تعديل مخزون يدوي بانتظار المراجعة",
+                    x.QuantityBase,
+                    x.BranchId,
+                    x.OccurredAtUtc))
+            .ToList();
 
         // نفس مبدأ CLAUDE.md §3.1: لا تنسيق نص (:F2) جوّا Select() مترجَم
         // لـSQL - نجيب الحقول الخام أول، ونبني نص التفاصيل بالذاكرة.

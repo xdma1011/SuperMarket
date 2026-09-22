@@ -341,6 +341,14 @@ public class PermissionConfiguration : IEntityTypeConfiguration<Permission>
             Description = "Record operating expenses, manual capital deposits/withdrawals, and view the monthly profit statement - Master Admin only by design.",
             CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });
+        builder.HasData(new
+        {
+            Id = Guid.Parse("1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"),
+            Code = "Inventory.WasteIssue",
+            Name = "Record waste/damage issues",
+            Description = "Issue stock as waste/damage (expired, broken, storage damage...), with an explicit reason - separate from complimentary issues.",
+            CreatedAtUtc = new DateTime(2026, 9, 22, 0, 0, 0, DateTimeKind.Utc)
+        });
     }
 }
 
@@ -472,6 +480,14 @@ public class RolePermissionConfiguration : IEntityTypeConfiguration<RolePermissi
             Id = Guid.Parse("4310626b-7558-43de-aef5-515bb654cb10"),
             RoleId = Guid.Parse("50e6125a-cac0-4d82-a0b8-9f3c6fff59d7"),
             PermissionId = Guid.Parse("3f90797a-d3cd-482e-acad-5187542a5326")
+        });
+
+        // Master Admin حصرًا -> Inventory.WasteIssue (نفس منطق ComplimentaryIssue بالضبط).
+        builder.HasData(new
+        {
+            Id = Guid.Parse("2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e"),
+            RoleId = Guid.Parse("50e6125a-cac0-4d82-a0b8-9f3c6fff59d7"),
+            PermissionId = Guid.Parse("1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d")
         });
 
         // Master Admin -> الصلاحية الجديدة (System.SettingsManage)

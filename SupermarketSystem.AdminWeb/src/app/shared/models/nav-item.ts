@@ -18,6 +18,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'purchases-drafts', label: 'مسودات AI للمراجعة', route: '/purchases/drafts', requiredPermission: 'Purchasing.Create' },
   { id: 'upload-invoice', label: 'رفع فاتورة (AI)', route: '/purchases/upload-invoice', requiredPermission: 'Purchasing.CreateDraft' },
   { id: 'complimentary', label: 'الضيافة', route: '/complimentary', requiredPermission: 'Inventory.ComplimentaryIssue' },
+  { id: 'waste', label: 'التلف والهلاك', route: '/waste', requiredPermission: 'Inventory.WasteIssue' },
   { id: 'catalog', label: 'الكتالوج', route: '/catalog', requiredPermission: 'Catalog.Manage' },
   { id: 'current-stock', label: 'المخزون الحالي', route: '/current-stock', requiredPermission: 'Reports.View' },
   { id: 'suppliers', label: 'الموردين', route: '/suppliers', requiredPermission: 'Suppliers.Manage' },

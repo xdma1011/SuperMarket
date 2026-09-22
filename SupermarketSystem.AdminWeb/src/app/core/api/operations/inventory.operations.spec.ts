@@ -4,6 +4,7 @@ import { InventoryOperation } from './inventory.operations';
 describe('InventoryOperation enum', () => {
   it('يحافظ على القيم الحرفية الصحيحة لكل عملية', () => {
     expect(InventoryOperation.RecordComplimentaryIssue).toBe('complimentary-issues');
+    expect(InventoryOperation.RecordWasteIssue).toBe('waste-issues');
     expect(InventoryOperation.GetCurrentStock).toBe('current-stock');
   });
 });

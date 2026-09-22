@@ -14,5 +14,8 @@ export enum ReportsOperation {
   RecentReturnedItems = 'returns/recent-items',
   CurrentCapitalValue = 'inventory/capital-value',
   ConsumptionLevels = 'products/consumption-levels',
-  ProductMargin = 'product-margin'
+  ProductMargin = 'product-margin',
+  ExpiringBatches = 'inventory/expiring-batches',
+  CashierVariance = 'cashiers/variance',
+  WasteLog = 'inventory/waste-log'
 }

@@ -18,7 +18,9 @@ public enum MovementType
     /// <summary>الجرد لقى كمية أقل من المتوقع.</summary>
     StocktakeCorrectionDecrease = 10,
     /// <summary>ضيافة أو استهلاك داخلي — بضاعة خرجت من المخزون بلا أي قيد مالي كإيراد (بخلاف SaleOut). سبب اختياري يوضّح لمين/ليش.</summary>
-    ComplimentaryOut = 11
+    ComplimentaryOut = 11,
+    /// <summary>تلف/هلاك — بضاعة خرجت من المخزون بسبب تلف فعلي (انتهاء صلاحية، كسر، تلف تخزين...)، منفصل تصنيفًا عن الضيافة (ComplimentaryOut) رغم تشابه الآلية. سبب إلزامي (WasteReason) يوضّح السبب.</summary>
+    WasteOut = 12
 }
 
 /// <summary>
@@ -34,6 +36,15 @@ public enum StockMovementReferenceType
     StocktakeItem = 4,
     ManualAdjustment = 5,
     StockTransferItem = 6
+}
+
+/// <summary>سبب التلف/الهلاك - إلزامي على كل حركة WasteOut (بخلاف Reason الحر بـStockMovement، اختياري لتفاصيل إضافية).</summary>
+public enum WasteReason
+{
+    Expired = 1,
+    Broken = 2,
+    StorageDamage = 3,
+    Other = 4
 }
 
 /// <summary>
@@ -80,6 +91,14 @@ public class StockMovement : Entity, IBranchOwned
     public DateTime? ReviewedAtUtc { get; private set; }
     public Guid? ReviewedByUserId { get; private set; }
 
+    /// <summary>
+    /// ذو معنى فقط لـMovementType.WasteOut - null لكل نوع حركة تاني. تصنيف
+    /// إلزامي منفصل عن Reason الحر (اللي يبقى اختياريًا لتفاصيل إضافية)،
+    /// عشان يصير ممكن تجميع/تقرير أسباب التلف (منتهي، مكسور، تلف تخزين...)
+    /// بلا الاعتماد على parsing نص حر.
+    /// </summary>
+    public WasteReason? WasteReason { get; private set; }
+
     private StockMovement() { } // EF Core
 
     public StockMovement(
@@ -94,11 +113,17 @@ public class StockMovement : Entity, IBranchOwned
         Guid userId,
         StockMovementReferenceType referenceType,
         Guid referenceId,
-        bool needsReview = false)
+        bool needsReview = false,
+        WasteReason? wasteReason = null)
     {
         if (quantityBase <= 0)
         {
             throw new DomainException("StockMovement quantity must be positive; direction is expressed by MovementType, not sign.");
+        }
+
+        if (movementType == MovementType.WasteOut && wasteReason is null)
+        {
+            throw new DomainException("WasteOut requires a WasteReason.");
         }
 
         NeedsReview = needsReview;
@@ -113,6 +138,7 @@ public class StockMovement : Entity, IBranchOwned
         UserId = userId;
         ReferenceType = referenceType;
         ReferenceId = referenceId;
+        WasteReason = wasteReason;
     }
 
     public void MarkReviewed(Guid reviewedByUserId, DateTime reviewedAtUtc)

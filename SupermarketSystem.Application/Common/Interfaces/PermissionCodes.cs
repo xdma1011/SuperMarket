@@ -27,6 +27,8 @@ public static class PermissionCodes
     public const string NotificationsView = "Notifications.View";
     public const string UsersManage = "Users.Manage";
     public const string ComplimentaryIssue = "Inventory.ComplimentaryIssue";
+    /// <summary>تسجيل خروج بضاعة كتلف/هلاك - منفصلة عمدًا عن ComplimentaryIssue (تصنيف مالي/سببي مختلف، راجع MovementType.WasteOut).</summary>
+    public const string WasteIssue = "Inventory.WasteIssue";
     public const string SystemSettingsManage = "System.SettingsManage";
     public const string CustomersManage = "Customers.Manage";
     public const string StockTransferManage = "StockTransfer.Manage";
@@ -49,7 +51,7 @@ public static class PermissionCodes
         StocktakeManage, StocktakeApprove, CashClosingManage, ReportsView,
         BackupsManage, SessionsManage, NotificationsView, UsersManage, ComplimentaryIssue,
         SystemSettingsManage, CustomersManage, OrdersDeliver, StockTransferManage,
-        ChangeSellingPriceDirect, RequestSellingPriceChange, FinanceManage
+        ChangeSellingPriceDirect, RequestSellingPriceChange, FinanceManage, WasteIssue
     };
 
     /// <summary>

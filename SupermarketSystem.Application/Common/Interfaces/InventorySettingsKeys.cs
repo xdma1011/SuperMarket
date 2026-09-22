@@ -19,4 +19,7 @@ public static class InventorySettingsKeys
     /// يُرفض لو المخزون غير كافٍ.
     /// </summary>
     public const string AllowNegativeStock = "Inventory.AllowNegativeStock";
+
+    /// <summary>عدد الأيام قبل انتهاء الصلاحية اللي تبدأ فيها دفعة تظهر بتقرير "قرب انتهاء الصلاحية" (GetExpiringBatchesQuery). افتراضي 14 يوم.</summary>
+    public const string ExpiryAlertThresholdDays = "Inventory.ExpiryAlertThresholdDays";
 }
