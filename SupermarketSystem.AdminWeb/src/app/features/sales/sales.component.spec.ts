@@ -28,7 +28,7 @@ describe('SalesComponent', () => {
   describe('loadInvoices', () => {
     it('يحمّل الفواتير ويحدّث totalCount', async () => {
       apiClientSpy.get.and.returnValue(
-        of({ items: [{ id: 's1', invoiceNumber: 'INV-1', statusCode: 1, statusTitle: 'مكتملة', totalAmount: 10, totalReturnedAmount: 0, createdAtUtc: '', customerName: null, customerPhone: null }], totalCount: 1 })
+        of({ items: [{ id: 's1', invoiceNumber: 'INV-1', statusCode: 1, statusTitle: 'مكتملة', totalAmount: 10, totalPaidAmount: 10, totalReturnedAmount: 0, createdAtUtc: '', customerName: null, customerPhone: null }], totalCount: 1 })
       );
 
       await component.loadInvoices();
@@ -81,6 +81,66 @@ describe('SalesComponent', () => {
       expect(component.pageNumber()).toBe(2);
       expect(component.pageSize()).toBe(50);
       expect(apiClientSpy.get).toHaveBeenCalled();
+    });
+  });
+
+  describe('remainingDebt وتسديد الدفعة', () => {
+    const sampleInvoice = {
+      id: 's1', invoiceNumber: 'INV-1', statusCode: 1, statusTitle: 'مكتملة',
+      totalAmount: 100, totalPaidAmount: 40, totalReturnedAmount: 0,
+      createdAtUtc: '', customerName: 'زبون', customerPhone: '0790000000'
+    };
+
+    it('remainingDebt يحسب الفرق بين الإجمالي والمدفوع', () => {
+      expect(component.remainingDebt(sampleInvoice)).toBe(60);
+    });
+
+    it('openPaymentModal يفتح النافذة ويقترح كامل الدين المتبقي', () => {
+      component.openPaymentModal(sampleInvoice);
+
+      expect(component.paymentModalOpen()).toBeTrue();
+      expect(component.paymentAmount).toBe(60);
+    });
+
+    it('يرفض بلا مبلغ صالح أو طريقة دفع', async () => {
+      component.openPaymentModal(sampleInvoice);
+      component.paymentAmount = 0;
+
+      await component.submitPayment();
+
+      expect(component.paymentError()).toBe('حدّد مبلغًا موجبًا وطريقة دفع.');
+      expect(apiClientSpy.post).not.toHaveBeenCalled();
+    });
+
+    it('يرفض مبلغًا أكبر من الدين المتبقي', async () => {
+      component.openPaymentModal(sampleInvoice);
+      component.paymentAmount = 999;
+      component.paymentMethodId = 'pm1';
+
+      await component.submitPayment();
+
+      expect(component.paymentError()).toBe('المبلغ أكبر من الدين المتبقي على هذه الفاتورة.');
+      expect(apiClientSpy.post).not.toHaveBeenCalled();
+    });
+
+    it('يسجّل الدفعة بنجاح ويغلق النافذة', async () => {
+      component.openPaymentModal(sampleInvoice);
+      component.paymentMethodId = 'pm1';
+      apiClientSpy.post.and.returnValue(of({}));
+
+      await component.submitPayment();
+
+      expect(component.paymentModalOpen()).toBeFalse();
+    });
+
+    it('يعرض رسالة الخطأ التفصيلية من الباك إند لو موجودة', async () => {
+      component.openPaymentModal(sampleInvoice);
+      component.paymentMethodId = 'pm1';
+      apiClientSpy.post.and.returnValue(throwError(() => ({ error: { detail: 'المبلغ غير صالح.' } })));
+
+      await component.submitPayment();
+
+      expect(component.paymentError()).toBe('المبلغ غير صالح.');
     });
   });
 

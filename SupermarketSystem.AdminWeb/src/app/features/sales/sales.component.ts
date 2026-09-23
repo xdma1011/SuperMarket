@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
-import { SalesOperation, ReportsOperation } from '../../core/api/operations';
+import { SalesOperation, ReportsOperation, PaymentMethodsOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
 
 interface SaleInvoiceListItemDto {
@@ -13,10 +13,16 @@ interface SaleInvoiceListItemDto {
   statusCode: number;
   statusTitle: string;
   totalAmount: number;
+  totalPaidAmount: number;
   totalReturnedAmount: number;
   createdAtUtc: string;
   customerName: string | null;
   customerPhone: string | null;
+}
+
+interface PaymentMethodDto {
+  id: string;
+  name: string;
 }
 
 interface PagedResult<T> {
@@ -61,11 +67,32 @@ export class SalesComponent implements OnInit {
   readonly loading = signal(true);
   readonly errorMessage = signal<string | null>(null);
 
+  readonly paymentMethods = signal<PaymentMethodDto[]>([]);
+  readonly paymentModalOpen = signal(false);
+  readonly paymentSubmitting = signal(false);
+  readonly paymentError = signal<string | null>(null);
+  paymentTargetInvoice: SaleInvoiceListItemDto | null = null;
+  paymentAmount: number | null = null;
+  paymentMethodId = '';
+
   constructor(private readonly apiClient: ApiClient) {}
 
   ngOnInit(): void {
     this.loadSummary();
     this.loadInvoices();
+    this.loadPaymentMethods();
+  }
+
+  private async loadPaymentMethods(): Promise<void> {
+    try {
+      const result = await firstValueFrom(
+        this.apiClient.get<PaymentMethodDto[]>(ApiController.PaymentMethods, PaymentMethodsOperation.List)
+      );
+      this.paymentMethods.set(result);
+      if (result.length > 0) this.paymentMethodId = result[0].id;
+    } catch {
+      /* فشل تحميل طرق الدفع لا يمنع عرض جدول الفواتير - بس تسديد دين ما رح يشتغل. */
+    }
   }
 
   private async loadSummary(): Promise<void> {
@@ -124,5 +151,65 @@ export class SalesComponent implements OnInit {
     if (statusCode === 2) return 'red';
     if (statusCode === 3 || statusCode === 4) return 'accent';
     return 'green';
+  }
+
+  remainingDebt(invoice: SaleInvoiceListItemDto): number {
+    return invoice.totalAmount - invoice.totalPaidAmount;
+  }
+
+  openPaymentModal(invoice: SaleInvoiceListItemDto): void {
+    this.paymentTargetInvoice = invoice;
+    this.paymentAmount = this.remainingDebt(invoice);
+    this.paymentError.set(null);
+    this.paymentModalOpen.set(true);
+  }
+
+  closePaymentModal(): void {
+    this.paymentModalOpen.set(false);
+    this.paymentTargetInvoice = null;
+    this.paymentAmount = null;
+  }
+
+  async submitPayment(): Promise<void> {
+    const invoice = this.paymentTargetInvoice;
+    if (!invoice || !this.paymentAmount || this.paymentAmount <= 0 || !this.paymentMethodId) {
+      this.paymentError.set('حدّد مبلغًا موجبًا وطريقة دفع.');
+      return;
+    }
+
+    if (this.paymentAmount > this.remainingDebt(invoice)) {
+      this.paymentError.set('المبلغ أكبر من الدين المتبقي على هذه الفاتورة.');
+      return;
+    }
+
+    this.paymentSubmitting.set(true);
+    this.paymentError.set(null);
+
+    try {
+      await firstValueFrom(
+        this.apiClient.post(
+          ApiController.Sales,
+          SalesOperation.RecordPayment,
+          {
+            paymentMethodId: this.paymentMethodId,
+            amount: this.paymentAmount,
+            externalReference: null,
+            clientRequestId: crypto.randomUUID()
+          },
+          { id: invoice.id }
+        )
+      );
+
+      this.closePaymentModal();
+      await this.loadInvoices();
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === 'object' && 'error' in err
+          ? (err as { error?: { detail?: string } }).error?.detail
+          : null;
+      this.paymentError.set(message ?? 'تعذّر تسجيل الدفعة.');
+    } finally {
+      this.paymentSubmitting.set(false);
+    }
   }
 }

@@ -2,7 +2,7 @@
   <div class="head-text">
     <span class="crumb">التقارير</span>
     <h1>مركز التقارير</h1>
-    <span class="subtitle">16 تقريرًا — مبيعات، مخزون، موردين، وأداء.</span>
+    <span class="subtitle">21 تقريرًا — مبيعات، مخزون، موردين، زبائن، وأداء.</span>
   </div>
 </div>
 
@@ -19,6 +19,9 @@
     </button>
     <button type="button" class="nav-item" [class.active]="activeReportId() === 'product-margin'" (click)="selectReport('product-margin')">
       هامش الربح لكل منتج
+    </button>
+    <button type="button" class="nav-item" [class.active]="activeReportId() === 'customer-debts'" (click)="selectReport('customer-debts')">
+      ديون الزبائن
     </button>
     <div class="nav-divider"></div>
     @for (r of standardReports; track r.id) {
@@ -271,6 +274,49 @@
               <div class="no-results">
                 <span class="no-results-title">لا يوجد ديون حاليًا</span>
                 <span class="no-results-sub">كل الموردين مسدَّدون بالكامل.</span>
+              </div>
+            }
+          </div>
+        </section>
+      }
+    } @else if (activeReportId() === 'customer-debts') {
+      @if (customerDebts(); as d) {
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <span class="kpi-label">إجمالي ديون كل الزبائن</span>
+            <span class="kpi-value">{{ d.grandTotalDebt | number: '1.2-2' }}</span>
+          </div>
+        </div>
+
+        <section class="table-panel">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>الزبون</th>
+                  <th>إجمالي الفواتير</th>
+                  <th>المدفوع</th>
+                  <th>المتبقي (الدين)</th>
+                  <th>فواتير غير مسدَّدة</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (c of d.customers; track c.customerId) {
+                  <tr>
+                    <td>{{ c.customerName }}</td>
+                    <td class="mono">{{ c.totalInvoiced | number: '1.2-2' }}</td>
+                    <td class="mono">{{ c.totalPaid | number: '1.2-2' }}</td>
+                    <td class="mono debt-cell">{{ c.remainingDebt | number: '1.2-2' }}</td>
+                    <td class="mono">{{ c.unpaidInvoiceCount }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+
+            @if (d.customers.length === 0) {
+              <div class="no-results">
+                <span class="no-results-title">لا يوجد ديون حاليًا</span>
+                <span class="no-results-sub">لا يوجد زبائن عليهم بيع بالدين غير مسدَّد.</span>
               </div>
             }
           </div>

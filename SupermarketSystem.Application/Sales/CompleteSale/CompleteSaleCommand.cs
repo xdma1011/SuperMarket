@@ -492,12 +492,26 @@ public sealed class CompleteSaleHandler
 
         var paymentsTotal = command.Payments.Sum(p => p.Amount);
 
-        // A completed POS sale must be settled exactly. Underpayment would
-        // silently create an unrecorded receivable; overpayment is rejected
-        // by SaleInvoice.AddPayment anyway. Change given to the customer is
-        // a till concern, not an invoice one — the invoice records what the
-        // sale was worth and what was applied to it.
-        if (paymentsTotal != invoiceTotal)
+        // Overpayment is never allowed — Change given to the customer is a
+        // till concern, not an invoice one (the invoice records what the
+        // sale was worth and what was applied to it), and SaleInvoice.AddPayment
+        // would reject it anyway; caught here explicitly for a clearer error.
+        if (paymentsTotal > invoiceTotal)
+        {
+            return Result.Failure<CompleteSaleResponse>(
+                Error.BusinessRule(
+                    "Sale.PaymentsExceedTotal",
+                    $"Payments total {paymentsTotal} exceeds the invoice total {invoiceTotal}."));
+        }
+
+        // "بيع بالدين" (§CLAUDE.md - طلب صاحب المشروع الصريح 22/9/2026):
+        // تسوية كاملة لحظة البيع تبقى إلزامية لزبون غير معروف (walk-in) -
+        // ما في طريقة لاحقًا نلاحق دين بلا هوية زبون مسجَّلة. لزبون معروف
+        // (CustomerId محدَّد)، تسوية جزئية أو حتى صفرية مسموحة - الباقي
+        // دين متابَع ديناميكيًا عبر GetCustomerDebtsQuery (بلا Ledger
+        // مخزَّن، نفس فلسفة GetSupplierDebtsQuery تمامًا)، ويُسدَّد لاحقًا
+        // عبر RecordSaleInvoicePaymentCommand.
+        if (paymentsTotal < invoiceTotal && command.CustomerId is null)
         {
             return Result.Failure<CompleteSaleResponse>(
                 Error.BusinessRule(

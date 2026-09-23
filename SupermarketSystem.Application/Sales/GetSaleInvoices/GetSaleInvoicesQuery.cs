@@ -13,6 +13,7 @@ public sealed record SaleInvoiceListItemDto(
     int StatusCode,
     string StatusTitle,
     decimal TotalAmount,
+    decimal TotalPaidAmount,
     decimal TotalReturnedAmount,
     DateTime CreatedAtUtc,
     string? CustomerName,
@@ -74,14 +75,14 @@ public sealed class GetSaleInvoicesHandler
             .Select(x => new
             {
                 x.Invoice.Id, x.Invoice.InvoiceNumber, x.Invoice.Status,
-                x.Invoice.TotalAmount, x.Invoice.TotalReturnedAmount, x.Invoice.CreatedAtUtc,
+                x.Invoice.TotalAmount, x.Invoice.TotalPaidAmount, x.Invoice.TotalReturnedAmount, x.Invoice.CreatedAtUtc,
                 x.CustomerName, x.CustomerPhone
             })
             .ToListAsync(cancellationToken);
 
         var items = rawItems.Select(s => new SaleInvoiceListItemDto(
             s.Id, s.InvoiceNumber, (int)s.Status, StatusTitle(s.Status),
-            s.TotalAmount, s.TotalReturnedAmount, s.CreatedAtUtc, s.CustomerName, s.CustomerPhone))
+            s.TotalAmount, s.TotalPaidAmount, s.TotalReturnedAmount, s.CreatedAtUtc, s.CustomerName, s.CustomerPhone))
             .ToList();
 
         return new PagedResult<SaleInvoiceListItemDto>(items, totalCount, paging.PageNumber, paging.PageSize);

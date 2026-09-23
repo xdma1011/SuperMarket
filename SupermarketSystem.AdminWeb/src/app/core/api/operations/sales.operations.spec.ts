@@ -7,5 +7,7 @@ describe('SalesOperation enum', () => {
     expect(SalesOperation.Void).toBe('{id}/void');
     expect(SalesOperation.List).toBe('');
     expect(SalesOperation.GetById).toBe('{id}');
+    expect(SalesOperation.RecordPayment).toBe('{id}/payments');
+    expect(SalesOperation.CustomerDebts).toBe('customer-debts');
   });
 });

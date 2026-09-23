@@ -54,9 +54,11 @@
           <th>رقم الفاتورة</th>
           <th>الزبون</th>
           <th>الإجمالي</th>
+          <th>المتبقي (الدين)</th>
           <th>المرتجَع</th>
           <th>الحالة</th>
           <th>التاريخ</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -71,6 +73,13 @@
               }
             </td>
             <td class="mono">{{ row.totalAmount | number: '1.2-2' }}</td>
+            <td class="mono">
+              @if (remainingDebt(row) > 0) {
+                <span class="debt-chip">{{ remainingDebt(row) | number: '1.2-2' }}</span>
+              } @else {
+                <span class="paid-chip">مسدَّدة</span>
+              }
+            </td>
             <td class="mono">{{ row.totalReturnedAmount | number: '1.2-2' }}</td>
             <td>
               <span class="status-chip" [class]="statusTone(row.statusCode)">
@@ -78,6 +87,11 @@
               </span>
             </td>
             <td class="mono">{{ row.createdAtUtc | date: 'yyyy-MM-dd HH:mm' }}</td>
+            <td>
+              @if (remainingDebt(row) > 0) {
+                <button type="button" class="link-btn" (click)="openPaymentModal(row)">تسديد دفعة</button>
+              }
+            </td>
           </tr>
         }
       </tbody>
@@ -106,3 +120,45 @@
     ></app-pagination>
   }
 </section>
+
+@if (paymentModalOpen() && paymentTargetInvoice) {
+  <div class="modal-backdrop" (click)="closePaymentModal()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div class="modal-title-group">
+          <h2>تسديد دفعة — {{ paymentTargetInvoice.invoiceNumber }}</h2>
+          <span class="modal-hint">
+            الدين المتبقي: {{ remainingDebt(paymentTargetInvoice) | number: '1.2-2' }}
+          </span>
+        </div>
+        <button type="button" class="icon-btn" (click)="closePaymentModal()" aria-label="إغلاق">×</button>
+      </div>
+
+      @if (paymentError()) {
+        <p class="form-error">{{ paymentError() }}</p>
+      }
+
+      <div class="modal-fields">
+        <label class="field">
+          <span>المبلغ</span>
+          <input type="number" [(ngModel)]="paymentAmount" min="0.01" step="0.01" />
+        </label>
+        <label class="field">
+          <span>طريقة الدفع</span>
+          <select [(ngModel)]="paymentMethodId">
+            @for (m of paymentMethods(); track m.id) {
+              <option [value]="m.id">{{ m.name }}</option>
+            }
+          </select>
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" [disabled]="paymentSubmitting()" (click)="submitPayment()">
+          {{ paymentSubmitting() ? 'جارٍ التسجيل…' : 'تسجيل الدفعة' }}
+        </button>
+        <button type="button" class="btn-ghost" (click)="closePaymentModal()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+}

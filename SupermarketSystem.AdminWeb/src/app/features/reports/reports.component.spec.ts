@@ -113,6 +113,15 @@ describe('ReportsComponent', () => {
       expect(component.supplierDebts()?.grandTotalDebt).toBe(200);
     });
 
+    it('يحمّل ديون الزبائن لتقرير customer-debts', async () => {
+      component.activeReportId.set('customer-debts');
+      apiClientSpy.get.and.returnValue(of({ customers: [], grandTotalDebt: 75 }));
+
+      await component.loadActiveReport();
+
+      expect(component.customerDebts()?.grandTotalDebt).toBe(75);
+    });
+
     it('يحمّل تقرير قياسي عادي عبر endpoint التقارير العام', async () => {
       component.activeReportId.set('negative-stock');
       apiClientSpy.get.and.returnValue(of({ items: [{ productName: 'سكر', quantityOnHand: -3 }], totalCount: 1 }));

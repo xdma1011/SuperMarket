@@ -122,10 +122,12 @@ using SupermarketSystem.Application.Ordering.PlaceOrder;
 using SupermarketSystem.Application.Ordering.RateOrder;
 using SupermarketSystem.Application.Ordering.RejectOrder;
 using SupermarketSystem.Application.Sales.CompleteSale;
+using SupermarketSystem.Application.Sales.GetCustomerDebts;
 using SupermarketSystem.Application.Sales.GetSaleInvoiceById;
 using SupermarketSystem.Application.Sales.GetSaleInvoices;
 using SupermarketSystem.Application.Sales.MarkReturnReviewed;
 using SupermarketSystem.Application.Sales.ProcessReturn;
+using SupermarketSystem.Application.Sales.RecordSaleInvoicePayment;
 using SupermarketSystem.Application.Sales.VoidSale;
 using SupermarketSystem.Application.Reporting.GetRecentReturns;
 using SupermarketSystem.Application.Reporting.GetRecentReturnedItems;
@@ -274,6 +276,8 @@ public static class DependencyInjection
         services.AddScoped<GetSaleInvoiceByIdHandler>();
         services.AddScoped<ProcessReturnHandler>();
         services.AddScoped<MarkReturnReviewedHandler>();
+        services.AddScoped<RecordSaleInvoicePaymentHandler>();
+        services.AddScoped<GetCustomerDebtsHandler>();
 
         services.AddScoped<CompleteCashClosingHandler>();
         services.AddScoped<GetCashClosingsHandler>();

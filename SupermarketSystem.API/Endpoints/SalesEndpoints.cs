@@ -2,8 +2,10 @@ using SupermarketSystem.API.Common;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Pagination;
 using SupermarketSystem.Application.Sales.CompleteSale;
+using SupermarketSystem.Application.Sales.GetCustomerDebts;
 using SupermarketSystem.Application.Sales.GetSaleInvoiceById;
 using SupermarketSystem.Application.Sales.GetSaleInvoices;
+using SupermarketSystem.Application.Sales.RecordSaleInvoicePayment;
 using SupermarketSystem.Application.Sales.VoidSale;
 using SupermarketSystem.Domain.Sales;
 
@@ -88,9 +90,46 @@ public static class SalesEndpoints
         .Produces<SaleInvoiceDetailDto>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status404NotFound);
 
+        group.MapPost("/{saleInvoiceId:guid}/payments", async (
+            Guid saleInvoiceId,
+            RecordSaleInvoicePaymentRequest request,
+            RecordSaleInvoicePaymentHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var command = new RecordSaleInvoicePaymentCommand(
+                saleInvoiceId, request.PaymentMethodId, request.Amount,
+                request.ExternalReference, request.ClientRequestId);
+            var result = await handler.HandleAsync(command, cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithName("RecordSaleInvoicePayment")
+        .RequirePermission(PermissionCodes.SalesCreate)
+        .WithSummary("يسجّل دفعة لاحقة من زبون على فاتورة بيع بالدين - يقلّل الدين المتبقي (لا يتجاوز الإجمالي).")
+        .Produces<RecordSaleInvoicePaymentResponse>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status404NotFound)
+        .ProducesProblem(StatusCodes.Status409Conflict);
+
+        app.MapGet("/api/v1/sales/customer-debts", async (
+            GetCustomerDebtsHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(cancellationToken);
+            return Results.Ok(result);
+        })
+        .WithName("GetCustomerDebts")
+        .WithTags("Sales")
+        .RequirePermission(PermissionCodes.ReportsView)
+        .WithSummary("قديش إلنا عند كل زبون (بيع بالدين) + مجموع الديون الكلي.")
+        .Produces<GetCustomerDebtsResponse>(StatusCodes.Status200OK);
+
         return app;
     }
 
     /// <summary>SaleInvoiceId يجي من المسار لا من الجسم.</summary>
     public sealed record VoidSaleRequest(VoidReason Reason, string? Notes);
+
+    /// <summary>SaleInvoiceId يجي من المسار لا من الجسم.</summary>
+    public sealed record RecordSaleInvoicePaymentRequest(
+        Guid PaymentMethodId, decimal Amount, string? ExternalReference, Guid ClientRequestId);
 }

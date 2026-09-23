@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
-import { ReportsOperation, PurchaseInvoicesOperation, BranchesOperation } from '../../core/api/operations';
+import { ReportsOperation, PurchaseInvoicesOperation, SalesOperation, BranchesOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
 import { REPORT_CONFIGS, ReportConfig } from './report-configs';
 
@@ -75,12 +75,26 @@ interface GetSupplierDebtsResponse {
   grandTotalDebt: number;
 }
 
-type SpecialReportId = 'sales-summary' | 'capital-value' | 'supplier-debts' | 'product-margin';
+interface CustomerDebtDto {
+  customerId: string;
+  customerName: string;
+  totalInvoiced: number;
+  totalPaid: number;
+  remainingDebt: number;
+  unpaidInvoiceCount: number;
+}
+
+interface GetCustomerDebtsResponse {
+  customers: CustomerDebtDto[];
+  grandTotalDebt: number;
+}
+
+type SpecialReportId = 'sales-summary' | 'capital-value' | 'supplier-debts' | 'product-margin' | 'customer-debts';
 
 /**
- * كل تقرير عادي بيرندر من REPORT_CONFIGS بلا أي كود خاص. الأربعة
- * الخاصة (ملخّص المبيعات، رأس المال، ديون الموردين، هامش الربح لكل
- * منتج) شكلهم مختلف كليًا، فمعالجان بمنطق منفصل بنفس المكوّن.
+ * كل تقرير عادي بيرندر من REPORT_CONFIGS بلا أي كود خاص. الخمسة الخاصة
+ * (ملخّص المبيعات، رأس المال، ديون الموردين، هامش الربح لكل منتج، ديون
+ * الزبائن) شكلهم مختلف كليًا، فمعالجان بمنطق منفصل بنفس المكوّن.
  */
 @Component({
   selector: 'app-reports',
@@ -92,7 +106,7 @@ type SpecialReportId = 'sales-summary' | 'capital-value' | 'supplier-debts' | 'p
 export class ReportsComponent implements OnInit {
   readonly standardReports = REPORT_CONFIGS;
   readonly activeReportId = signal<string>(REPORT_CONFIGS[0].id);
-  private readonly SPECIAL_IDS: SpecialReportId[] = ['sales-summary', 'capital-value', 'supplier-debts', 'product-margin'];
+  private readonly SPECIAL_IDS: SpecialReportId[] = ['sales-summary', 'capital-value', 'supplier-debts', 'product-margin', 'customer-debts'];
   readonly isSpecial = computed(() => this.SPECIAL_IDS.includes(this.activeReportId() as SpecialReportId));
 
   readonly loading = signal(false);
@@ -113,6 +127,7 @@ export class ReportsComponent implements OnInit {
   readonly capitalValue = signal<GetCurrentCapitalValueResponse | null>(null);
   readonly supplierDebts = signal<GetSupplierDebtsResponse | null>(null);
   readonly productMargin = signal<GetProductMarginReportResponse | null>(null);
+  readonly customerDebts = signal<GetCustomerDebtsResponse | null>(null);
 
   constructor(private readonly apiClient: ApiClient) {}
 
@@ -152,6 +167,7 @@ export class ReportsComponent implements OnInit {
     if (id === 'capital-value') return this.loadCapitalValue();
     if (id === 'supplier-debts') return this.loadSupplierDebts();
     if (id === 'product-margin') return this.loadProductMargin();
+    if (id === 'customer-debts') return this.loadCustomerDebts();
     return this.loadStandardReport();
   }
 
@@ -285,6 +301,25 @@ export class ReportsComponent implements OnInit {
     } catch {
       this.errorMessage.set('تعذّر تحميل تقرير ديون الموردين.');
       this.supplierDebts.set(null);
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  private async loadCustomerDebts(): Promise<void> {
+    this.loading.set(true);
+    this.errorMessage.set(null);
+
+    try {
+      const result = await firstValueFrom(
+        this.apiClient.get<GetCustomerDebtsResponse>(
+          ApiController.Sales, SalesOperation.CustomerDebts
+        )
+      );
+      this.customerDebts.set(result);
+    } catch {
+      this.errorMessage.set('تعذّر تحميل تقرير ديون الزبائن.');
+      this.customerDebts.set(null);
     } finally {
       this.loading.set(false);
     }
