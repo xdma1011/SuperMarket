@@ -46,7 +46,12 @@ public sealed record CompleteSaleCommand(
     Guid? CustomerId,
     decimal InvoiceLevelDiscountAmount,
     IReadOnlyList<CompleteSaleItemDto> Items,
-    IReadOnlyList<CompleteSalePaymentDto> Payments);
+    IReadOnlyList<CompleteSalePaymentDto> Payments,
+    // "بيع بالدين" قرار صريح لكل فاتورة، مش استنتاج من وجود CustomerId -
+    // CompleteOrderHandler (طلبات تطبيق الزبائن/التوصيل) دايمًا بيبعت
+    // CustomerId، فلو كان الاستنتاج تلقائي، أي مبلغ ناقص بالغلط من السائق
+    // كان رح يصير دين صامت بدل ما يفشل زي قبل.
+    bool AllowCreditSale = false);
 
 public sealed record CompleteSaleResponse(
     Guid SaleInvoiceId,
@@ -504,19 +509,28 @@ public sealed class CompleteSaleHandler
                     $"Payments total {paymentsTotal} exceeds the invoice total {invoiceTotal}."));
         }
 
-        // "بيع بالدين" (§CLAUDE.md - طلب صاحب المشروع الصريح 22/9/2026):
-        // تسوية كاملة لحظة البيع تبقى إلزامية لزبون غير معروف (walk-in) -
-        // ما في طريقة لاحقًا نلاحق دين بلا هوية زبون مسجَّلة. لزبون معروف
-        // (CustomerId محدَّد)، تسوية جزئية أو حتى صفرية مسموحة - الباقي
-        // دين متابَع ديناميكيًا عبر GetCustomerDebtsQuery (بلا Ledger
-        // مخزَّن، نفس فلسفة GetSupplierDebtsQuery تمامًا)، ويُسدَّد لاحقًا
-        // عبر RecordSaleInvoicePaymentCommand.
-        if (paymentsTotal < invoiceTotal && command.CustomerId is null)
+        // "بيع بالدين" (طلب صاحب المشروع الصريح 22/9/2026): تسوية ناقصة
+        // مسموحة بس لو AllowCreditSale=true صراحة **و** زبون معروف
+        // (CustomerId) - ما في طريقة نلاحق دين بلا هوية زبون. الباقي دين
+        // متابَع ديناميكيًا عبر GetCustomerDebtsQuery، ويُسدَّد لاحقًا عبر
+        // RecordSaleInvoicePaymentCommand. غير هيك: تسوية كاملة إلزامية زي قبل.
+        if (paymentsTotal < invoiceTotal)
         {
-            return Result.Failure<CompleteSaleResponse>(
-                Error.BusinessRule(
-                    "Sale.PaymentsDoNotSettleTotal",
-                    $"Payments total {paymentsTotal} does not settle the invoice total {invoiceTotal}."));
+            if (command.AllowCreditSale && command.CustomerId is null)
+            {
+                return Result.Failure<CompleteSaleResponse>(
+                    Error.BusinessRule(
+                        "Sale.CreditSaleRequiresCustomer",
+                        "البيع بالدين يحتاج زبون مسجَّل."));
+            }
+
+            if (!command.AllowCreditSale)
+            {
+                return Result.Failure<CompleteSaleResponse>(
+                    Error.BusinessRule(
+                        "Sale.PaymentsDoNotSettleTotal",
+                        $"Payments total {paymentsTotal} does not settle the invoice total {invoiceTotal}."));
+            }
         }
 
         // --- 5. Payment methods must exist and be active ---

@@ -70,6 +70,14 @@ public sealed class RecordSaleInvoicePaymentHandler
                 Error.NotFound("Payment.InvoiceNotFound", $"فاتورة البيع '{command.SaleInvoiceId}' غير موجودة."));
         }
 
+        // الإلغاء بيعكس كل الدفعات (TotalPaidAmount → 0) بس بيخلي TotalAmount -
+        // بلا هالفحص، الفاتورة الملغاة بتبين "دين" كامل وبتقبل دفعة عليها.
+        if (invoice.Status == Domain.Sales.SaleInvoiceStatus.Voided)
+        {
+            return Result.Failure<RecordSaleInvoicePaymentResponse>(
+                Error.BusinessRule("Payment.InvoiceVoided", "لا يمكن تسجيل دفعة على فاتورة ملغاة."));
+        }
+
         var paymentMethod = await _context.PaymentMethods.AsNoTracking()
             .FirstOrDefaultAsync(pm => pm.Id == command.PaymentMethodId && pm.IsActive, cancellationToken);
         if (paymentMethod is null)

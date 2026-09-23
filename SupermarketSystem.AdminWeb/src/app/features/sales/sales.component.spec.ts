@@ -9,7 +9,7 @@ describe('SalesComponent', () => {
   let apiClientSpy: jasmine.SpyObj<ApiClient>;
 
   beforeEach(async () => {
-    apiClientSpy = jasmine.createSpyObj('ApiClient', ['get']);
+    apiClientSpy = jasmine.createSpyObj('ApiClient', ['get', 'post']);
     apiClientSpy.get.and.returnValue(of({ items: [], totalCount: 0 }));
 
     await TestBed.configureTestingModule({
@@ -93,6 +93,10 @@ describe('SalesComponent', () => {
 
     it('remainingDebt يحسب الفرق بين الإجمالي والمدفوع', () => {
       expect(component.remainingDebt(sampleInvoice)).toBe(60);
+    });
+
+    it('remainingDebt صفر لفاتورة ملغاة (دفعاتها معكوسة، مش دين حقيقي)', () => {
+      expect(component.remainingDebt({ ...sampleInvoice, statusCode: 2, totalPaidAmount: 0 })).toBe(0);
     });
 
     it('openPaymentModal يفتح النافذة ويقترح كامل الدين المتبقي', () => {

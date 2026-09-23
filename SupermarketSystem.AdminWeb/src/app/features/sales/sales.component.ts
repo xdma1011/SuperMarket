@@ -154,6 +154,8 @@ export class SalesComponent implements OnInit {
   }
 
   remainingDebt(invoice: SaleInvoiceListItemDto): number {
+    // الملغاة (2): دفعاتها معكوسة بس الإجمالي باقي - مش دين حقيقي.
+    if (invoice.statusCode === 2) return 0;
     return invoice.totalAmount - invoice.totalPaidAmount;
   }
 

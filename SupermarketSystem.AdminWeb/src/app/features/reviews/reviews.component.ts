@@ -5,7 +5,7 @@ import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { ReviewsOperation, ReturnsOperation } from '../../core/api/operations';
 
-type PendingReviewType = 1 | 2 | 3 | 4;
+type PendingReviewType = 1 | 2 | 3 | 4 | 5;
 
 interface PendingReviewItemDto {
   type: PendingReviewType;
@@ -116,7 +116,8 @@ export class ReviewsComponent implements OnInit {
             this.apiClient.post(ApiController.Returns, ReturnsOperation.MarkReviewed, {}, { id: item.referenceId })
           );
           break;
-        case 2:
+        case 2: // ضيافة
+        case 5: // تلف/هلاك - نفس جدول StockMovements، نفس endpoint
           await firstValueFrom(
             this.apiClient.post(
               ApiController.Reviews,

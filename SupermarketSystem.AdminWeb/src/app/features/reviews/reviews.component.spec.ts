@@ -8,7 +8,7 @@ describe('ReviewsComponent', () => {
   let component: ReviewsComponent;
   let apiClientSpy: jasmine.SpyObj<ApiClient>;
 
-  function item(type: 1 | 2 | 3 | 4, referenceId = 'ref1') {
+  function item(type: 1 | 2 | 3 | 4 | 5, referenceId = 'ref1') {
     return {
       type,
       typeTitle: 'مراجعة',
@@ -110,6 +110,19 @@ describe('ReviewsComponent', () => {
         jasmine.anything(),
         {},
         { stockMovementId: 'sm1' }
+      );
+    });
+
+    it('يستدعي endpoint حركة المخزون نفسه لنوع 5 (تلف/هلاك) - كان ما بيستدعي شي', async () => {
+      apiClientSpy.post.and.returnValue(of({}));
+
+      await component.markReviewed(item(5, 'waste1'));
+
+      expect(apiClientSpy.post).toHaveBeenCalledWith(
+        jasmine.anything(),
+        jasmine.anything(),
+        {},
+        { stockMovementId: 'waste1' }
       );
     });
 

@@ -222,6 +222,25 @@ public sealed class ProcessReturnHandler
                 $"مجموع الاسترجاع ({refundsTotal}) يتجاوز قيمة الإرجاع ({returnTotal})."));
         }
 
+        // بيع بالدين غير مسدَّد بالكامل: ما بنرجّع للزبون مصاري أكتر من اللي
+        // دفعها فعليًا على هالفاتورة (ناقص استرجاعات سابقة) - وإلا بياخد
+        // بضاعة بالدين ويرجّعها مقابل كاش ما دفعه أصلًا. الفواتير المسدَّدة
+        // بالكامل (كل البيع العادي) ما بتمر هون إطلاقًا - سلوكها بلا تغيير.
+        if (originalInvoice.TotalPaidAmount < originalInvoice.TotalAmount)
+        {
+            var previouslyRefunded = await _context.ReturnInvoices.AsNoTracking()
+                .Where(r => r.OriginalSaleInvoiceId == originalInvoice.Id)
+                .SumAsync(r => (decimal?)r.TotalRefundedAmount, cancellationToken) ?? 0m;
+
+            var refundableCash = originalInvoice.TotalPaidAmount - previouslyRefunded;
+            if (refundsTotal > refundableCash)
+            {
+                return Result.Failure<ProcessReturnResponse>(Error.BusinessRule(
+                    "Return.RefundExceedsAmountPaid",
+                    $"الفاتورة بالدين وغير مسدَّدة بالكامل - أقصى استرجاع ممكن هو المدفوع فعليًا ({Math.Max(refundableCash, 0m)})."));
+            }
+        }
+
         var reviewFlags = new List<string>();
 
         // === 4. فحوصات السياسة — كلها فورية، بلا انتظار ===

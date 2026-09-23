@@ -46,10 +46,123 @@ public sealed class RecordSaleInvoicePaymentTests : IntegrationTestBase
             new CompleteSaleCommand(
                 Fixture.TestBranchId, Guid.NewGuid(), customer.Id, 0m,
                 new[] { new CompleteSaleItemDto(product.Id, unit.Id, 1m, 0m, null) },
-                payments),
+                payments,
+                AllowCreditSale: true),
             CancellationToken.None);
         Assert.True(result.IsSuccess);
         return result.Value.SaleInvoiceId;
+    }
+
+    [Fact]
+    public async Task زبون_معروف_بدفعة_ناقصة_بلا_تفعيل_البيع_بالدين_صراحة_يفشل_زي_قبل()
+    {
+        // يحمي مسار الطلبات (CompleteOrderHandler بيبعت CustomerId دايمًا):
+        // مبلغ ناقص بالغلط لازم يفشل، مش يصير دين صامت.
+        using var scope = CreateScope();
+        await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+        var db = CreateDbContext(scope);
+        var (product, unit) = await TestDataBuilder.CreateActiveProductAsync(db, "منتج بلا تفعيل دين");
+        await TestDataBuilder.CreateProductBranchAsync(db, product.Id, Fixture.TestBranchId, 100m);
+        await TestDataBuilder.SetStockAsync(db, product.Id, Fixture.TestBranchId, 10m);
+        var customer = await TestDataBuilder.CreateCustomerAsync(db);
+
+        var handler = scope.ServiceProvider.GetRequiredService<CompleteSaleHandler>();
+        var result = await handler.HandleAsync(
+            new CompleteSaleCommand(
+                Fixture.TestBranchId, Guid.NewGuid(), customer.Id, 0m,
+                new[] { new CompleteSaleItemDto(product.Id, unit.Id, 1m, 0m, null) },
+                new[] { new CompleteSalePaymentDto(TestDataBuilder.CashPaymentMethodId, 30m, null, Guid.NewGuid()) }),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Sale.PaymentsDoNotSettleTotal", result.Error!.Code);
+    }
+
+    [Fact]
+    public async Task تفعيل_البيع_بالدين_بلا_زبون_يفشل_بخطأ_واضح()
+    {
+        using var scope = CreateScope();
+        await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+        var db = CreateDbContext(scope);
+        var (product, unit) = await TestDataBuilder.CreateActiveProductAsync(db, "منتج دين بلا زبون");
+        await TestDataBuilder.CreateProductBranchAsync(db, product.Id, Fixture.TestBranchId, 100m);
+        await TestDataBuilder.SetStockAsync(db, product.Id, Fixture.TestBranchId, 10m);
+
+        var handler = scope.ServiceProvider.GetRequiredService<CompleteSaleHandler>();
+        var result = await handler.HandleAsync(
+            new CompleteSaleCommand(
+                Fixture.TestBranchId, Guid.NewGuid(), null, 0m,
+                new[] { new CompleteSaleItemDto(product.Id, unit.Id, 1m, 0m, null) },
+                Array.Empty<CompleteSalePaymentDto>(),
+                AllowCreditSale: true),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Sale.CreditSaleRequiresCustomer", result.Error!.Code);
+    }
+
+    [Fact]
+    public async Task دفعة_على_فاتورة_ملغاة_ترفض()
+    {
+        var saleInvoiceId = await CreateACreditSaleAsync(sellingPrice: 100m, paidNow: 40m);
+
+        using (var voidScope = CreateScope())
+        {
+            await TestDataBuilder.ActAsAdminAsync(voidScope, Fixture);
+            var voidHandler = voidScope.ServiceProvider
+                .GetRequiredService<SupermarketSystem.Application.Sales.VoidSale.VoidSaleHandler>();
+            var voidResult = await voidHandler.HandleAsync(
+                new SupermarketSystem.Application.Sales.VoidSale.VoidSaleCommand(
+                    saleInvoiceId, SupermarketSystem.Domain.Sales.VoidReason.CashierError, null),
+                CancellationToken.None);
+            Assert.True(voidResult.IsSuccess);
+        }
+
+        using var scope = CreateScope();
+        await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+        var handler = scope.ServiceProvider.GetRequiredService<RecordSaleInvoicePaymentHandler>();
+        var result = await handler.HandleAsync(
+            new RecordSaleInvoicePaymentCommand(saleInvoiceId, TestDataBuilder.CashPaymentMethodId, 10m, null, Guid.NewGuid()),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Payment.InvoiceVoided", result.Error!.Code);
+    }
+
+    [Fact]
+    public async Task إرجاع_على_بيع_بالدين_لا_يرجّع_كاش_أكتر_من_المدفوع_فعليًا()
+    {
+        // دفع 30 من 100، رجّع الصنف كامل - أقصى استرجاع كاش = 30، مش 100.
+        var saleInvoiceId = await CreateACreditSaleAsync(sellingPrice: 100m, paidNow: 30m);
+
+        using var scope = CreateScope();
+        await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+        var db = CreateDbContext(scope);
+        var saleItemId = (await db.SaleInvoiceItems.AsNoTracking().FirstAsync(i => i.SaleInvoiceId == saleInvoiceId)).Id;
+
+        var returnHandler = scope.ServiceProvider
+            .GetRequiredService<SupermarketSystem.Application.Sales.ProcessReturn.ProcessReturnHandler>();
+
+        var tooMuch = await returnHandler.HandleAsync(
+            new SupermarketSystem.Application.Sales.ProcessReturn.ProcessReturnCommand(
+                saleInvoiceId, Guid.NewGuid(),
+                SupermarketSystem.Domain.Sales.ReturnReason.CustomerChangedMind, null,
+                new[] { new SupermarketSystem.Application.Sales.ProcessReturn.ProcessReturnItemDto(saleItemId, 1m) },
+                new[] { new SupermarketSystem.Application.Sales.ProcessReturn.ProcessReturnPaymentDto(TestDataBuilder.CashPaymentMethodId, 100m, null, Guid.NewGuid()) }),
+            CancellationToken.None);
+
+        Assert.True(tooMuch.IsFailure);
+        Assert.Equal("Return.RefundExceedsAmountPaid", tooMuch.Error!.Code);
+
+        var withinPaid = await returnHandler.HandleAsync(
+            new SupermarketSystem.Application.Sales.ProcessReturn.ProcessReturnCommand(
+                saleInvoiceId, Guid.NewGuid(),
+                SupermarketSystem.Domain.Sales.ReturnReason.CustomerChangedMind, null,
+                new[] { new SupermarketSystem.Application.Sales.ProcessReturn.ProcessReturnItemDto(saleItemId, 1m) },
+                new[] { new SupermarketSystem.Application.Sales.ProcessReturn.ProcessReturnPaymentDto(TestDataBuilder.CashPaymentMethodId, 30m, null, Guid.NewGuid()) }),
+            CancellationToken.None);
+
+        Assert.True(withinPaid.IsSuccess);
     }
 
     [Fact]
