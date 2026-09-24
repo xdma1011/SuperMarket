@@ -169,6 +169,8 @@ public class PriceChangeRequestConfiguration : IEntityTypeConfiguration<PriceCha
         // "قائمة الطلبات المعلَّقة بانتظار الموافقة" - نفس نمط StockMovement.NeedsReview بالضبط.
         builder.HasIndex(r => r.Status);
         builder.HasIndex(r => r.ProductBranchId);
+        // تسعير البيع الأوفلاين (CompleteSaleHandler) بيدوّر بهالعمودين سوا.
+        builder.HasIndex(r => new { r.ProductBranchId, r.AppliedAtCatalogVersion });
 
         builder.HasOne<ProductBranch>().WithMany().HasForeignKey(r => r.ProductBranchId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(r => r.RequestedByUserId).OnDelete(DeleteBehavior.Restrict);

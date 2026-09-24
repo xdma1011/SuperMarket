@@ -13,6 +13,13 @@ public sealed class CartLine
     public decimal LineTotal => Quantity * UnitPrice;
 
     /// <summary>
+    /// رقم نسخة الكتالوج المحلية اللي انقرأ منها UnitPrice - بينبعت مع السطر، والسيرفر بيحسب
+    /// السطر بسعر هالنسخة بالضبط (راجع OFFLINE PRICE بـCompleteSaleHandler). لكل سطر لحاله
+    /// لأن المزامنة الخلفية ممكن تحدّث الأسعار وأنت بنص السلة.
+    /// </summary>
+    public long? CatalogVersion { get; set; }
+
+    /// <summary>
     /// الكمية المطلوبة تجاوزت الرصيد المحلي المخزَّن آخر مزامنة لهذه
     /// الدفعة - سماح مع مراجعة (CLAUDE.md §1.6)، لا منع: السيرفر هو
     /// الحكم الفعلي (AllowNegativeStock + SucceededWentNegative)، هذا

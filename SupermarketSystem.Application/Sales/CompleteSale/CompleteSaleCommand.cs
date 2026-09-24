@@ -31,7 +31,12 @@ public sealed record CompleteSaleItemDto(
     decimal Quantity,
     decimal ManualDiscountAmount,
     // Required when the product is batch-tracked. No batch is auto-selected — see handler remarks on costing.
-    Guid? ProductBatchId);
+    Guid? ProductBatchId,
+    // رقم نسخة الكتالوج المحلية اللي الكاشير قرأ منها سعر هالسطر (أوفلاين). لو السعر تغيّر
+    // بعدها، السطر بينحسب بسعر نسخته لا بسعر اللحظة - قرار صاحب المشروع (24/9/2026). لكل سطر
+    // لحاله لأن المزامنة الخلفية ممكن تحدّث الأسعار والكاشير بنص السلة. null (لوحة الإدارة،
+    // الطلبات) = السعر الحالي زي قبل. راجع OFFLINE PRICE بالـHandler.
+    long? CatalogVersion = null);
 
 public sealed record CompleteSalePaymentDto(
     Guid PaymentMethodId,
@@ -282,8 +287,25 @@ public sealed class CompleteSaleHandler
 
         var productBranches = await _context.ProductBranches.AsNoTracking()
             .Where(pb => pb.BranchId == command.BranchId && productIds.Contains(pb.ProductId))
-            .Select(pb => new { pb.ProductId, pb.SellingPrice, pb.IsAvailableForSale })
+            .Select(pb => new { pb.Id, pb.ProductId, pb.SellingPrice, pb.IsAvailableForSale })
             .ToDictionaryAsync(pb => pb.ProductId, cancellationToken);
+
+        // OFFLINE PRICE: الكاشير بيبعت مع كل سطر رقم نسخة الكتالوج اللي قرأ منها السعر
+        // (CompleteSaleItemDto.CatalogVersion)، والدفعة محسوبة بأسعار هالنسخة. كل تغيير سعر معتمد مختوم برقم النسخة اللي صار فيها فعّال
+        // (PriceChangeRequest.AppliedAtCatalogVersion، بنفس معاملة تغيير السعر)، فالسعر اللي
+        // كان عند الكاشير = السعر الجديد لآخر تغيير ≤ نسخته، أو (لو ما في) السعر القديم لأول
+        // تغيير بعدها. لو ما في أي تغيير بعد نسخته، سعره هو السعر الحالي نفسه.
+        // مش سعر من العميل (§3.6): السيرفر بيختار من أسعار كانت فعلًا معتمدة للمنتج بهالفرع،
+        // وأي فرق عن السعر الحالي بيتعلّم للمراجعة (§1.6) - نسخة مزوّرة قديمة بتنكشف هيك.
+        var appliedPriceChanges = new List<AppliedPriceChange>();
+        if (command.Items.Any(i => i.CatalogVersion is not null) && productBranches.Count > 0)
+        {
+            var productBranchIds = productBranches.Values.Select(pb => pb.Id).ToList();
+            appliedPriceChanges = await _context.PriceChangeRequests.AsNoTracking()
+                .Where(r => productBranchIds.Contains(r.ProductBranchId) && r.AppliedAtCatalogVersion != null)
+                .Select(r => new AppliedPriceChange(r.ProductBranchId, r.AppliedAtCatalogVersion!.Value, r.PreviousPrice, r.RequestedPrice))
+                .ToListAsync(cancellationToken);
+        }
 
         var products = await _context.Products.AsNoTracking()
             .Where(p => productIds.Contains(p.Id))
@@ -337,6 +359,7 @@ public sealed class CompleteSaleHandler
             .ToDictionary(g => g.Key, g => g.First());
 
         var reviewFlags = new List<string>();
+        var offlinePriceFlaggedProducts = new HashSet<Guid>();
         var resolvedLines = new List<ResolvedSaleLine>();
 
         foreach (var item in command.Items)
@@ -391,8 +414,22 @@ public sealed class CompleteSaleHandler
                     Error.Validation("Sale.BatchNotApplicable", $"Product '{product.Name}' is not batch-tracked; no batch may be specified."));
             }
 
-            // Price derived server-side. See the PRICING ASSUMPTION note.
-            var unitPrice = productBranch.SellingPrice * unit.ConversionFactorToBase;
+            // Price derived server-side. See the PRICING ASSUMPTION and OFFLINE PRICE notes.
+            var baseSellingPrice = productBranch.SellingPrice;
+            if (item.CatalogVersion is { } itemCatalogVersion
+                && PriceAtCatalogVersion(appliedPriceChanges, productBranch.Id, itemCatalogVersion) is { } offlinePrice
+                && offlinePrice != productBranch.SellingPrice)
+            {
+                baseSellingPrice = offlinePrice;
+                if (offlinePriceFlaggedProducts.Add(item.ProductId))
+                {
+                    reviewFlags.Add(
+                        $"المنتج '{product.Name}' انباع بسعر نسخة الكاشير الأوفلاين ({offlinePrice:0.000}) " +
+                        $"بدل السعر الحالي ({productBranch.SellingPrice:0.000}) - بيع قبل ما توصله الأسعار الجديدة.");
+                }
+            }
+
+            var unitPrice = baseSellingPrice * unit.ConversionFactorToBase;
             var grossLineTotal = unitPrice * item.Quantity;
 
             // تكلفة الوحدة وقت البيع - راجع تعليق PROFIT ASSUMPTION فوق.
@@ -718,6 +755,25 @@ public sealed class CompleteSaleHandler
         }
 
         return result;
+    }
+
+    private sealed record AppliedPriceChange(Guid ProductBranchId, long Version, decimal PreviousPrice, decimal RequestedPrice);
+
+    /// <summary>
+    /// السعر اللي كان عند نسخة كتالوج معيّنة: السعر الجديد لآخر تغيير ≤ النسخة، أو (لو ما في)
+    /// السعر القديم لأول تغيير بعدها. null = ما في أي تغيير بعد النسخة، يعني سعرها هو الحالي.
+    /// </summary>
+    private static decimal? PriceAtCatalogVersion(List<AppliedPriceChange> changes, Guid productBranchId, long catalogVersion)
+    {
+        var forBranch = changes.Where(c => c.ProductBranchId == productBranchId).ToList();
+        var firstUnseen = forBranch.Where(c => c.Version > catalogVersion).MinBy(c => c.Version);
+        if (firstUnseen is null)
+        {
+            return null;
+        }
+
+        var lastSeen = forBranch.Where(c => c.Version <= catalogVersion).MaxBy(c => c.Version);
+        return lastSeen?.RequestedPrice ?? firstUnseen.PreviousPrice;
     }
 
     private sealed record ResolvedSaleLine(

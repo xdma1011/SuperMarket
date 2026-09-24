@@ -79,7 +79,8 @@ public sealed class CashierAppEndToEndHttpTests : IntegrationTestBase
         return new CashierContext(client, branchId, body.GetProperty("refreshToken").GetString()!);
     }
 
-    private static string BuildSalePayload(Guid branchId, Guid clientRequestId, Guid productId, Guid unitId, decimal quantity, decimal localTotal)
+    private static string BuildSalePayload(
+        Guid branchId, Guid clientRequestId, Guid productId, Guid unitId, decimal quantity, decimal localTotal, long? catalogVersion = null)
     {
         var payload = new
         {
@@ -89,7 +90,7 @@ public sealed class CashierAppEndToEndHttpTests : IntegrationTestBase
             invoiceLevelDiscountAmount = 0m,
             items = new[]
             {
-                new { productId, productUnitId = unitId, quantity, manualDiscountAmount = 0m, productBatchId = (Guid?)null }
+                new { productId, productUnitId = unitId, quantity, manualDiscountAmount = 0m, productBatchId = (Guid?)null, catalogVersion }
             },
             payments = new[]
             {
@@ -209,20 +210,17 @@ public sealed class CashierAppEndToEndHttpTests : IntegrationTestBase
             countedDetails = Array.Empty<object>()
         };
 
-        // الكاشير نفسه ما عنده CashClosing.Manage (مش من CashierDefaults) - زر التقفيل
-        // بالتطبيق محمي بباسوورد أدمن محلي بس، والطلب نفسه بيطلع بتوكن الكاشير.
+        // الكاشير نفسه بيقفّل (CashClosing.Manage صارت من CashierDefaults - قرار صاحب المشروع
+        // 24/9/2026، كانت 403 لأن زر التقفيل بالتطبيق بيبعت الطلب بتوكن الكاشير).
         var cashierClosing = await client.PostAsJsonAsync("/api/v1/cash-closings", closingRequest);
-        Assert.Equal(HttpStatusCode.Forbidden, cashierClosing.StatusCode);
-
-        var adminClient = await CreateAuthenticatedClientAsync();
-        var adminClosing = await adminClient.PostAsJsonAsync("/api/v1/cash-closings", closingRequest);
-        Assert.Equal(HttpStatusCode.Created, adminClosing.StatusCode);
-        var closing = JsonDocument.Parse(await adminClosing.Content.ReadAsStringAsync()).RootElement;
+        Assert.Equal(HttpStatusCode.Created, cashierClosing.StatusCode);
+        var closing = JsonDocument.Parse(await cashierClosing.Content.ReadAsStringAsync()).RootElement;
         Assert.Equal(1.250m, closing.GetProperty("expectedCash").GetDecimal());
         Assert.Equal(-0.050m, closing.GetProperty("variance").GetDecimal());
 
         // --- التقارير بتشوف الإرجاع والإلغاء. الـenums بتطلع كنصوص (JsonStringEnumConverter
         // عام بـProgram.cs) - الفرونت إند بيترجمها بخرائط بالاسم (report-configs.ts). ---
+        var adminClient = await CreateAuthenticatedClientAsync();
         var recentReturns = await adminClient.GetFromJsonAsync<JsonElement>($"/api/v1/reports/returns/recent?branchId={branchId}");
         Assert.Equal("Defective", recentReturns.GetProperty("items")[0].GetProperty("reason").GetString());
         var voidedSales = await adminClient.GetFromJsonAsync<JsonElement>($"/api/v1/reports/sales/voided?branchId={branchId}");
@@ -273,36 +271,137 @@ public sealed class CashierAppEndToEndHttpTests : IntegrationTestBase
         Assert.Equal(5m, await GetStockAsync(productId, branchId));
     }
 
-    [Fact(Skip = "فجوة مؤكَّدة (24/9/2026) بانتظار قرار التصميم: السيرفر حاليًا بيرفض البيع (422 " +
-        "Sale.PaymentsDoNotSettleTotal) لأنه بيحسب بالسعر الجديد، والبيع بيضل عالق بطابور الكاشير.")]
-    public async Task بيع_أوفلاين_بسعر_النسخة_المحلية_بعد_تغيير_السعر_بالسيرفر()
+    private async Task<long> GetCatalogVersionAsync(HttpClient client) =>
+        (await client.GetFromJsonAsync<JsonElement>("/api/v1/cashier-sync/catalog-version")).GetProperty("version").GetInt64();
+
+    private async Task ChangePriceAsAdminAsync(Guid productId, Guid productBranchId, decimal newPrice)
+    {
+        var adminClient = await CreateAuthenticatedClientAsync();
+        var response = await adminClient.PostAsJsonAsync(
+            $"/api/v1/products/{productId}/branches/{productBranchId}/price-change-requests", new { requestedPrice = newPrice });
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task بيع_أوفلاين_بسعر_النسخة_المحلية_بعد_رفع_السعر_بالسيرفر()
     {
         // قرار صاحب المشروع: البيع الأوفلاين بينحسب بسعر النسخة المحلية اللي انباع منها،
         // والسعر الجديد للبيعات الجاية بعد المزامنة - غير هيك الكاشير بيطلع عنده عجز وهمي.
         var (branchId, productId, unitId, productBranchId) = await SeedBranchWithProductAsync("CSH-OFFL", price: 1.000m, stock: 10m);
         var client = (await LoginAsCashierLikeWpfAsync(branchId)).Client;
+        var localVersion = await GetCatalogVersionAsync(client);
 
-        var page = await client.GetFromJsonAsync<JsonElement>(
-            $"/api/v1/cashier-sync/catalog-page?branchId={branchId}&pageNumber=1&pageSize=200");
-        var localPrice = page.GetProperty("items").EnumerateArray()
-            .Single(i => i.GetProperty("productId").GetGuid() == productId).GetProperty("sellingPrice").GetDecimal();
-        Assert.Equal(1.000m, localPrice);
-
-        // النت انقطع، الكاشير باع حبتين بالسعر المحلي وانحفظ البيع بالطابور...
-        var queuedPayload = BuildSalePayload(branchId, Guid.NewGuid(), productId, unitId, 2m, localTotal: 2 * localPrice);
+        // النت انقطع، الكاشير باع حبتين بالسعر المحلي (1.000) وانحفظ البيع بالطابور...
+        var queuedPayload = BuildSalePayload(branchId, Guid.NewGuid(), productId, unitId, 2m, localTotal: 2.000m, catalogVersion: localVersion);
 
         // ...وبنفس الوقت الأدمن رفع السعر.
-        var adminClient = await CreateAuthenticatedClientAsync();
-        var priceChange = await adminClient.PostAsJsonAsync(
-            $"/api/v1/products/{productId}/branches/{productBranchId}/price-change-requests", new { requestedPrice = 1.250m });
-        Assert.True(priceChange.IsSuccessStatusCode, await priceChange.Content.ReadAsStringAsync());
+        await ChangePriceAsAdminAsync(productId, productBranchId, 1.250m);
+        var newVersion = await GetCatalogVersionAsync(client);
+        Assert.True(newVersion > localVersion);
 
-        // رجع النت: الطابور بيبعت البيع المعلَّق.
+        // رجع النت: الطابور بيبعت البيع المعلَّق - بينقبل بسعر نسخته، ومعلَّم للمراجعة.
         var response = await SendPendingSaleAsync(client, queuedPayload);
-
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var sale = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
         Assert.Equal(2.000m, sale.GetProperty("totalAmount").GetDecimal());
+        Assert.Contains(sale.GetProperty("reviewFlags").EnumerateArray(), f => f.GetString()!.Contains("سعر نسخة الكاشير"));
+
+        // بعد المزامنة: بيع جديد بالنسخة الجديدة بالسعر الجديد، بلا أي علامة مراجعة.
+        var afterSync = await SendPendingSaleAsync(client,
+            BuildSalePayload(branchId, Guid.NewGuid(), productId, unitId, 2m, localTotal: 2.500m, catalogVersion: newVersion));
+        Assert.Equal(HttpStatusCode.Created, afterSync.StatusCode);
+        var afterSyncSale = JsonDocument.Parse(await afterSync.Content.ReadAsStringAsync()).RootElement;
+        Assert.Equal(2.500m, afterSyncSale.GetProperty("totalAmount").GetDecimal());
+        Assert.Empty(afterSyncSale.GetProperty("reviewFlags").EnumerateArray());
+
+        // الكاشير ما بيختار السعر: نسخة قديمة بسعر جديد (مش سعر نسختها) بتنرفض.
+        var mismatched = await SendPendingSaleAsync(client,
+            BuildSalePayload(branchId, Guid.NewGuid(), productId, unitId, 1m, localTotal: 1.250m, catalogVersion: localVersion));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, mismatched.StatusCode);
+        Assert.Equal(6m, await GetStockAsync(productId, branchId));
+    }
+
+    [Fact]
+    public async Task بيع_أوفلاين_بعد_تنزيل_السعر_بينحسب_بالسعر_القديم_الأعلى()
+    {
+        var (branchId, productId, unitId, productBranchId) = await SeedBranchWithProductAsync("CSH-OFFD", price: 2.000m, stock: 10m);
+        var client = (await LoginAsCashierLikeWpfAsync(branchId)).Client;
+        var localVersion = await GetCatalogVersionAsync(client);
+
+        await ChangePriceAsAdminAsync(productId, productBranchId, 1.500m);
+
+        var response = await SendPendingSaleAsync(client,
+            BuildSalePayload(branchId, Guid.NewGuid(), productId, unitId, 1m, localTotal: 2.000m, catalogVersion: localVersion));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(2.000m, JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.GetProperty("totalAmount").GetDecimal());
+    }
+
+    [Fact]
+    public async Task تغييرين_متتاليين_للسعر_النسخة_الوسطى_بتاخد_سعرها_هي()
+    {
+        var (branchId, productId, unitId, productBranchId) = await SeedBranchWithProductAsync("CSH-OFF2", price: 1.000m, stock: 10m);
+        var client = (await LoginAsCashierLikeWpfAsync(branchId)).Client;
+
+        await ChangePriceAsAdminAsync(productId, productBranchId, 1.250m);
+        var middleVersion = await GetCatalogVersionAsync(client);
+        await ChangePriceAsAdminAsync(productId, productBranchId, 1.500m);
+
+        var response = await SendPendingSaleAsync(client,
+            BuildSalePayload(branchId, Guid.NewGuid(), productId, unitId, 2m, localTotal: 2.500m, catalogVersion: middleVersion));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(2.500m, JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.GetProperty("totalAmount").GetDecimal());
+    }
+
+    [Fact]
+    public async Task بيع_بلا_رقم_نسخة_بيضل_بالسعر_الحالي_زي_قبل()
+    {
+        // لوحة الإدارة، الطلبات، وبيعات معلّقة من قبل هالتحديث - كلها بلا catalogVersion.
+        var (branchId, productId, unitId, productBranchId) = await SeedBranchWithProductAsync("CSH-NOVR", price: 1.000m, stock: 10m);
+        var client = (await LoginAsCashierLikeWpfAsync(branchId)).Client;
+        await ChangePriceAsAdminAsync(productId, productBranchId, 1.250m);
+
+        var oldPrice = await SendPendingSaleAsync(client, BuildSalePayload(branchId, Guid.NewGuid(), productId, unitId, 1m, localTotal: 1.000m));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, oldPrice.StatusCode);
+
+        var currentPrice = await SendPendingSaleAsync(client, BuildSalePayload(branchId, Guid.NewGuid(), productId, unitId, 1m, localTotal: 1.250m));
+        Assert.Equal(HttpStatusCode.Created, currentPrice.StatusCode);
+    }
+
+    [Fact]
+    public async Task طلب_سعر_بانتظار_موافقة_بينختم_برقم_النسخة_وقت_الموافقة_مش_وقت_الطلب()
+    {
+        var (branchId, productId, unitId, productBranchId) = await SeedBranchWithProductAsync("CSH-APPR", price: 1.000m, stock: 10m);
+        var client = (await LoginAsCashierLikeWpfAsync(branchId)).Client;
+
+        Guid requestId;
+        using (var scope = CreateScope())
+        {
+            var db = CreateDbContext(scope);
+            var pending = new SupermarketSystem.Domain.Catalog.PriceChangeRequest(productBranchId, 1.000m, 1.250m, Fixture.AdminUserId, DateTime.UtcNow);
+            db.PriceChangeRequests.Add(pending);
+            await db.SaveChangesAsync();
+            requestId = pending.Id;
+        }
+
+        // الطلب معلَّق - السعر لسه 1.000، فالنسخة الحالية سعرها 1.000.
+        var versionBeforeApproval = await GetCatalogVersionAsync(client);
+
+        var adminClient = await CreateAuthenticatedClientAsync();
+        var approve = await adminClient.PostAsJsonAsync($"/api/v1/price-change-requests/{requestId}/approve", new { note = (string?)null });
+        Assert.True(approve.IsSuccessStatusCode, await approve.Content.ReadAsStringAsync());
+
+        var response = await SendPendingSaleAsync(client,
+            BuildSalePayload(branchId, Guid.NewGuid(), productId, unitId, 1m, localTotal: 1.000m, catalogVersion: versionBeforeApproval));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        using (var scope = CreateScope())
+        {
+            var db = CreateDbContext(scope);
+            var approved = await db.PriceChangeRequests.AsNoTracking().FirstAsync(r => r.Id == requestId);
+            Assert.True(approved.AppliedAtCatalogVersion > versionBeforeApproval);
+        }
     }
 
     [Fact]

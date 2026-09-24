@@ -62,7 +62,7 @@ public static class PermissionCodes
     /// </summary>
     public static readonly IReadOnlyList<string> CashierDefaults = new[]
     {
-        SalesCreate, SalesVoid, ReturnsProcess, NotificationsView, PurchasingCreateDraft
+        SalesCreate, SalesVoid, ReturnsProcess, NotificationsView, PurchasingCreateDraft, CashClosingManage
     };
 
     /// <summary>

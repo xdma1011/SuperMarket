@@ -16,11 +16,14 @@ public sealed class ApprovePriceChangeRequestHandler
     private readonly ICurrentUserContext _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ICatalogVersionService _catalogVersionService;
+    private readonly ITransactionalExecutor _transactionalExecutor;
 
     public ApprovePriceChangeRequestHandler(
         IApplicationDbContext context, ICurrentUserContext currentUser,
-        IDateTimeProvider dateTimeProvider, ICatalogVersionService catalogVersionService)
+        IDateTimeProvider dateTimeProvider, ICatalogVersionService catalogVersionService,
+        ITransactionalExecutor transactionalExecutor)
     {
+        _transactionalExecutor = transactionalExecutor;
         _context = context;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
@@ -49,13 +52,18 @@ public sealed class ApprovePriceChangeRequestHandler
         var actorUserId = _currentUser.UserId ?? User.SystemUserId;
         var occurredAtUtc = _dateTimeProvider.UtcNow;
 
-        productBranch.ChangePrice(request.RequestedPrice);
-        request.Approve(actorUserId, occurredAtUtc, command.Note);
+        // السعر ورقم النسخة بنفس المعاملة - راجع PriceChangeRequest.AppliedAtCatalogVersion.
+        var applied = await _transactionalExecutor.ExecuteAsync<bool>(async ct =>
+        {
+            var catalogVersion = await _catalogVersionService.IncrementVersionAndGetAsync(ct);
+            productBranch.ChangePrice(request.RequestedPrice);
+            request.Approve(actorUserId, occurredAtUtc, command.Note);
+            request.RecordAppliedCatalogVersion(catalogVersion);
+            await _context.SaveChangesAsync(ct);
+            return Result.Success(true);
+        }, cancellationToken);
 
-        await _context.SaveChangesAsync(cancellationToken);
-        await _catalogVersionService.IncrementVersionAsync(cancellationToken);
-
-        return Result.Success();
+        return applied.IsSuccess ? Result.Success() : Result.Failure(applied.Error);
     }
 }
 

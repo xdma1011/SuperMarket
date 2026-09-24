@@ -561,6 +561,14 @@ public class RolePermissionConfiguration : IEntityTypeConfiguration<RolePermissi
             RoleId = Guid.Parse("f3b401c7-84f6-4a0f-9f17-b689979c5d8c"),
             PermissionId = Guid.Parse("2a4f7c1e-9b3d-4e5a-8c6f-1d2e3a4b5c6d")
         });
+        // كاشير -> CashClosing.Manage: قرار صاحب المشروع (24/9/2026) "خلي الكاشير يقفل" -
+        // زر التقفيل بتطبيق الكاشير كان بيرجع 403 لأن الطلب بيطلع بتوكن الكاشير نفسه.
+        builder.HasData(new
+        {
+            Id = Guid.Parse("7e1c4b2a-9d3f-4e6a-b8c5-2f0d1a3e5b79"),
+            RoleId = Guid.Parse("f3b401c7-84f6-4a0f-9f17-b689979c5d8c"),
+            PermissionId = Guid.Parse("a7fc0954-e9d6-4c47-af8a-4620d9faf6f0")
+        });
 
         // Seed: ربط دور مساعد أدمن بصلاحياته (PermissionCodes.AssistantAdminDefaults).
         builder.HasData(new

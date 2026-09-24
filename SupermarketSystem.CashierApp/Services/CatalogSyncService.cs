@@ -8,18 +8,20 @@ namespace SupermarketSystem.CashierApp.Services;
 /// نفس رقمك المحلي، صفر سحب. لو مختلف، تسحب الكتالوج الكامل بصفحات
 /// وتخزّنها محليًا.
 ///
-/// كل صفحة ناجحة تُطبَّق فورًا على الجداول المحلية، بدل تجميع كل شي
-/// بالذاكرة أول — لو انقطع النت بمنتصف السحب، الصفحات اللي نجحت قبل
-/// الانقطاع محفوظة فعليًا. SyncState ما تُحدَّث لآخر نسخة إلا بعد نجاح
-/// كل الصفحات، فمحاولة لاحقة بتعيد من الصفحة 1 - بسيط ومضمون، بثمن
-/// إعادة سحب كامل بدل استئناف دقيق، وهو ثمن مقبول لحجم كتالوج ميني
-/// ماركت عادي.
+/// ذرّية (24/9/2026): كل الصفحات بتنسحب بالذاكرة أول، وبعدها رقم النسخة بينفحص مرة
+/// تانية - لو تغيّر أثناء السحب (سعر اتعدّل بالنص)، بنعيد السحب. بس لما النسخة تثبت،
+/// المنتجات ورقم النسخة بينكتبوا سوا بمعاملة SQLite وحدة. السبب: السيرفر بيحسب البيع
+/// الأوفلاين بأسعار رقم النسخة اللي الكاشير بيبعته (CartLine.CatalogVersion)، فلازم
+/// الرقم المخزَّن يطابق الأسعار المخزَّنة بالضبط - صفحات نص محدَّثة (انقطاع بالنص) برقم
+/// نسخة قديم كانت رح تخلي البيع ينرفض. انقطاع بالنص = ولا إشي بيتغيّر محليًا، والمحاولة
+/// الجاية بتعيد من الصفحة 1 (نفس قرار "لا استئناف" الموثَّق بـCLAUDE.md).
 /// </summary>
 public sealed class CatalogSyncService
 {
     private readonly string _dbPath;
     private readonly ApiClient _apiClient;
     private readonly int _pageSize;
+    private const int MaxVersionChangeRetries = 3;
 
     public CatalogSyncService(string dbPath, ApiClient apiClient, int pageSize)
     {
@@ -44,43 +46,69 @@ public sealed class CatalogSyncService
             return CatalogSyncResult.AlreadyUpToDate(remoteVersion.Value);
         }
 
-        var pageNumber = 1;
-        var totalProductsSynced = 0;
+        var version = remoteVersion.Value;
 
-        while (true)
+        for (var attempt = 1; attempt <= MaxVersionChangeRetries; attempt++)
         {
-            var page = await _apiClient.GetCatalogSyncPageAsync(branchId, pageNumber, _pageSize, cancellationToken);
-            if (page is null)
+            var products = new List<CatalogSyncProductDto>();
+            var pageNumber = 1;
+
+            while (true)
             {
-                return CatalogSyncResult.PartialFailure(totalProductsSynced);
+                var page = await _apiClient.GetCatalogSyncPageAsync(branchId, pageNumber, _pageSize, cancellationToken);
+                if (page is null)
+                {
+                    return CatalogSyncResult.PartialFailure(0);
+                }
+
+                products.AddRange(page.Items);
+
+                var totalPages = (int)Math.Ceiling(page.TotalCount / (double)_pageSize);
+                if (pageNumber >= totalPages || page.Items.Count == 0)
+                {
+                    break;
+                }
+
+                pageNumber++;
             }
 
-            ApplyPageToLocalDb(db, page.Items);
-            totalProductsSynced += page.Items.Count;
-
-            var totalPages = (int)Math.Ceiling(page.TotalCount / (double)_pageSize);
-            if (pageNumber >= totalPages || page.Items.Count == 0)
+            var versionAfterPaging = await _apiClient.GetCatalogVersionAsync(cancellationToken);
+            if (versionAfterPaging is null)
             {
-                break;
+                return CatalogSyncResult.ConnectionFailed();
             }
 
-            pageNumber++;
+            if (versionAfterPaging.Value != version)
+            {
+                // الكتالوج تغيّر أثناء السحب - الصفحات ممكن تكون خليط نسختين.
+                version = versionAfterPaging.Value;
+                continue;
+            }
+
+            await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
+            {
+                ApplyPageToLocalDb(db, products);
+
+                if (state is null)
+                {
+                    state = new SyncState { LastSyncedCatalogVersion = version, LastSuccessfulSyncAtLocal = DateTime.UtcNow };
+                    db.SyncStates.Add(state);
+                }
+                else
+                {
+                    state.LastSyncedCatalogVersion = version;
+                    state.LastSuccessfulSyncAtLocal = DateTime.UtcNow;
+                }
+
+                await db.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+            }
+
+            return CatalogSyncResult.Completed(version, products.Count);
         }
 
-        if (state is null)
-        {
-            state = new SyncState { LastSyncedCatalogVersion = remoteVersion.Value, LastSuccessfulSyncAtLocal = DateTime.UtcNow };
-            db.SyncStates.Add(state);
-        }
-        else
-        {
-            state.LastSyncedCatalogVersion = remoteVersion.Value;
-            state.LastSuccessfulSyncAtLocal = DateTime.UtcNow;
-        }
-
-        await db.SaveChangesAsync(cancellationToken);
-
-        return CatalogSyncResult.Completed(remoteVersion.Value, totalProductsSynced);
+        // الكتالوج ضل يتغيّر بكل محاولة - بنجرّب بالدورة الجاية للمزامنة الخلفية.
+        return CatalogSyncResult.PartialFailure(0);
     }
 
     /// <summary>استبدال كامل لكل منتج بالصفحة - أبسط من تعديل جزئي، وصحيح دائمًا.</summary>

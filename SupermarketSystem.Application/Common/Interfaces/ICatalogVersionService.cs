@@ -12,4 +12,11 @@ public interface ICatalogVersionService
 {
     Task<long> GetCurrentVersionAsync(CancellationToken cancellationToken);
     Task IncrementVersionAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// زيادة ذرية وترجيع الرقم الجديد بجملة وحدة - لتغيير سعر لازم يعرف رقم النسخة اللي
+    /// صار فيها فعّال. لازم تنستدعى جوّا نفس معاملة تغيير السعر (ITransactionalExecutor)،
+    /// عشان ما حدا يقرأ السعر الجديد برقم النسخة القديم.
+    /// </summary>
+    Task<long> IncrementVersionAndGetAsync(CancellationToken cancellationToken);
 }

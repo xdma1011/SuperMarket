@@ -26,14 +26,17 @@ public sealed class RequestPriceChangeHandler
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IPermissionChecker _permissionChecker;
     private readonly ICatalogVersionService _catalogVersionService;
+    private readonly ITransactionalExecutor _transactionalExecutor;
 
     public RequestPriceChangeHandler(
         IApplicationDbContext context,
         ICurrentUserContext currentUser,
         IDateTimeProvider dateTimeProvider,
         IPermissionChecker permissionChecker,
-        ICatalogVersionService catalogVersionService)
+        ICatalogVersionService catalogVersionService,
+        ITransactionalExecutor transactionalExecutor)
     {
+        _transactionalExecutor = transactionalExecutor;
         _context = context;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
@@ -65,18 +68,28 @@ public sealed class RequestPriceChangeHandler
         var hasDirectPermission = _currentUser.UserId is { } userId
             && await _permissionChecker.HasPermissionAsync(userId, PermissionCodes.ChangeSellingPriceDirect, cancellationToken);
 
-        if (hasDirectPermission)
+        if (!hasDirectPermission)
         {
-            productBranch.ChangePrice(command.RequestedPrice);
-            request.AutoApprove(actorUserId, occurredAtUtc);
+            _context.PriceChangeRequests.Add(request);
+            await _context.SaveChangesAsync(cancellationToken);
+            return Result.Success(new RequestPriceChangeResponse(request.Id, Applied: false));
         }
 
-        _context.PriceChangeRequests.Add(request);
-        await _context.SaveChangesAsync(cancellationToken);
-
-        if (hasDirectPermission)
+        // السعر ورقم النسخة بنفس المعاملة - راجع PriceChangeRequest.AppliedAtCatalogVersion.
+        var applied = await _transactionalExecutor.ExecuteAsync<bool>(async ct =>
         {
-            await _catalogVersionService.IncrementVersionAsync(cancellationToken);
+            var catalogVersion = await _catalogVersionService.IncrementVersionAndGetAsync(ct);
+            productBranch.ChangePrice(command.RequestedPrice);
+            request.AutoApprove(actorUserId, occurredAtUtc);
+            request.RecordAppliedCatalogVersion(catalogVersion);
+            _context.PriceChangeRequests.Add(request);
+            await _context.SaveChangesAsync(ct);
+            return Result.Success(true);
+        }, cancellationToken);
+
+        if (applied.IsFailure)
+        {
+            return Result.Failure<RequestPriceChangeResponse>(applied.Error);
         }
 
         return Result.Success(new RequestPriceChangeResponse(request.Id, hasDirectPermission));

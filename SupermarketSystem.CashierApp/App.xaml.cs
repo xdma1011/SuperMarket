@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text;
 using System.Windows;
+using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.CashierApp.Local;
 using SupermarketSystem.CashierApp.Services;
 using SupermarketSystem.CashierApp.Views;

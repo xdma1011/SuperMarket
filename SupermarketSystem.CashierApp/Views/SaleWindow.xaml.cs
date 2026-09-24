@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
 using Microsoft.EntityFrameworkCore;
@@ -299,6 +300,19 @@ public partial class SaleWindow : Window
         }
     }
 
+    /// <summary>
+    /// السعر ورقم نسخة الكتالوج بنفس القراءة (معاملة قراءة وحدة) - المزامنة بتكتب الاثنين
+    /// سوا بمعاملة وحدة (CatalogSyncService)، فهيك ما بنقرأ سعر جديد برقم نسخة قديم أو العكس.
+    /// </summary>
+    private (decimal BaseUnitPrice, long? CatalogVersion) ReadPriceSnapshot(Guid productId)
+    {
+        using var db = new LocalDbContext(_dbPath);
+        using var transaction = db.Database.BeginTransaction();
+        var baseUnitPrice = db.Products.Where(p => p.ProductId == productId).Select(p => p.SellingPrice).First();
+        var catalogVersion = db.SyncStates.Select(s => (long?)s.LastSyncedCatalogVersion).FirstOrDefault();
+        return (baseUnitPrice, catalogVersion);
+    }
+
     private void AddSimpleItem(LocalProduct product, LocalProductUnit unit)
     {
         FlashAddedSuccess();
@@ -311,6 +325,10 @@ public partial class SaleWindow : Window
         }
         else
         {
+            // سعر الوحدة = سعر الوحدة الأساسية × معامل التحويل (كرتونة = 12 حبة مثلًا) - نفس
+            // حساب السيرفر بالضبط (PRICING ASSUMPTION بـCompleteSaleHandler). كان بياخد سعر
+            // الحبة لأي وحدة، فأي بيع بوحدة غير أساسية كان بينرفض بالسيرفر ويعلق بالطابور.
+            var (baseUnitPrice, catalogVersion) = ReadPriceSnapshot(product.ProductId);
             var newLine = new CartLine
             {
                 ProductId = product.ProductId,
@@ -318,7 +336,8 @@ public partial class SaleWindow : Window
                 ProductName = product.Name,
                 UnitName = unit.UnitName,
                 Quantity = 1,
-                UnitPrice = product.SellingPrice
+                UnitPrice = baseUnitPrice * unit.ConversionFactorToBase,
+                CatalogVersion = catalogVersion
             };
             _lastAddedLine = newLine;
             _cart.Add(newLine);
@@ -381,6 +400,7 @@ public partial class SaleWindow : Window
 
         FlashAddedSuccess();
 
+        var (batchBaseUnitPrice, batchCatalogVersion) = ReadPriceSnapshot(product.ProductId);
         var newBatchLine = new CartLine
         {
             ProductId = product.ProductId,
@@ -390,7 +410,8 @@ public partial class SaleWindow : Window
             ProductName = product.Name,
             UnitName = unit.UnitName,
             Quantity = 1,
-            UnitPrice = product.SellingPrice,
+            UnitPrice = batchBaseUnitPrice * unit.ConversionFactorToBase,
+            CatalogVersion = batchCatalogVersion,
             NeedsReview = needsReview
         };
         _lastAddedLine = newBatchLine;
@@ -500,7 +521,8 @@ public partial class SaleWindow : Window
                 productUnitId = l.ProductUnitId,
                 quantity = l.Quantity,
                 manualDiscountAmount = 0m,
-                productBatchId = l.ProductBatchId
+                productBatchId = l.ProductBatchId,
+                catalogVersion = l.CatalogVersion
             }),
             payments = new[]
             {

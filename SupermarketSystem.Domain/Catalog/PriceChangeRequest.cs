@@ -34,6 +34,14 @@ public class PriceChangeRequest : AuditableEntity
     public DateTime? DecidedAtUtc { get; private set; }
     public string? DecisionNote { get; private set; }
 
+    /// <summary>
+    /// رقم نسخة الكتالوج (Catalog.Version) اللي صار فيه السعر الجديد فعّال - يُحدَّد بنفس
+    /// المعاملة اللي تغيّر فيها السعر. أساس "البيع الأوفلاين بسعر النسخة اللي انباع منها":
+    /// الكاشير بيبعت رقم نسخته، والسيرفر بيعرف منه أي سعر كان عنده بالضبط (راجع
+    /// CompleteSaleHandler). null لطلبات معلَّقة/مرفوضة، وللتغييرات القديمة قبل هالميزة.
+    /// </summary>
+    public long? AppliedAtCatalogVersion { get; private set; }
+
     private PriceChangeRequest() { } // EF Core
 
     public PriceChangeRequest(
@@ -72,6 +80,16 @@ public class PriceChangeRequest : AuditableEntity
         DecidedByUserId = decidedByUserId;
         DecidedAtUtc = decidedAtUtc;
         DecisionNote = note;
+    }
+
+    public void RecordAppliedCatalogVersion(long catalogVersion)
+    {
+        if (Status != PriceChangeRequestStatus.Approved)
+        {
+            throw new DomainException("Only an approved price change has an applied catalog version.");
+        }
+
+        AppliedAtCatalogVersion = catalogVersion;
     }
 
     public void Reject(Guid decidedByUserId, DateTime decidedAtUtc, string? note)

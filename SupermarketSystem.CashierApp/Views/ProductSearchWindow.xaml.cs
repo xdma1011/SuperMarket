@@ -199,7 +199,8 @@ public partial class ProductSearchWindow : Window
                     ProductName = p.Name,
                     UnitId = u.UnitId,
                     UnitName = u.UnitName,
-                    Price = p.SellingPrice,
+                    BaseUnitPrice = p.SellingPrice,
+                    ConversionFactorToBase = u.ConversionFactorToBase,
                     MatchedBarcode = null
                 })
             .ToList();
@@ -216,7 +217,8 @@ public partial class ProductSearchWindow : Window
                         ProductName = p.Name,
                         UnitId = x.Unit.UnitId,
                         UnitName = x.Unit.UnitName,
-                        Price = p.SellingPrice,
+                        BaseUnitPrice = p.SellingPrice,
+                        ConversionFactorToBase = x.Unit.ConversionFactorToBase,
                         MatchedBarcode = x.BarcodeValue
                     })
                 .ToList();
@@ -263,7 +265,10 @@ public partial class ProductSearchWindow : Window
         public string ProductName { get; set; } = string.Empty;
         public Guid UnitId { get; set; }
         public string UnitName { get; set; } = string.Empty;
-        public decimal Price { get; set; }
+        public decimal BaseUnitPrice { get; set; }
+        public decimal ConversionFactorToBase { get; set; } = 1m;
+        // سعر الوحدة المعروضة (كرتونة = سعر الحبة × معاملها) - نفس حساب السيرفر.
+        public decimal Price => BaseUnitPrice * ConversionFactorToBase;
         public string? MatchedBarcode { get; set; }
     }
 }
