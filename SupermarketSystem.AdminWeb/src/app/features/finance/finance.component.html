@@ -202,7 +202,7 @@
             <tr>
               <td>{{ branchName(c.branchId) }}</td>
               <td>
-                <span class="status-chip" [class.inactive]="c.type === 2">{{ typeLabels[c.type] }}</span>
+                <span class="status-chip" [class.inactive]="c.type === 'Withdrawal'">{{ typeLabels[c.type] }}</span>
               </td>
               <td class="mono">{{ c.amount | number: '1.2-2' }}</td>
               <td class="mono">{{ c.occurredAtUtc | date: 'yyyy-MM-dd' }}</td>

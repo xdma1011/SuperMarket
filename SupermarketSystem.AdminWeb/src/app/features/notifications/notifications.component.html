@@ -15,8 +15,8 @@
 
 <div class="notif-list">
   @for (n of notifications(); track n.id) {
-    <div class="notif-card" [class.unread]="n.status !== 3">
-      <div class="notif-dot" [class.unread]="n.status !== 3"></div>
+    <div class="notif-card" [class.unread]="n.status !== 'Read'">
+      <div class="notif-dot" [class.unread]="n.status !== 'Read'"></div>
       <div class="notif-body">
         <div class="notif-title-row">
           <span class="notif-title">{{ n.title }}</span>

@@ -9,7 +9,7 @@ describe('CatalogComponent', () => {
   let apiClientSpy: jasmine.SpyObj<ApiClient>;
 
   const sampleProduct = {
-    id: 'p1', name: 'سكر', categoryId: 'c1', status: 1, isBatchTracked: false,
+    id: 'p1', name: 'سكر', categoryId: 'c1', status: 'Active', isBatchTracked: false,
     suggestedRetailPrice: 5, expectedShelfLifeDays: null, isComplimentaryAllowed: false, createdAtUtc: ''
   };
   const sampleCategory = { id: 'c1', name: 'مواد غذائية', parentCategoryId: null };

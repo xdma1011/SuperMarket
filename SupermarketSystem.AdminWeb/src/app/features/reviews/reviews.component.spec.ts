@@ -8,9 +8,12 @@ describe('ReviewsComponent', () => {
   let component: ReviewsComponent;
   let apiClientSpy: jasmine.SpyObj<ApiClient>;
 
+  // الأرقام للقراءة بس - الباك إند بيرجّع الاسم (JsonStringEnumConverter).
+  const TYPE_NAMES = { 1: 'Return', 2: 'ComplimentaryIssue', 3: 'HighPurchasePrice', 4: 'Complaint', 5: 'WasteIssue' } as const;
+
   function item(type: 1 | 2 | 3 | 4 | 5, referenceId = 'ref1') {
     return {
-      type,
+      type: TYPE_NAMES[type],
       typeTitle: 'مراجعة',
       referenceId,
       title: 'عنصر بانتظار مراجعة',
@@ -150,6 +153,17 @@ describe('ReviewsComponent', () => {
         {},
         { complaintId: 'c1' }
       );
+    });
+
+    it('نوع مراجعة غير معروف ما بينشال من الشاشة بصمت كأنه انراجع', async () => {
+      const unknown = { ...item(1, 'x1'), type: 'SomethingNew' as unknown as 'Return' };
+      component.items.set([unknown]);
+
+      await component.markReviewed(unknown);
+
+      expect(apiClientSpy.post).not.toHaveBeenCalled();
+      expect(component.items().length).toBe(1);
+      expect(component.errorMessage()).not.toBeNull();
     });
 
     it('يعرض رسالة خطأ عربية تحمل عنوان العنصر عند الفشل، بلا حذفه من القائمة', async () => {

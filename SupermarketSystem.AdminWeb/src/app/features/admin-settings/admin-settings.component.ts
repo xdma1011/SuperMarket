@@ -6,11 +6,9 @@ import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { SystemOperation } from '../../core/api/operations';
 
-enum AdminSettingDataType {
-  Boolean = 1,
-  Decimal = 2,
-  String = 3
-}
+// أسماء AdminSettingDataType بالـC# - الباك إند بيسلسل الـenums كنصوص (JsonStringEnumConverter عام).
+const AdminSettingDataType = { Boolean: 'Boolean', Decimal: 'Decimal', String: 'String' } as const;
+type AdminSettingDataType = (typeof AdminSettingDataType)[keyof typeof AdminSettingDataType];
 
 interface AdminSettingDto {
   key: string;

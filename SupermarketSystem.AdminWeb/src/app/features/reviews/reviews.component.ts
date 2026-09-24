@@ -5,7 +5,8 @@ import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { ReviewsOperation, ReturnsOperation } from '../../core/api/operations';
 
-type PendingReviewType = 1 | 2 | 3 | 4 | 5;
+// أسماء PendingReviewType بالـC# - الباك إند بيسلسل الـenums كنصوص (JsonStringEnumConverter عام).
+type PendingReviewType = 'Return' | 'ComplimentaryIssue' | 'HighPurchasePrice' | 'Complaint' | 'WasteIssue';
 
 interface PendingReviewItemDto {
   type: PendingReviewType;
@@ -102,7 +103,7 @@ export class ReviewsComponent implements OnInit {
   }
 
   isReturn(item: PendingReviewItemDto): boolean {
-    return item.type === 1;
+    return item.type === 'Return';
   }
 
   async markReviewed(item: PendingReviewItemDto): Promise<void> {
@@ -111,13 +112,13 @@ export class ReviewsComponent implements OnInit {
 
     try {
       switch (item.type) {
-        case 1:
+        case 'Return':
           await firstValueFrom(
             this.apiClient.post(ApiController.Returns, ReturnsOperation.MarkReviewed, {}, { id: item.referenceId })
           );
           break;
-        case 2: // ضيافة
-        case 5: // تلف/هلاك - نفس جدول StockMovements، نفس endpoint
+        case 'ComplimentaryIssue':
+        case 'WasteIssue': // نفس جدول StockMovements، نفس endpoint
           await firstValueFrom(
             this.apiClient.post(
               ApiController.Reviews,
@@ -127,7 +128,7 @@ export class ReviewsComponent implements OnInit {
             )
           );
           break;
-        case 3:
+        case 'HighPurchasePrice':
           await firstValueFrom(
             this.apiClient.post(
               ApiController.Reviews,
@@ -137,11 +138,14 @@ export class ReviewsComponent implements OnInit {
             )
           );
           break;
-        case 4:
+        case 'Complaint':
           await firstValueFrom(
             this.apiClient.post(ApiController.Reviews, ReviewsOperation.MarkComplaintReviewed, {}, { complaintId: item.referenceId })
           );
           break;
+        default:
+          // نوع مش معروف: لا نشيله من الشاشة بصمت كأنه انراجع.
+          throw new Error(`نوع مراجعة غير معروف: ${item.type}`);
       }
 
       this.items.set(this.items().filter(i => i.referenceId !== item.referenceId));

@@ -17,13 +17,16 @@ interface PagedResult<T> {
   totalCount: number;
 }
 
+/** قيم الإرسال (أرقام) - الباك إند بيقبلها، بس بيرجّع الأسماء بالردود (JsonStringEnumConverter عام). */
 type ExpenseCategory = 1 | 2 | 3 | 4 | 5;
 type CapitalTransactionType = 1 | 2;
+type ExpenseCategoryName = 'Rent' | 'Electricity' | 'Water' | 'Salary' | 'Other';
+type CapitalTransactionTypeName = 'Deposit' | 'Withdrawal';
 
 interface ExpenseListItemDto {
   id: string;
   branchId: string;
-  category: ExpenseCategory;
+  category: ExpenseCategoryName;
   amount: number;
   paymentDateUtc: string;
   periodYear: number;
@@ -35,7 +38,7 @@ interface ExpenseListItemDto {
 interface CapitalTransactionListItemDto {
   id: string;
   branchId: string;
-  type: CapitalTransactionType;
+  type: CapitalTransactionTypeName;
   amount: number;
   occurredAtUtc: string;
   notes: string | null;
@@ -43,7 +46,7 @@ interface CapitalTransactionListItemDto {
 }
 
 interface ExpenseByCategoryDto {
-  category: ExpenseCategory;
+  category: ExpenseCategoryName;
   amount: number;
 }
 
@@ -67,17 +70,17 @@ interface GetMonthlyProfitStatementResponse {
   netProfit: number;
 }
 
-const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
-  1: 'إيجار',
-  2: 'كهرباء',
-  3: 'ماء',
-  4: 'راتب',
-  5: 'أخرى'
+const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategoryName, string> = {
+  Rent: 'إيجار',
+  Electricity: 'كهرباء',
+  Water: 'ماء',
+  Salary: 'راتب',
+  Other: 'أخرى'
 };
 
-const CAPITAL_TYPE_LABELS: Record<CapitalTransactionType, string> = {
-  1: 'إضافة',
-  2: 'سحب'
+const CAPITAL_TYPE_LABELS: Record<CapitalTransactionTypeName, string> = {
+  Deposit: 'إضافة',
+  Withdrawal: 'سحب'
 };
 
 const MONTH_NAMES = [

@@ -6,7 +6,8 @@ export interface ReportColumn {
   key: string;
   label: string;
   type: ColumnType;
-  enumMap?: Record<number, string>;
+  /** مفتاحها اسم العضو بالـC# ("Defective") - الباك إند بيسلسل الـenums كنصوص (JsonStringEnumConverter عام بـProgram.cs). */
+  enumMap?: Record<string, string>;
 }
 
 export interface ReportConfig {
@@ -19,24 +20,27 @@ export interface ReportConfig {
   requiresBranch?: boolean;
 }
 
-const returnReasonMap: Record<number, string> = {
-  1: 'طلب الزبون',
-  2: 'تالف',
-  3: 'خطأ بالفاتورة',
-  4: 'أخرى'
+// مطابقة لـReturnReason / VoidReason / WasteReason بالـDomain.
+const returnReasonMap: Record<string, string> = {
+  Defective: 'تالف/معيب',
+  CustomerChangedMind: 'غيّر رأيه',
+  WrongItem: 'صنف غلط',
+  Expired: 'منتهي الصلاحية',
+  Other: 'أخرى'
 };
 
-const voidReasonMap: Record<number, string> = {
-  1: 'خطأ كاشير',
-  2: 'طلب الزبون',
-  3: 'أخرى'
+const voidReasonMap: Record<string, string> = {
+  CashierError: 'خطأ كاشير',
+  CustomerCancelled: 'ألغاها الزبون',
+  SystemError: 'خطأ نظام',
+  Other: 'أخرى'
 };
 
-const wasteReasonMap: Record<number, string> = {
-  1: 'منتهي الصلاحية',
-  2: 'مكسور',
-  3: 'تلف تخزين',
-  4: 'أخرى'
+const wasteReasonMap: Record<string, string> = {
+  Expired: 'منتهي الصلاحية',
+  Broken: 'مكسور',
+  StorageDamage: 'تلف تخزين',
+  Other: 'أخرى'
 };
 
 /**

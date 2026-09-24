@@ -69,7 +69,7 @@ describe('FinanceComponent', () => {
         branchId: 'b1', year: 2026, month: 9,
         totalSales: 100, totalReturnedAmount: 0, netRevenue: 100,
         costOfGoodsSold: 60, itemsExcludedNoCostHistory: 0, grossProfit: 40,
-        totalExpenses: 10, expensesByCategory: [{ category: 1 as const, amount: 10 }],
+        totalExpenses: 10, expensesByCategory: [{ category: 'Rent' as const, amount: 10 }],
         stocktakeSurplusValue: 5, stocktakeShortageValue: 15, stocktakeMovementsExcludedNoCostHistory: 1,
         wasteLossValue: 7, wasteMovementsExcludedNoCostHistory: 0,
         netProfit: 30
@@ -206,5 +206,11 @@ describe('FinanceComponent', () => {
       expect(component.branchName('b1')).toBe('الرئيسي');
       expect(component.branchName('unknown')).toBe('unknown');
     });
+  });
+
+  it('يترجم أسماء التصنيفات وأنواع حركات رأس المال القادمة من الباك إند (أسماء لا أرقام)', () => {
+    expect(component.categoryLabels['Rent']).toBe('إيجار');
+    expect(component.categoryLabels['Electricity']).toBe('كهرباء');
+    expect(component.typeLabels['Withdrawal']).toBe('سحب');
   });
 });

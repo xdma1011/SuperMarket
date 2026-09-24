@@ -224,7 +224,7 @@ describe('ReportsComponent', () => {
     });
 
     it('يترجم قيمة enum عبر enumMap', () => {
-      expect(component.formatCell(2, { type: 'enum', enumMap: { 1: 'طلب الزبون', 2: 'تالف' } })).toBe('تالف');
+      expect(component.formatCell('Defective', { type: 'enum', enumMap: { CustomerChangedMind: 'غيّر رأيه', Defective: 'تالف/معيب' } })).toBe('تالف/معيب');
     });
 
     it('يترجم القيمة المنطقية لنعم/لا', () => {
@@ -233,7 +233,7 @@ describe('ReportsComponent', () => {
     });
 
     it('يرجّع القيمة الخام كنص لو enum بلا خريطة مطابقة', () => {
-      expect(component.formatCell(99, { type: 'enum', enumMap: { 1: 'طلب الزبون' } })).toBe('99');
+      expect(component.formatCell('Unknown', { type: 'enum', enumMap: { Defective: 'تالف/معيب' } })).toBe('Unknown');
     });
 
     it('ينسّق القيمة المالية بمنزلتين عشريتين', () => {

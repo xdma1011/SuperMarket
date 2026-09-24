@@ -24,7 +24,7 @@ interface StocktakeDetailResponse {
   stocktakeId: string;
   stocktakeNumber: string;
   branchId: string;
-  status: number;
+  status: StocktakeStatus;
   completedAtUtc: string | null;
   approvedAtUtc: string | null;
   items: StocktakeItemDetailDto[];
@@ -36,11 +36,14 @@ interface ApproveStocktakeResponse {
   appliedCorrections: { productId: string; variance: number; wentNegative: boolean }[];
 }
 
-const STATUS_DRAFT = 1;
-const STATUS_IN_PROGRESS = 2;
-const STATUS_COMPLETED = 3;
-const STATUS_APPROVED = 4;
-const STATUS_CANCELLED = 5;
+// أسماء StocktakeStatus بالـC# - الباك إند بيسلسل الـenums كنصوص (JsonStringEnumConverter عام).
+type StocktakeStatus = 'Draft' | 'InProgress' | 'Completed' | 'Approved' | 'Cancelled';
+
+const STATUS_DRAFT: StocktakeStatus = 'Draft';
+const STATUS_IN_PROGRESS: StocktakeStatus = 'InProgress';
+const STATUS_COMPLETED: StocktakeStatus = 'Completed';
+const STATUS_APPROVED: StocktakeStatus = 'Approved';
+const STATUS_CANCELLED: StocktakeStatus = 'Cancelled';
 
 /**
  * شاشة واحدة تغطي المراحل الأربعة كلها، بحالة واحدة تفاعلية بدل صفحات

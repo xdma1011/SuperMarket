@@ -27,7 +27,7 @@ describe('AdminSettingsComponent', () => {
 
   it('يحمّل الإعدادات ويضيف draftValue مطابقة للقيمة الأصلية', async () => {
     apiClientSpy.get.and.returnValue(
-      of({ settings: [{ key: 'AllowNegativeStock', label: 'سماح برصيد سالب', value: 'False', dataType: 1 }] })
+      of({ settings: [{ key: 'AllowNegativeStock', label: 'سماح برصيد سالب', value: 'False', dataType: 'Boolean' as const }] })
     );
 
     fixture.detectChanges();
@@ -47,20 +47,20 @@ describe('AdminSettingsComponent', () => {
 
   describe('isDirty', () => {
     it('يرجّع true لو draftValue مختلفة عن value المحفوظة', () => {
-      const setting = { key: 'K', label: 'إعداد', value: '5', dataType: 2, draftValue: '10', saving: false };
+      const setting = { key: 'K', label: 'إعداد', value: '5', dataType: 'Decimal' as const, draftValue: '10', saving: false };
       expect(component.isDirty(setting)).toBeTrue();
     });
 
     it('يرجّع false لو draftValue مطابقة لـvalue', () => {
-      const setting = { key: 'K', label: 'إعداد', value: '5', dataType: 2, draftValue: '5', saving: false };
+      const setting = { key: 'K', label: 'إعداد', value: '5', dataType: 'Decimal' as const, draftValue: '5', saving: false };
       expect(component.isDirty(setting)).toBeFalse();
     });
   });
 
   describe('toggleBoolean', () => {
     it('يبدّل True إلى False ويحفظ فورًا', () => {
-      apiClientSpy.put.and.returnValue(of({ key: 'K', label: 'إعداد', value: 'False', dataType: 1 }));
-      const setting = { key: 'K', label: 'إعداد', value: 'True', dataType: 1, draftValue: 'True', saving: false };
+      apiClientSpy.put.and.returnValue(of({ key: 'K', label: 'إعداد', value: 'False', dataType: 'Boolean' as const }));
+      const setting = { key: 'K', label: 'إعداد', value: 'True', dataType: 'Boolean' as const, draftValue: 'True', saving: false };
 
       component.toggleBoolean(setting);
 
@@ -69,8 +69,8 @@ describe('AdminSettingsComponent', () => {
     });
 
     it('يبدّل False إلى True', () => {
-      apiClientSpy.put.and.returnValue(of({ key: 'K', label: 'إعداد', value: 'True', dataType: 1 }));
-      const setting = { key: 'K', label: 'إعداد', value: 'False', dataType: 1, draftValue: 'False', saving: false };
+      apiClientSpy.put.and.returnValue(of({ key: 'K', label: 'إعداد', value: 'True', dataType: 'Boolean' as const }));
+      const setting = { key: 'K', label: 'إعداد', value: 'False', dataType: 'Boolean' as const, draftValue: 'False', saving: false };
 
       component.toggleBoolean(setting);
 
@@ -80,11 +80,11 @@ describe('AdminSettingsComponent', () => {
 
   describe('save', () => {
     it('يحفظ القيمة الجديدة ويحدّث value وdraftValue من رد السيرفر', async () => {
-      apiClientSpy.get.and.returnValue(of({ settings: [{ key: 'K', label: 'إعداد', value: '3', dataType: 2 }] }));
+      apiClientSpy.get.and.returnValue(of({ settings: [{ key: 'K', label: 'إعداد', value: '3', dataType: 'Decimal' as const }] }));
       fixture.detectChanges();
       await fixture.whenStable();
 
-      apiClientSpy.put.and.returnValue(of({ key: 'K', label: 'إعداد', value: '7', dataType: 2 }));
+      apiClientSpy.put.and.returnValue(of({ key: 'K', label: 'إعداد', value: '7', dataType: 'Decimal' as const }));
       const setting = component.settings()[0];
       setting.draftValue = '7';
 
@@ -97,7 +97,7 @@ describe('AdminSettingsComponent', () => {
 
     it('يعرض رسالة الخطأ التفصيلية من الباك إند (err.error.detail) لو موجودة', async () => {
       apiClientSpy.put.and.returnValue(throwError(() => ({ error: { detail: 'القيمة يجب أن تكون بين 1 و100.' } })));
-      const setting = { key: 'K', label: 'إعداد', value: '3', dataType: 2, draftValue: '999', saving: false };
+      const setting = { key: 'K', label: 'إعداد', value: '3', dataType: 'Decimal' as const, draftValue: '999', saving: false };
 
       await component.save(setting);
 
@@ -107,7 +107,7 @@ describe('AdminSettingsComponent', () => {
 
     it('يعرض رسالة عربية عامة لو ما في تفاصيل خطأ من الباك إند', async () => {
       apiClientSpy.put.and.returnValue(throwError(() => new Error('network')));
-      const setting = { key: 'K', label: 'إعداد', value: '3', dataType: 2, draftValue: '5', saving: false };
+      const setting = { key: 'K', label: 'إعداد', value: '3', dataType: 'Decimal' as const, draftValue: '5', saving: false };
 
       await component.save(setting);
 

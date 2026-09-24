@@ -15,7 +15,7 @@ describe('StocktakeDetailComponent', () => {
     stocktakeId: 'st1',
     stocktakeNumber: 'ST-1',
     branchId: 'b1',
-    status: 2,
+    status: 'InProgress' as const,
     completedAtUtc: null,
     approvedAtUtc: null,
     items: [
@@ -67,16 +67,16 @@ describe('StocktakeDetailComponent', () => {
   describe('canCount', () => {
     it('يرجّع true بحالة مسودة (1) أو قيد التنفيذ (2)', async () => {
       await component.load();
-      component.stocktake.update(s => (s ? { ...s, status: 1 } : s));
+      component.stocktake.update(s => (s ? { ...s, status: 'Draft' as const } : s));
       expect(component.canCount()).toBeTrue();
 
-      component.stocktake.update(s => (s ? { ...s, status: 2 } : s));
+      component.stocktake.update(s => (s ? { ...s, status: 'InProgress' as const } : s));
       expect(component.canCount()).toBeTrue();
     });
 
     it('يرجّع false بحالة مكتمل أو معتمد أو ملغى', async () => {
       await component.load();
-      component.stocktake.update(s => (s ? { ...s, status: 3 } : s));
+      component.stocktake.update(s => (s ? { ...s, status: 'Completed' as const } : s));
       expect(component.canCount()).toBeFalse();
     });
 

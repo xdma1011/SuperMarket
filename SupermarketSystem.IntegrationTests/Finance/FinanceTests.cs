@@ -1,4 +1,5 @@
 ﻿using System.Net;
+using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SupermarketSystem.Application.Common.Pagination;
@@ -48,6 +49,50 @@ public sealed class FinanceTests : IntegrationTestBase
         var assistantClient = await LoginHelper.LoginAsAsync(Fixture, assistantUsername, UsersTestDataHelper.DefaultPassword);
         var assistantResponse = await assistantClient.GetAsync("/api/v1/finance/capital-transactions");
         Assert.Equal(HttpStatusCode.Forbidden, assistantResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task صفحة_المالية_عبر_HTTP_بنفس_شكل_طلبات_لوحة_الإدارة()
+    {
+        // لوحة الإدارة بتبعت التصنيف رقم (القيمة الافتراضية) أو نص رقمي ("2" من <select>)،
+        // والباك إند بيرجّع الـenums كأسماء (JsonStringEnumConverter عام) - الواجهة بتترجم بالاسم.
+        var client = await CreateAuthenticatedClientAsync();
+        var paymentDate = DateTime.UtcNow.ToString("yyyy-MM-dd");
+
+        var numberCategory = await client.PostAsJsonAsync("/api/v1/finance/expenses", new
+        {
+            branchId = Fixture.TestBranchId, category = 1, amount = 150.250m, paymentDateUtc = paymentDate,
+            periodYear = 2031, periodMonth = 1, notes = (string?)null
+        });
+        Assert.Equal(HttpStatusCode.Created, numberCategory.StatusCode);
+
+        var stringCategory = await client.PostAsJsonAsync("/api/v1/finance/expenses", new
+        {
+            branchId = Fixture.TestBranchId, category = "2", amount = 20.125m, paymentDateUtc = paymentDate,
+            periodYear = 2031, periodMonth = 1, notes = "فاتورة كهربا"
+        });
+        Assert.Equal(HttpStatusCode.Created, stringCategory.StatusCode);
+
+        var capital = await client.PostAsJsonAsync("/api/v1/finance/capital-transactions", new
+        {
+            branchId = Fixture.TestBranchId, type = "2", amount = 50m, occurredAtUtc = paymentDate, notes = (string?)null
+        });
+        Assert.Equal(HttpStatusCode.Created, capital.StatusCode);
+
+        var expenses = await client.GetFromJsonAsync<System.Text.Json.JsonElement>(
+            $"/api/v1/finance/expenses?branchId={Fixture.TestBranchId}&periodYear=2031&periodMonth=1");
+        var categories = expenses.GetProperty("items").EnumerateArray().Select(e => e.GetProperty("category").GetString()).ToList();
+        Assert.Contains("Rent", categories);
+        Assert.Contains("Electricity", categories);
+
+        var statement = await client.GetFromJsonAsync<System.Text.Json.JsonElement>(
+            $"/api/v1/finance/profit-statement?branchId={Fixture.TestBranchId}&year=2031&month=1");
+        Assert.Equal(170.375m, statement.GetProperty("totalExpenses").GetDecimal());
+        Assert.Equal(-170.375m, statement.GetProperty("netProfit").GetDecimal());
+
+        var capitalList = await client.GetFromJsonAsync<System.Text.Json.JsonElement>(
+            $"/api/v1/finance/capital-transactions?branchId={Fixture.TestBranchId}");
+        Assert.Contains(capitalList.GetProperty("items").EnumerateArray(), c => c.GetProperty("type").GetString() == "Withdrawal");
     }
 
     [Fact]

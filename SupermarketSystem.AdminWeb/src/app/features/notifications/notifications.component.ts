@@ -9,8 +9,9 @@ interface NotificationItemDto {
   id: string;
   title: string;
   message: string;
-  channel: number;
-  status: number;
+  // أسماء NotificationChannel/NotificationStatus بالـC# (JsonStringEnumConverter عام بالباك إند).
+  channel: string;
+  status: 'Pending' | 'Sent' | 'Read' | 'Failed';
   createdAtUtc: string;
   readAtUtc: string | null;
 }

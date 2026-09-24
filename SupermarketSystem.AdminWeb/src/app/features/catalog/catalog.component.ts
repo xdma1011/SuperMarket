@@ -24,7 +24,7 @@ interface ProductDto {
   id: string;
   name: string;
   categoryId: string;
-  status: number;
+  status: string;
   isBatchTracked: boolean;
   suggestedRetailPrice: number | null;
   expectedShelfLifeDays: number | null;

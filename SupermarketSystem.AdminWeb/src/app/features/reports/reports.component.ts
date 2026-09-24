@@ -341,14 +341,14 @@ export class ReportsComponent implements OnInit {
     this.loadActiveReport();
   }
 
-  formatCell(value: unknown, column: { type: string; enumMap?: Record<number, string> }): string {
+  formatCell(value: unknown, column: { type: string; enumMap?: Record<string, string> }): string {
     if (value === null || value === undefined) return '—';
 
     if (column.type === 'boolean') {
       return value ? 'نعم' : 'لا';
     }
     if (column.type === 'enum' && column.enumMap) {
-      return column.enumMap[value as number] ?? String(value);
+      return column.enumMap[String(value)] ?? String(value);
     }
     if (column.type === 'currency') {
       return Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

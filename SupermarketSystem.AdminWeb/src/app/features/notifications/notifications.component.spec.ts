@@ -27,7 +27,7 @@ describe('NotificationsComponent', () => {
 
   it('يحمّل الإشعارات تلقائيًا عند ngOnInit', async () => {
     apiClientSpy.get.and.returnValue(
-      of({ items: [{ id: '1', title: 'تنبيه', message: 'نص', channel: 1, status: 1, createdAtUtc: '', readAtUtc: null }], totalCount: 1 })
+      of({ items: [{ id: '1', title: 'تنبيه', message: 'نص', channel: 'InApp', status: 'Pending' as const, createdAtUtc: '', readAtUtc: null }], totalCount: 1 })
     );
 
     fixture.detectChanges();
