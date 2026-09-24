@@ -28,11 +28,16 @@ public sealed class UpdateUserHandler
 {
     private readonly IApplicationDbContext _context;
     private readonly IMemoryCache _cache;
+    private readonly ICurrentUserContext _currentUser;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public UpdateUserHandler(IApplicationDbContext context, IMemoryCache cache)
+    public UpdateUserHandler(
+        IApplicationDbContext context, IMemoryCache cache, ICurrentUserContext currentUser, IDateTimeProvider dateTimeProvider)
     {
         _context = context;
         _cache = cache;
+        _currentUser = currentUser;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<Result> HandleAsync(UpdateUserCommand command, CancellationToken cancellationToken)
@@ -62,6 +67,13 @@ public sealed class UpdateUserHandler
             return Result.Failure(Error.NotFound("User.BranchNotFound", $"الفرع '{command.BranchId}' غير موجود."));
         }
 
+        // التعطيل صار بيطرد فورًا (ActiveSessionValidator) - أدمن بيعطّل حسابه
+        // هو بالغلط بيقفل حاله برّا النظام بلا رجعة.
+        if (!command.IsActive && command.UserId == _currentUser.UserId)
+        {
+            return Result.Failure(Error.BusinessRule("User.CannotDeactivateSelf", "ما بتقدر تعطّل حسابك إنت."));
+        }
+
         user.UpdateProfile(command.FullName.Trim(), command.Email.Trim());
 
         if (command.IsActive)
@@ -71,6 +83,17 @@ public sealed class UpdateUserHandler
         else
         {
             user.Deactivate();
+
+            // إلغاء كل جلساته الفعّالة (سبب واضح بسجل الجلسات). الطرد الفوري نفسه
+            // مضمون أصلًا بفحص IsActive بكل طلب، هذا للتدقيق ودقة قائمة الجلسات.
+            var utcNow = _dateTimeProvider.UtcNow;
+            var activeSessions = await _context.UserSessions
+                .Where(s => s.UserId == command.UserId && s.RevokedAtUtc == null && s.ExpiresAtUtc > utcNow)
+                .ToListAsync(cancellationToken);
+            foreach (var session in activeSessions)
+            {
+                session.Revoke(SessionRevocationReason.UserDeactivated, utcNow);
+            }
         }
 
         var existingRoles = await _context.UserRoles

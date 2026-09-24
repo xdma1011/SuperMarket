@@ -149,6 +149,12 @@ public static class DependencyInjection
                     // سبب اختيارنا عمرًا قصيرًا أصلًا.
                     ClockSkew = TimeSpan.Zero
                 };
+
+                // طرد فوري: الجلسة والمستخدم يُفحصان حيًّا بكل طلب - راجع ActiveSessionValidator.
+                options.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = ActiveSessionValidator.ValidateAsync
+                };
             });
 
         // FallbackPolicy لا MapGroup("").RequireAuthorization() — الأخيرة

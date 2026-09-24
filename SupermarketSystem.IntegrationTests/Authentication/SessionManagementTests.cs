@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using SupermarketSystem.IntegrationTests.Common;
 using Xunit;
 
 namespace SupermarketSystem.IntegrationTests.Authentication;
@@ -126,6 +128,136 @@ public sealed class SessionManagementTests : IntegrationTestBase
         var refreshAfterRevokeClient = Fixture.Factory.CreateClient();
         var refreshResponse = await refreshAfterRevokeClient.PostAsJsonAsync("/api/v1/auth/refresh", new { RefreshToken = refreshToken });
         Assert.Equal(HttpStatusCode.Forbidden, refreshResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task إلغاء_جلسة_كاشير_يطرده_فورًا_وأي_طلب_بعدها_يرجع_401()
+    {
+        var (userId, username) = await UsersTestDataHelper.CreateUserWithRoleReturningUsernameAsync(
+            Fixture.Factory.Services, Fixture.TestBranchId, UsersTestDataHelper.CashierRoleId, "session.kick.test");
+        var cashierClient = await LoginHelper.LoginAsAsync(Fixture, username, UsersTestDataHelper.DefaultPassword, appType: "Cashier");
+
+        Assert.Equal(HttpStatusCode.OK, (await cashierClient.GetAsync("/api/v1/auth/my-permissions")).StatusCode);
+
+        Guid sessionId;
+        using (var scope = CreateScope())
+        {
+            sessionId = (await CreateDbContext(scope).UserSessions.FirstAsync(s => s.UserId == userId)).Id;
+        }
+
+        var adminClient = await CreateAuthenticatedClientAsync();
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await adminClient.PostAsync($"/api/v1/auth/sessions/{sessionId}/revoke", content: null)).StatusCode);
+
+        // نفس توكن الوصول (لسه ضمن عمره 15 دقيقة) - مرفوض فورًا.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await cashierClient.GetAsync("/api/v1/auth/my-permissions")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await cashierClient.GetAsync("/api/v1/payment-methods")).StatusCode);
+    }
+
+    [Fact]
+    public async Task التوكن_الملغى_ما_بيمنع_الكاشير_من_تسجيل_الدخول_من_جديد()
+    {
+        // تطبيق الكاشير بيبعت التوكن القديم حتى مع طلب الدخول - لازم الدخول يضل شغّال.
+        var (userId, username) = await UsersTestDataHelper.CreateUserWithRoleReturningUsernameAsync(
+            Fixture.Factory.Services, Fixture.TestBranchId, UsersTestDataHelper.CashierRoleId, "session.relogin.test");
+        var cashierClient = await LoginHelper.LoginAsAsync(Fixture, username, UsersTestDataHelper.DefaultPassword, appType: "Cashier");
+
+        Guid sessionId;
+        using (var scope = CreateScope())
+        {
+            sessionId = (await CreateDbContext(scope).UserSessions.FirstAsync(s => s.UserId == userId)).Id;
+        }
+
+        var adminClient = await CreateAuthenticatedClientAsync();
+        await adminClient.PostAsync($"/api/v1/auth/sessions/{sessionId}/revoke", content: null);
+
+        var relogin = await cashierClient.PostAsJsonAsync("/api/v1/auth/login", new
+        {
+            Username = username,
+            Password = UsersTestDataHelper.DefaultPassword,
+            AppType = "Cashier",
+            BranchId = Fixture.TestBranchId
+        });
+        Assert.Equal(HttpStatusCode.OK, relogin.StatusCode);
+
+        var newToken = JsonDocument.Parse(await relogin.Content.ReadAsStringAsync()).RootElement.GetProperty("accessToken").GetString();
+        cashierClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", newToken);
+        Assert.Equal(HttpStatusCode.OK, (await cashierClient.GetAsync("/api/v1/auth/my-permissions")).StatusCode);
+    }
+
+    [Fact]
+    public async Task تعطيل_مستخدم_يطرده_فورًا_ويلغي_كل_جلساته()
+    {
+        var (userId, username) = await UsersTestDataHelper.CreateUserWithRoleReturningUsernameAsync(
+            Fixture.Factory.Services, Fixture.TestBranchId, UsersTestDataHelper.CashierRoleId, "user.deactivate.kick.test");
+        var cashierClient = await LoginHelper.LoginAsAsync(Fixture, username, UsersTestDataHelper.DefaultPassword, appType: "Cashier");
+        Assert.Equal(HttpStatusCode.OK, (await cashierClient.GetAsync("/api/v1/auth/my-permissions")).StatusCode);
+
+        using (var scope = CreateScope())
+        {
+            await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+            var handler = scope.ServiceProvider.GetRequiredService<SupermarketSystem.Application.Users.UpdateUser.UpdateUserHandler>();
+            var result = await handler.HandleAsync(
+                new SupermarketSystem.Application.Users.UpdateUser.UpdateUserCommand(
+                    userId, "كاشير معطَّل", $"{Guid.NewGuid():N}@test.local",
+                    UsersTestDataHelper.CashierRoleId, Fixture.TestBranchId, IsActive: false),
+                CancellationToken.None);
+            Assert.True(result.IsSuccess);
+        }
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await cashierClient.GetAsync("/api/v1/auth/my-permissions")).StatusCode);
+
+        using (var scope = CreateScope())
+        {
+            var sessions = await CreateDbContext(scope).UserSessions.AsNoTracking().Where(s => s.UserId == userId).ToListAsync();
+            Assert.NotEmpty(sessions);
+            Assert.All(sessions, s =>
+            {
+                Assert.NotNull(s.RevokedAtUtc);
+                Assert.Equal(SupermarketSystem.Domain.Identity.SessionRevocationReason.UserDeactivated, s.RevocationReason);
+            });
+        }
+
+        // والمعطَّل ما بيقدر يرجع يدخل أصلًا.
+        var relogin = await Fixture.Factory.CreateClient().PostAsJsonAsync("/api/v1/auth/login", new
+        {
+            Username = username,
+            Password = UsersTestDataHelper.DefaultPassword,
+            AppType = "Cashier",
+            BranchId = Fixture.TestBranchId
+        });
+        Assert.NotEqual(HttpStatusCode.OK, relogin.StatusCode);
+    }
+
+    [Fact]
+    public async Task الأدمن_ما_بيقدر_يعطّل_حسابه_هو()
+    {
+        using var scope = CreateScope();
+        await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+        var handler = scope.ServiceProvider.GetRequiredService<SupermarketSystem.Application.Users.UpdateUser.UpdateUserHandler>();
+
+        try
+        {
+            var result = await handler.HandleAsync(
+                new SupermarketSystem.Application.Users.UpdateUser.UpdateUserCommand(
+                    Fixture.AdminUserId, "مدير الاختبار", "test.admin@local.invalid",
+                    UsersTestDataHelper.MasterAdminRoleId, Fixture.TestBranchId, IsActive: false),
+                CancellationToken.None);
+
+            Assert.True(result.IsFailure);
+            Assert.Equal("User.CannotDeactivateSelf", result.Error!.Code);
+        }
+        finally
+        {
+            // حماية باقي الاختبارات لو الحارس انكسر يومًا: أدمن الاختبار مشترك بين كل الاختبارات.
+            var db = CreateDbContext(scope);
+            var admin = await db.Users.IgnoreQueryFilters().FirstAsync(u => u.Id == Fixture.AdminUserId);
+            if (!admin.IsActive)
+            {
+                admin.Activate();
+                await db.SaveChangesAsync();
+            }
+        }
     }
 
     [Fact]
