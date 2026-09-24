@@ -4,7 +4,7 @@ import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
-import { ReportsOperation, SalesOperation, ReviewsOperation, BackupsOperation } from '../../core/api/operations';
+import { ReportsOperation, SalesOperation, ReviewsOperation, BackupsOperation, NotificationsOperation } from '../../core/api/operations';
 
 interface SalesSummaryPeriodDto {
   invoiceCount: number;
@@ -64,6 +64,8 @@ export class DashboardComponent implements OnInit {
   readonly negativeStockCount = signal(0);
   readonly reorderNeededCount = signal(0);
   readonly pendingReviewsCount = signal(0);
+  /** تنبيهات خطيرة آخر 24 ساعة (عجز صندوق، نقص جرد، فاتورة أوفلاين انحذفت، قفل حساب...). */
+  readonly criticalAlertsCount = signal(0);
   readonly loading = signal(true);
 
   /** null = لسه ما تحمّل / تعذّر الجلب (بلا تنبيه بهالحالة، تفاديًا لتنبيه كاذب). */
@@ -82,7 +84,7 @@ export class DashboardComponent implements OnInit {
   }
 
   get totalAlerts(): number {
-    return this.negativeStockCount() + this.reorderNeededCount() + this.pendingReviewsCount();
+    return this.negativeStockCount() + this.reorderNeededCount() + this.pendingReviewsCount() + this.criticalAlertsCount();
   }
 
   /** أقدم من 24 ساعة = تنبيه. null (لسه ما توفرت بيانات) = بلا تنبيه، ما نفترض الأسوأ بلا دليل. */
@@ -118,6 +120,10 @@ export class DashboardComponent implements OnInit {
       // عنصر هو آخر نسخة فعليًا، بلا حاجة نجيب القائمة كاملة.
       firstValueFrom(this.apiClient.get<GetBackupsResponse>(ApiController.Backups, BackupsOperation.List, undefined, {
         pageNumber: 1, pageSize: 5
+      })),
+      firstValueFrom(this.apiClient.get<{ totalCount: number }>(ApiController.Notifications, NotificationsOperation.List, undefined, {
+        pageNumber: 1, pageSize: 1, minSeverity: 'Critical',
+        sinceUtc: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
       }))
     ]);
 
@@ -126,6 +132,7 @@ export class DashboardComponent implements OnInit {
     if (results[2].status === 'fulfilled') this.negativeStockCount.set(results[2].value.totalCount);
     if (results[3].status === 'fulfilled') this.reorderNeededCount.set(results[3].value.totalCount);
     if (results[4].status === 'fulfilled') this.pendingReviewsCount.set(results[4].value.totalCount);
+    if (results[6].status === 'fulfilled') this.criticalAlertsCount.set(results[6].value.totalCount);
     if (results[5].status === 'fulfilled') {
       // أول نسخة ناجحة ضمن آخر 5 محاولات - لا أحدث عنصر فقط، تفاديًا
       // لتنبيه كاذب لو آخر محاولة فشلت بس قبلها نجحت وحدة.

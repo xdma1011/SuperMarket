@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using SupermarketSystem.Domain.Notifications;
+using SupermarketSystem.Application.Common.Notifications;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Domain.Inventory;
@@ -42,6 +44,7 @@ public sealed class RecordComplimentaryIssueHandler
     private readonly ICurrentUserContext _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ISettingsProvider _settingsProvider;
+    private readonly INotificationDispatcher _notificationDispatcher;
 
     public RecordComplimentaryIssueHandler(
         IApplicationDbContext context,
@@ -49,8 +52,10 @@ public sealed class RecordComplimentaryIssueHandler
         ITransactionalExecutor transactionalExecutor,
         ICurrentUserContext currentUser,
         IDateTimeProvider dateTimeProvider,
-        ISettingsProvider settingsProvider)
+        ISettingsProvider settingsProvider,
+        INotificationDispatcher notificationDispatcher)
     {
+        _notificationDispatcher = notificationDispatcher;
         _context = context;
         _stockOperations = stockOperations;
         _transactionalExecutor = transactionalExecutor;
@@ -106,7 +111,7 @@ public sealed class RecordComplimentaryIssueHandler
 
         var needsReview = (recentQuantity + quantityBase) > threshold;
 
-        return await _transactionalExecutor.ExecuteAsync<RecordComplimentaryIssueResponse>(async ct =>
+        var result = await _transactionalExecutor.ExecuteAsync<RecordComplimentaryIssueResponse>(async ct =>
         {
             var outcome = await _stockOperations.TryDecreaseAsync(
                 command.ProductId, command.BranchId, productBatchId: null, quantityBase,
@@ -137,5 +142,22 @@ public sealed class RecordComplimentaryIssueHandler
 
             return Result.Success(new RecordComplimentaryIssueResponse(movement.Id, quantityBase, needsReview));
         }, cancellationToken);
+
+        // فوق الحد اليومي = بينبّه فورًا (مش بس بقائمة المراجعات)، "سماح مع مراجعة" §1.6 - العملية
+        // نجحت، بس خروج بضاعة بلا بيع بكمية كبيرة هو باب سرقة لازم صاحب المحل يشوفه.
+        if (result.IsSuccess && result.Value.FlaggedForReview)
+        {
+            var productName = await AlertText.ProductNameAsync(_context, command.ProductId, cancellationToken);
+            var branchName = await AlertText.BranchNameAsync(_context, command.BranchId, cancellationToken);
+            var actor = await AlertText.UserNameAsync(_context, _currentUser.UserId, cancellationToken);
+            await _notificationDispatcher.NotifyAsync(
+                $"ضيافة فوق الحد اليومي — {productName}",
+                $"الفرع: {branchName}\nسجّلها: {actor}\nالكمية: {result.Value.QuantityBase:0.###} (مجموع آخر 24 ساعة تجاوز الحد {threshold:0.###})" +
+                (string.IsNullOrWhiteSpace(command.Reason) ? "" : $"\nملاحظة: {command.Reason}"),
+                cancellationToken,
+                NotificationSeverity.Warning);
+        }
+
+        return result;
     }
 }

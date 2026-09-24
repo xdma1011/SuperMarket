@@ -62,6 +62,15 @@
     </div>
 
     <div class="alert-list">
+      @if (criticalAlertsCount() > 0) {
+        <a class="alert-row" routerLink="/notifications">
+          <span class="alert-dot" style="background: var(--red)"></span>
+          <div class="alert-text">
+            <span class="alert-title">{{ criticalAlertsCount() }} تنبيه خطير آخر 24 ساعة</span>
+            <span class="alert-detail">عجز صندوق، نقص جرد، فاتورة أوفلاين انحذفت، قفل حساب… افتح الإشعارات.</span>
+          </div>
+        </a>
+      }
       @if (negativeStockCount() > 0) {
         <div class="alert-row">
           <span class="alert-dot" style="background: var(--red)"></span>

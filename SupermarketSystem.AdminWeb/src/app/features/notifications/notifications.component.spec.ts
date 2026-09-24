@@ -27,7 +27,7 @@ describe('NotificationsComponent', () => {
 
   it('يحمّل الإشعارات تلقائيًا عند ngOnInit', async () => {
     apiClientSpy.get.and.returnValue(
-      of({ items: [{ id: '1', title: 'تنبيه', message: 'نص', channel: 'InApp', status: 'Pending' as const, createdAtUtc: '', readAtUtc: null }], totalCount: 1 })
+      of({ items: [{ id: '1', title: 'تنبيه', message: 'نص', channel: 'InApp', status: 'Pending' as const, createdAtUtc: '', readAtUtc: null, severity: 'Critical' as const }], totalCount: 1 })
     );
 
     fixture.detectChanges();
@@ -64,5 +64,30 @@ describe('NotificationsComponent', () => {
 
       expect(component.errorMessage()).toBeNull();
     });
+  });
+
+  it('فلتر "الخطيرة بس" بيبعت minSeverity=Critical ويعيد التحميل', async () => {
+    apiClientSpy.get.and.returnValue(of({ items: [], totalCount: 0 }));
+
+    component.setSeverityFilter('Critical');
+    await fixture.whenStable();
+
+    const lastQuery = apiClientSpy.get.calls.mostRecent().args[3] as Record<string, unknown>;
+    expect(lastQuery['minSeverity']).toBe('Critical');
+    expect(component.minSeverity()).toBe('Critical');
+  });
+
+  it('التنبيه الخطير بيتلوّن وبيبين عليه "خطير"', async () => {
+    apiClientSpy.get.and.returnValue(of({
+      items: [{ id: '1', title: 'تقفيل صندوق — عجز 5.000', message: 'سطر 1\nسطر 2', channel: 'InApp', status: 'Pending', createdAtUtc: '', readAtUtc: null, severity: 'Critical' }],
+      totalCount: 1
+    }));
+
+    await component.load();
+    fixture.detectChanges();
+
+    const card = (fixture.nativeElement as HTMLElement).querySelector('.notif-card');
+    expect(card?.classList.contains('critical')).toBeTrue();
+    expect(card?.textContent).toContain('خطير');
   });
 });

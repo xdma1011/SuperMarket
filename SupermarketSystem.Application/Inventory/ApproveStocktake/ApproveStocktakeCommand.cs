@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using SupermarketSystem.Domain.Notifications;
+using SupermarketSystem.Application.Common.Notifications;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Domain.Identity;
@@ -43,6 +45,7 @@ public sealed class ApproveStocktakeHandler
     private readonly ISettingsProvider _settingsProvider;
     private readonly ICurrentUserContext _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly INotificationDispatcher _notificationDispatcher;
 
     public ApproveStocktakeHandler(
         IApplicationDbContext context,
@@ -50,8 +53,10 @@ public sealed class ApproveStocktakeHandler
         ITransactionalExecutor transactionalExecutor,
         ISettingsProvider settingsProvider,
         ICurrentUserContext currentUser,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        INotificationDispatcher notificationDispatcher)
     {
+        _notificationDispatcher = notificationDispatcher;
         _context = context;
         _stockOperations = stockOperations;
         _transactionalExecutor = transactionalExecutor;
@@ -100,7 +105,7 @@ public sealed class ApproveStocktakeHandler
         var actorUserId = _currentUser.UserId ?? User.SystemUserId;
         var occurredAtUtc = _dateTimeProvider.UtcNow;
 
-        return await _transactionalExecutor.ExecuteAsync<ApproveStocktakeResponse>(async ct =>
+        var result = await _transactionalExecutor.ExecuteAsync<ApproveStocktakeResponse>(async ct =>
         {
             var appliedCorrections = new List<ApproveStocktakeAppliedCorrectionDto>();
             var movements = new List<StockMovement>();
@@ -157,6 +162,29 @@ public sealed class ApproveStocktakeHandler
 
             return Result.Success(new ApproveStocktakeResponse(stocktake.Id, stocktake.StocktakeNumber, appliedCorrections));
         }, cancellationToken);
+
+        // نقص بالجرد = بضاعة طلعت بلا بيع ولا تسجيل - أوضح إشارة سرقة بالمخزون.
+        var shortages = result.IsSuccess
+            ? result.Value.AppliedCorrections.Where(c => c.Variance < 0).ToList()
+            : new List<ApproveStocktakeAppliedCorrectionDto>();
+        if (shortages.Count > 0)
+        {
+            var lines = new List<string>();
+            foreach (var shortage in shortages)
+            {
+                var productName = await AlertText.ProductNameAsync(_context, shortage.ProductId, cancellationToken);
+                lines.Add($"- {productName}: ناقص {Math.Abs(shortage.Variance):0.###}");
+            }
+
+            var branchName = await AlertText.BranchNameAsync(_context, stocktake.BranchId, cancellationToken);
+            await _notificationDispatcher.NotifyAsync(
+                $"نقص بالجرد — {stocktake.StocktakeNumber}",
+                $"الفرع: {branchName}\n{string.Join("\n", lines)}\nالقيمة بتنحسب خسارة بكشف الربح الشهري.",
+                cancellationToken,
+                NotificationSeverity.Critical);
+        }
+
+        return result;
     }
 
     private async Task<Stock> GetOrCreateTrackedStockAsync(Guid branchId, Guid productId, Guid? productBatchId, CancellationToken cancellationToken)

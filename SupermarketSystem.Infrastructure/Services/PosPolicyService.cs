@@ -58,7 +58,7 @@ public sealed class PosPolicyService : IPosPolicyService
             PosOperation.VoidSale => await EvaluateSimpleToggleAsync(
                 PosPolicyKeys.AllowVoidSale,
                 DefaultAllowVoidSale,
-                "Voiding sales is disabled in system settings.",
+                "إلغاء فواتير البيع مقفول من إعدادات النظام.",
                 cancellationToken),
 
             PosOperation.ProcessReturn => await EvaluateReturnAsync(amount, cancellationToken),
@@ -66,18 +66,18 @@ public sealed class PosPolicyService : IPosPolicyService
             PosOperation.CrossMethodRefund => await EvaluateSimpleToggleAsync(
                 PosPolicyKeys.AllowCrossMethodRefund,
                 DefaultAllowCrossMethodRefund,
-                "Refunding to a payment method other than the original is disabled in system settings.",
+                "الاسترجاع بطريقة دفع غير الأصلية مقفول من إعدادات النظام.",
                 cancellationToken,
                 // Even when enabled, this always warrants a look: it is the
                 // one combination that creates a drawer-vs-bank mismatch.
-                reviewReasonWhenAllowed: "Refund issued to a different payment method than the original sale."),
+                reviewReasonWhenAllowed: "الاسترجاع انعمل بطريقة دفع غير طريقة البيع الأصلية."),
 
             PosOperation.ManualDiscount => await EvaluateManualDiscountAsync(amount, comparisonBase, cancellationToken),
 
             PosOperation.ReversePayment => await EvaluateSimpleToggleAsync(
                 PosPolicyKeys.AllowPaymentReversal,
                 DefaultAllowPaymentReversal,
-                "Payment reversal is disabled in system settings.",
+                "عكس الدفعات مقفول من إعدادات النظام.",
                 cancellationToken),
 
             _ => PolicyDecision.Deny($"Unknown POS operation '{operation}'.")
@@ -109,7 +109,7 @@ public sealed class PosPolicyService : IPosPolicyService
 
         if (!allowed)
         {
-            return PolicyDecision.Deny("Returns are disabled in system settings.");
+            return PolicyDecision.Deny("الإرجاع مقفول من إعدادات النظام.");
         }
 
         var threshold = await _settings.GetDecimalAsync(
@@ -123,7 +123,7 @@ public sealed class PosPolicyService : IPosPolicyService
         if (threshold > 0m && returnAmount > threshold)
         {
             return PolicyDecision.AllowWithReview(
-                $"Return value {returnAmount} exceeds the high-value review threshold {threshold}.");
+                $"قيمة الإرجاع {returnAmount:0.000} فوق حد المراجعة {threshold:0.000}.");
         }
 
         return PolicyDecision.Allow();
@@ -141,7 +141,7 @@ public sealed class PosPolicyService : IPosPolicyService
 
         if (!allowed)
         {
-            return PolicyDecision.Deny("Manual discounts are disabled in system settings.");
+            return PolicyDecision.Deny("الخصم اليدوي مقفول من إعدادات النظام.");
         }
 
         var maxPercentage = await _settings.GetDecimalAsync(
@@ -151,7 +151,7 @@ public sealed class PosPolicyService : IPosPolicyService
 
         if (maxPercentage <= 0m)
         {
-            return PolicyDecision.Deny("Manual discounts are disabled (maximum permitted percentage is zero).");
+            return PolicyDecision.Deny("الخصم اليدوي مقفول (النسبة المسموحة صفر).");
         }
 
         // Without a base to compare against, the ceiling cannot be evaluated.
@@ -159,7 +159,7 @@ public sealed class PosPolicyService : IPosPolicyService
         // discount never passes through completely unremarked.
         if (lineTotal is null or <= 0m)
         {
-            return PolicyDecision.AllowWithReview("Manual discount applied without a comparable base amount.");
+            return PolicyDecision.AllowWithReview("خصم يدوي بلا مبلغ أساسي للمقارنة.");
         }
 
         var requestedPercentage = discountAmount / lineTotal.Value * 100m;
@@ -167,7 +167,7 @@ public sealed class PosPolicyService : IPosPolicyService
         if (requestedPercentage > maxPercentage)
         {
             return PolicyDecision.Deny(
-                $"Manual discount of {requestedPercentage:F2}% exceeds the maximum permitted {maxPercentage:F2}%.");
+                $"خصم يدوي {requestedPercentage:F2}% فوق الحد المسموح {maxPercentage:F2}%.");
         }
 
         return PolicyDecision.Allow();

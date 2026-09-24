@@ -63,7 +63,7 @@ public class SystemSettingConfiguration : IEntityTypeConfiguration<SystemSetting
             NewSetting("50a800fa-ae5d-4f4e-a50b-ff8adb30e7ff", NotificationSettingsKeys.TelegramChatId, "",
                 "Telegram chat id notifications are sent to. Empty disables the Telegram channel."),
             NewSetting("5fddc559-554c-4f20-8923-bfb5c1bb7c6e", CashClosingSettingsKeys.VarianceAlertThreshold, "0",
-                "Cash-closing variance (absolute value) above which a notification is sent. 0 disables the alert."),
+                "Cash-closing variance (absolute value) above which a notification is sent. 0 = any variance (deficit or surplus) alerts."),
             // إعدادات قراءة فاتورة الشراء بالذكاء الاصطناعي — مفاتيح
             // API فاضية عمدًا (المستخدم يدخلها بنفسه لاحقًا من لوحة
             // الإعدادات)، أسماء الموديلات بقيمها الافتراضية الحالية.

@@ -20,6 +20,8 @@ describe('DashboardComponent', () => {
           return of({ totalCount: 2 });
         case 'backups':
           return of({ items: { items: [{ createdAtUtc: new Date().toISOString(), statusCode: 1 }], totalCount: 1 } });
+        case 'notifications':
+          return of({ items: [], totalCount: 3 });
         default:
           return of({ items: [], totalCount: 0 });
       }
@@ -52,6 +54,7 @@ describe('DashboardComponent', () => {
     expect(component.summary()?.totalSales).toBe(1000);
     expect(component.recentInvoices().length).toBe(1);
     expect(component.pendingReviewsCount()).toBe(2);
+    expect(component.criticalAlertsCount()).toBe(3);
     expect(component.lastBackupAtUtc()).toBeTruthy();
     expect(component.loading()).toBeFalse();
   });

@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using SupermarketSystem.Domain.Notifications;
+using SupermarketSystem.Application.Common.Notifications;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Domain.Catalog;
@@ -17,13 +19,16 @@ public sealed class ApprovePriceChangeRequestHandler
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ICatalogVersionService _catalogVersionService;
     private readonly ITransactionalExecutor _transactionalExecutor;
+    private readonly INotificationDispatcher _notificationDispatcher;
 
     public ApprovePriceChangeRequestHandler(
         IApplicationDbContext context, ICurrentUserContext currentUser,
         IDateTimeProvider dateTimeProvider, ICatalogVersionService catalogVersionService,
-        ITransactionalExecutor transactionalExecutor)
+        ITransactionalExecutor transactionalExecutor,
+        INotificationDispatcher notificationDispatcher)
     {
         _transactionalExecutor = transactionalExecutor;
+        _notificationDispatcher = notificationDispatcher;
         _context = context;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
@@ -51,6 +56,7 @@ public sealed class ApprovePriceChangeRequestHandler
 
         var actorUserId = _currentUser.UserId ?? User.SystemUserId;
         var occurredAtUtc = _dateTimeProvider.UtcNow;
+        var priceBeforeApproval = productBranch.SellingPrice;
 
         // السعر ورقم النسخة بنفس المعاملة - راجع PriceChangeRequest.AppliedAtCatalogVersion.
         var applied = await _transactionalExecutor.ExecuteAsync<bool>(async ct =>
@@ -63,7 +69,37 @@ public sealed class ApprovePriceChangeRequestHandler
             return Result.Success(true);
         }, cancellationToken);
 
-        return applied.IsSuccess ? Result.Success() : Result.Failure(applied.Error);
+        if (applied.IsFailure)
+        {
+            return Result.Failure(applied.Error);
+        }
+
+        await NotifyIfDecreasedAsync(productBranch.Id, priceBeforeApproval, request.RequestedPrice, cancellationToken);
+        return Result.Success();
+    }
+
+    /// <summary>تنزيل سعر بيع = الاتجاه الخطِر (بيع لصاحب بسعر أقل) - تنبيه بكل تنزيل، مش بالرفع.</summary>
+    private async Task NotifyIfDecreasedAsync(Guid productBranchId, decimal oldPrice, decimal newPrice, CancellationToken cancellationToken)
+    {
+        if (newPrice >= oldPrice)
+        {
+            return;
+        }
+
+        var link = await _context.ProductBranches.AsNoTracking()
+            .Where(pb => pb.Id == productBranchId)
+            .Select(pb => new { pb.ProductId, pb.BranchId })
+            .FirstAsync(cancellationToken);
+        var productName = await AlertText.ProductNameAsync(_context, link.ProductId, cancellationToken);
+        var branchName = await AlertText.BranchNameAsync(_context, link.BranchId, cancellationToken);
+        var actor = await AlertText.UserNameAsync(_context, _currentUser.UserId, cancellationToken);
+        var percent = oldPrice == 0 ? 0 : (oldPrice - newPrice) / oldPrice * 100m;
+
+        await _notificationDispatcher.NotifyAsync(
+            $"تنزيل سعر — {productName}",
+            $"الفرع: {branchName}\nمن {oldPrice:0.000} إلى {newPrice:0.000} (-{percent:0.#}%)\nغيّره: {actor}",
+            cancellationToken,
+            NotificationSeverity.Warning);
     }
 }
 

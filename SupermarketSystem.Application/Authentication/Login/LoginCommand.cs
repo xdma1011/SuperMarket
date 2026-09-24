@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SupermarketSystem.Domain.Notifications;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Domain.Identity;
@@ -53,6 +54,7 @@ public sealed class LoginHandler
     private readonly ITokenService _tokenService;
     private readonly ISettingsProvider _settingsProvider;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly INotificationDispatcher _notificationDispatcher;
 
     private static Error InvalidCredentials()
         => Error.Forbidden("Auth.InvalidCredentials", "اسم المستخدم أو كلمة السر غير صحيحة.");
@@ -62,8 +64,10 @@ public sealed class LoginHandler
         IPasswordHasher passwordHasher,
         ITokenService tokenService,
         ISettingsProvider settingsProvider,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        INotificationDispatcher notificationDispatcher)
     {
+        _notificationDispatcher = notificationDispatcher;
         _context = context;
         _passwordHasher = passwordHasher;
         _tokenService = tokenService;
@@ -122,6 +126,19 @@ public sealed class LoginHandler
         if (verification == PasswordVerificationOutcome.Failed)
         {
             await LogAttemptAsync(user.Id, command, success: false, utcNow, cancellationToken);
+
+            // هالمحاولة بالذات هي اللي قفلت الحساب (قبلها ما كان مقفول) - تخمين كلمة سر على
+            // حساب حد تاني، تنبيه واحد لكل قفل.
+            if (await CheckLockoutAsync(user.Id, utcNow, cancellationToken) is not null)
+            {
+                await _notificationDispatcher.NotifyAsync(
+                    $"قفل حساب — {user.Username}",
+                    $"الحساب انقفل مؤقتًا بعد محاولات دخول فاشلة متتالية.\nالتطبيق: {(command.AppType == ClientAppType.Cashier ? "الكاشير" : "لوحة الإدارة")}\n" +
+                    $"الجهاز: {command.DeviceInfo ?? "غير معروف"}\nIP: {command.IpAddress ?? "غير معروف"}",
+                    cancellationToken,
+                    NotificationSeverity.Critical);
+            }
+
             return Result.Failure<LoginResponse>(InvalidCredentials());
         }
 

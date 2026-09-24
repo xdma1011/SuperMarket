@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using SupermarketSystem.Domain.Notifications;
+using SupermarketSystem.Application.Common.Notifications;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Policies;
 using SupermarketSystem.Application.Common.Results;
@@ -427,13 +429,24 @@ public sealed class ProcessReturnHandler
                 returnInvoice.TotalRefundedAmount, originalInvoice.Status, WasReplay: false, reviewFlags));
         }, cancellationToken);
 
-        // التنبيه بعد الالتزام فقط.
-        if (result.IsSuccess && result.Value.ReviewFlags.Count > 0)
+        // التنبيه بعد الالتزام فقط. كل إرجاع بينبّه (مش بس المعلَّم): الإرجاع الوهمي - تسجيل
+        // إرجاع ما صار وأخذ المصاري - هو بالضبط الخوف اللي حكى عنه صاحب المشروع، والتنبيه
+        // الفوري بيخلّيه يطابق الإرجاع مع البضاعة الفعلية وهي لسه قريبة.
+        if (result.IsSuccess && !result.Value.WasReplay)
         {
+            var cashier = await AlertText.UserNameAsync(_context, _currentUser.UserId, cancellationToken);
+            var branchName = await AlertText.BranchNameAsync(_context, originalInvoice.BranchId, cancellationToken);
+            var flags = result.Value.ReviewFlags.Count > 0
+                ? $"\n⚠️ {string.Join("\n⚠️ ", result.Value.ReviewFlags)}"
+                : "";
             await _notificationDispatcher.NotifyAsync(
-                $"مراجعة مطلوبة — إرجاع {result.Value.InvoiceNumber}",
-                $"- {string.Join("\n- ", result.Value.ReviewFlags)}",
-                cancellationToken);
+                $"إرجاع — {result.Value.InvoiceNumber}",
+                $"الفرع: {branchName}\nالكاشير: {cashier}\nالفاتورة الأصلية: {originalInvoice.InvoiceNumber}\n" +
+                $"قيمة الإرجاع: {result.Value.TotalAmount:0.000} - المسترجع للزبون: {result.Value.TotalRefundedAmount:0.000}\n" +
+                $"السبب: {AlertText.ReturnReason(command.Reason)}{(string.IsNullOrWhiteSpace(command.Notes) ? "" : $" - {command.Notes}")}" +
+                flags,
+                cancellationToken,
+                result.Value.ReviewFlags.Count > 0 ? NotificationSeverity.Critical : NotificationSeverity.Warning);
         }
 
         return result;

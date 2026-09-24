@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SupermarketSystem.Domain.Notifications;
 using SupermarketSystem.Application.Common.Interfaces;
 
 namespace SupermarketSystem.Application.CashierSync.ReportDiscardedPendingSale;
@@ -68,7 +69,8 @@ public sealed class ReportDiscardedPendingSaleHandler
             $"عدد محاولات الإرسال: {command.AttemptCount}\n" +
             $"آخر خطأ: {lastErrorText}\n\n" +
             "هذه الفاتورة لم تصل السيرفر إطلاقًا ولن تصل بعد الآن - إذا كان في كاش أو بضاعة تحرّكوا فعليًا بالمحل، لازم مراجعة يدوية.",
-            cancellationToken);
+            cancellationToken,
+            NotificationSeverity.Critical);
 
         return new ReportDiscardedPendingSaleResponse(true);
     }

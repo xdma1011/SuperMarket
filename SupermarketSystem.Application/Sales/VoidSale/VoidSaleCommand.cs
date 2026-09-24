@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using SupermarketSystem.Domain.Notifications;
+using SupermarketSystem.Application.Common.Notifications;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Policies;
 using SupermarketSystem.Application.Common.Results;
@@ -199,11 +201,15 @@ public sealed class VoidSaleHandler
         // الإلغاء عملية حساسة دائمًا، فبينبعث تنبيه بلا شرط قيمة.
         if (result.IsSuccess)
         {
+            var voidedBy = await AlertText.UserNameAsync(_context, _currentUser.UserId, cancellationToken);
+            var branchName = await AlertText.BranchNameAsync(_context, invoice.BranchId, cancellationToken);
             await _notificationDispatcher.NotifyAsync(
                 $"إلغاء فاتورة — {result.Value.InvoiceNumber}",
-                $"السبب: {command.Reason}\nحركات مخزون معكوسة: {result.Value.StockMovementsReversed}\n" +
-                $"دفعات معكوسة: {result.Value.PaymentsReversed}\nكاش أُعيد للدرج: {result.Value.CashReturnedToDrawer:F2}",
-                cancellationToken);
+                $"الفرع: {branchName}\nألغاها: {voidedBy}\nالمبلغ: {invoice.TotalAmount:0.000}\n" +
+                $"السبب: {AlertText.VoidReason(command.Reason)}{(string.IsNullOrWhiteSpace(command.Notes) ? "" : $" - {command.Notes}")}\n" +
+                $"كاش رجع للدرج: {result.Value.CashReturnedToDrawer:0.000}",
+                cancellationToken,
+                NotificationSeverity.Warning);
         }
 
         return result;

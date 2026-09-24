@@ -16,6 +16,8 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
         builder.Property(n => n.Message).IsRequired().HasMaxLength(2000);
         builder.Property(n => n.Channel).HasConversion<int>().IsRequired();
         builder.Property(n => n.Status).HasConversion<int>().IsRequired();
+        // التنبيهات القديمة قبل هالعمود = "مهمة" (Warning).
+        builder.Property(n => n.Severity).HasConversion<int>().IsRequired().HasDefaultValue(NotificationSeverity.Warning);
         builder.Property(n => n.ReadAtUtc).HasColumnType("datetime2");
         builder.Property(n => n.CreatedAtUtc).HasColumnType("datetime2").IsRequired();
         builder.Property(n => n.UpdatedAtUtc).HasColumnType("datetime2");

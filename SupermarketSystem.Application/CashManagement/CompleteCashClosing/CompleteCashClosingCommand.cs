@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using SupermarketSystem.Application.Common.Notifications;
+using SupermarketSystem.Domain.Notifications;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Domain.CashManagement;
@@ -310,13 +312,21 @@ public sealed class CompleteCashClosingHandler
         var varianceThreshold = await _settingsProvider.GetDecimalAsync(
             CashClosingSettingsKeys.VarianceAlertThreshold, defaultValue: 0m, cancellationToken);
 
-        if (varianceThreshold > 0 && Math.Abs(cashClosing.Variance) > varianceThreshold)
+        // 0 (الافتراضي) = أي فرق بينبّه. كان 0 = التنبيه مطفي، فعجز الصندوق ما كان يوصل
+        // لصاحب المحل أبدًا إلا لو غيّر الإعداد بنفسه. الزيادة كمان بتنبّه: ممكن تعني بيعات
+        // ما انسجّلت (الكاشير بيقبض بلا فاتورة وبيسحب الفرق لاحقًا).
+        if (cashClosing.Variance != 0 && Math.Abs(cashClosing.Variance) > varianceThreshold)
         {
-            var direction = cashClosing.Variance < 0 ? "عجز" : "زيادة";
+            var isDeficit = cashClosing.Variance < 0;
+            var closedBy = await AlertText.UserNameAsync(_context, _currentUser.UserId, cancellationToken);
+            var branchName = await AlertText.BranchNameAsync(_context, command.BranchId, cancellationToken);
             await _notificationDispatcher.NotifyAsync(
-                $"فرق تقفيل صندوق — {direction}",
-                $"الفرع: {command.BranchId}\nالتاريخ: {command.BusinessDate}\nالفرق: {cashClosing.Variance:F2} (متوقع {cashClosing.ExpectedCash:F2}، معدود {cashClosing.CountedCash:F2})",
-                cancellationToken);
+                $"تقفيل صندوق — {(isDeficit ? "عجز" : "زيادة")} {Math.Abs(cashClosing.Variance):0.000}",
+                $"الفرع: {branchName}\nقفّل: {closedBy}\nاليوم: {command.BusinessDate:yyyy-MM-dd} - وردية {cashClosing.ShiftNumber}\n" +
+                $"المتوقع: {cashClosing.ExpectedCash:0.000} - المعدود: {cashClosing.CountedCash:0.000}" +
+                (isDeficit ? "" : "\nالزيادة ممكن تعني بيعات ما انسجّلت بفاتورة."),
+                cancellationToken,
+                isDeficit ? NotificationSeverity.Critical : NotificationSeverity.Warning);
         }
 
         return Result.Success(new CompleteCashClosingResponse(

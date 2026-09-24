@@ -2,6 +2,7 @@ using SupermarketSystem.API.Common;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Pagination;
 using SupermarketSystem.Application.Notifications.GetNotifications;
+using SupermarketSystem.Domain.Notifications;
 
 namespace SupermarketSystem.API.Endpoints;
 
@@ -15,11 +16,13 @@ public static class NotificationEndpoints
         group.MapGet("/", async (
             int? pageNumber, int? pageSize, string? search, string? sortBy, string? sortDirection,
             bool? unreadOnly,
+            NotificationSeverity? minSeverity,
+            DateTime? sinceUtc,
             GetNotificationsHandler handler,
             CancellationToken cancellationToken) =>
         {
             var paging = PagingBinder.Build(pageNumber, pageSize, search, sortBy, sortDirection);
-            var result = await handler.HandleAsync(new GetNotificationsQuery(paging, unreadOnly ?? false), cancellationToken);
+            var result = await handler.HandleAsync(new GetNotificationsQuery(paging, unreadOnly ?? false, minSeverity, sinceUtc), cancellationToken);
             return Results.Ok(result);
         })
         .WithName("GetNotifications")

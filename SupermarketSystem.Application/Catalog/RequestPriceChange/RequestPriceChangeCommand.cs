@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using SupermarketSystem.Domain.Notifications;
+using SupermarketSystem.Application.Common.Notifications;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Domain.Catalog;
@@ -27,6 +29,7 @@ public sealed class RequestPriceChangeHandler
     private readonly IPermissionChecker _permissionChecker;
     private readonly ICatalogVersionService _catalogVersionService;
     private readonly ITransactionalExecutor _transactionalExecutor;
+    private readonly INotificationDispatcher _notificationDispatcher;
 
     public RequestPriceChangeHandler(
         IApplicationDbContext context,
@@ -34,9 +37,11 @@ public sealed class RequestPriceChangeHandler
         IDateTimeProvider dateTimeProvider,
         IPermissionChecker permissionChecker,
         ICatalogVersionService catalogVersionService,
-        ITransactionalExecutor transactionalExecutor)
+        ITransactionalExecutor transactionalExecutor,
+        INotificationDispatcher notificationDispatcher)
     {
         _transactionalExecutor = transactionalExecutor;
+        _notificationDispatcher = notificationDispatcher;
         _context = context;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
@@ -92,6 +97,32 @@ public sealed class RequestPriceChangeHandler
             return Result.Failure<RequestPriceChangeResponse>(applied.Error);
         }
 
+        await NotifyIfDecreasedAsync(productBranch.Id, request.PreviousPrice, command.RequestedPrice, cancellationToken);
+
         return Result.Success(new RequestPriceChangeResponse(request.Id, hasDirectPermission));
+    }
+
+    /// <summary>تنزيل سعر بيع = الاتجاه الخطِر (بيع لصاحب بسعر أقل) - تنبيه بكل تنزيل، مش بالرفع.</summary>
+    private async Task NotifyIfDecreasedAsync(Guid productBranchId, decimal oldPrice, decimal newPrice, CancellationToken cancellationToken)
+    {
+        if (newPrice >= oldPrice)
+        {
+            return;
+        }
+
+        var link = await _context.ProductBranches.AsNoTracking()
+            .Where(pb => pb.Id == productBranchId)
+            .Select(pb => new { pb.ProductId, pb.BranchId })
+            .FirstAsync(cancellationToken);
+        var productName = await AlertText.ProductNameAsync(_context, link.ProductId, cancellationToken);
+        var branchName = await AlertText.BranchNameAsync(_context, link.BranchId, cancellationToken);
+        var actor = await AlertText.UserNameAsync(_context, _currentUser.UserId, cancellationToken);
+        var percent = oldPrice == 0 ? 0 : (oldPrice - newPrice) / oldPrice * 100m;
+
+        await _notificationDispatcher.NotifyAsync(
+            $"تنزيل سعر — {productName}",
+            $"الفرع: {branchName}\nمن {oldPrice:0.000} إلى {newPrice:0.000} (-{percent:0.#}%)\nغيّره: {actor}",
+            cancellationToken,
+            NotificationSeverity.Warning);
     }
 }

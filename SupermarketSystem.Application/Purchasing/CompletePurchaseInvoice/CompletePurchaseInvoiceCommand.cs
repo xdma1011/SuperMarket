@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using SupermarketSystem.Domain.Notifications;
+using SupermarketSystem.Application.Common.Notifications;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Policies;
 using SupermarketSystem.Application.Common.Results;
@@ -113,14 +115,17 @@ public sealed class CompletePurchaseInvoiceHandler
     private readonly ICurrentUserContext _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ISettingsProvider _settingsProvider;
+    private readonly INotificationDispatcher _notificationDispatcher;
 
     public CompletePurchaseInvoiceHandler(
         IApplicationDbContext context,
         IDocumentNumberGenerator documentNumberGenerator,
         ICurrentUserContext currentUser,
         IDateTimeProvider dateTimeProvider,
-        ISettingsProvider settingsProvider)
+        ISettingsProvider settingsProvider,
+        INotificationDispatcher notificationDispatcher)
     {
+        _notificationDispatcher = notificationDispatcher;
         _context = context;
         _documentNumberGenerator = documentNumberGenerator;
         _currentUser = currentUser;
@@ -282,6 +287,7 @@ public sealed class CompletePurchaseInvoiceHandler
         var occurredAtUtc = _dateTimeProvider.UtcNow;
         var stockCache = new Dictionary<(Guid ProductId, Guid? ProductBatchId), Stock>();
         var newStockMovements = new List<StockMovement>();
+        var highPricedItems = new List<(Guid ProductId, decimal UnitCost, decimal AverageCost)>();
 
         foreach (var itemDto in command.Items)
         {
@@ -301,6 +307,10 @@ public sealed class CompletePurchaseInvoiceHandler
 
             var invoiceItem = purchaseInvoice.AddItem(
                 itemDto.ProductId, itemDto.ProductUnitId, productBatchId, itemDto.Quantity, itemDto.UnitCost, needsReview);
+            if (needsReview)
+            {
+                highPricedItems.Add((itemDto.ProductId, itemDto.UnitCost, averageRecentCost));
+            }
 
             // Normalized to the product's base unit (Architecture Review
             // §12) so StockMovement/Stock stay consistent regardless of
@@ -338,6 +348,26 @@ public sealed class CompletePurchaseInvoiceHandler
         _context.StockMovements.AddRange(newStockMovements);
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // سعر شراء أعلى بشكل ملحوظ من المعتاد - ممكن غلط إدخال، وممكن تواطؤ مع مورد (فاتورة
+        // مضخّمة). كان بيطلع بقائمة المراجعات بس؛ هلق بينبّه فورًا كمان.
+        if (highPricedItems.Count > 0)
+        {
+            var lines = new List<string>();
+            foreach (var (productId, unitCost, averageCost) in highPricedItems)
+            {
+                var productName = await AlertText.ProductNameAsync(_context, productId, cancellationToken);
+                lines.Add($"- {productName}: {unitCost:0.000} (المعتاد {averageCost:0.000})");
+            }
+
+            var supplierName = await _context.Suppliers.AsNoTracking()
+                .Where(s => s.Id == command.SupplierId).Select(s => s.Name).FirstOrDefaultAsync(cancellationToken) ?? "مورد غير معروف";
+            await _notificationDispatcher.NotifyAsync(
+                $"سعر شراء أعلى من المعتاد — {purchaseInvoice.InvoiceNumber}",
+                $"المورد: {supplierName}\n" + string.Join("\n", lines),
+                cancellationToken,
+                NotificationSeverity.Warning);
+        }
 
         return Result.Success(new CompletePurchaseInvoiceResponse(purchaseInvoice.Id, purchaseInvoice.InvoiceNumber, purchaseInvoice.TotalAmount));
     }

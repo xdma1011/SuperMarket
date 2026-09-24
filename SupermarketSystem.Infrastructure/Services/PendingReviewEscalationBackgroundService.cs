@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using SupermarketSystem.Domain.Notifications;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SupermarketSystem.Application.Common.Interfaces;
@@ -92,7 +93,8 @@ public sealed class PendingReviewEscalationBackgroundService : BackgroundService
             await notificationDispatcher.NotifyAsync(
                 $"تصعيد: {overdue.Count} عملية بانتظار مراجعة منذ أكثر من {thresholdDays:0} يوم",
                 body,
-                cancellationToken);
+                cancellationToken,
+                NotificationSeverity.Critical);
 
             _logger.LogWarning(
                 "تصعيد مراجعات معلَّقة: {Count} عنصر تجاوز {ThresholdDays} يوم بدون مراجعة.",

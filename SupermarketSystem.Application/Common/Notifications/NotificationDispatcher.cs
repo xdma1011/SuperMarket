@@ -42,20 +42,30 @@ public sealed class NotificationDispatcher : INotificationDispatcher
         _logger = logger;
     }
 
-    public async Task NotifyAsync(string title, string message, CancellationToken cancellationToken)
+    public async Task NotifyAsync(
+        string title, string message, CancellationToken cancellationToken,
+        NotificationSeverity severity = NotificationSeverity.Warning)
     {
         try
         {
             // سجل "داخل النظام" — دايمًا يُنشأ، بغض النظر عن نجاح أي قناة
             // خارجية. هذا هو اللي endpoint الـpolling بيقرأ منه.
-            _context.Notifications.Add(new Notification(targetUserId: null, title, message, NotificationChannel.InApp));
+            _context.Notifications.Add(new Notification(targetUserId: null, title, message, NotificationChannel.InApp, severity));
+
+            // بالقنوات الخارجية (تلغرام) الخطورة بتنكتب بأول العنوان - هناك ما في لون ولا فلتر.
+            var externalTitle = severity switch
+            {
+                NotificationSeverity.Critical => $"🔴 خطير — {title}",
+                NotificationSeverity.Warning => $"🟠 {title}",
+                _ => title
+            };
 
             // أفضل جهد لكل قناة خارجية مسجَّلة (تلغرام حاليًا). كل قناة
             // بتاخد سجل Notification منفصل خاص فيها — عشان محاولات الإرسال
             // والحالة (نجح/فشل) تنعرض بدقة لكل قناة لحالها.
             foreach (var sender in _senders)
             {
-                var channelNotification = new Notification(targetUserId: null, title, message, sender.Channel);
+                var channelNotification = new Notification(targetUserId: null, title, message, sender.Channel, severity);
                 _context.Notifications.Add(channelNotification);
 
                 bool success;
@@ -63,7 +73,7 @@ public sealed class NotificationDispatcher : INotificationDispatcher
 
                 try
                 {
-                    (success, errorMessage) = await sender.SendAsync(title, message, cancellationToken);
+                    (success, errorMessage) = await sender.SendAsync(externalTitle, message, cancellationToken);
                 }
                 catch (Exception ex)
                 {

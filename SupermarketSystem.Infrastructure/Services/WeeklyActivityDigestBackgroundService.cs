@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using SupermarketSystem.Domain.Notifications;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SupermarketSystem.Application.Common.Interfaces;
@@ -66,7 +67,8 @@ public sealed class WeeklyActivityDigestBackgroundService : BackgroundService
             await notificationDispatcher.NotifyAsync(
                 "الملخّص الأسبوعي لأنشطة النظام",
                 body,
-                cancellationToken);
+                cancellationToken,
+                NotificationSeverity.Info);
 
             _logger.LogInformation(
                 "ملخّص أسبوعي أُرسل: {VoidCount} إلغاء ({VoidAmount})، {ReturnCount} إرجاع ({ReturnAmount})، {ManualCount} حركة يدوية ({ManualQty}).",

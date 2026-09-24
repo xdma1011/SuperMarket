@@ -2,11 +2,17 @@
   <div class="head-text">
     <span class="crumb">النظام / الإشعارات</span>
     <h1>الإشعارات</h1>
-    <span class="subtitle">تنبيهات النظام (مخزون سالب، فرق تقفيل، مراجعات مطلوبة).</span>
+    <span class="subtitle">كل شي بيحذّر من سرقة أو خسارة: إرجاع، إلغاء، عجز صندوق، نقص جرد، خصم فوق الحد، تنزيل سعر، قفل حساب…</span>
   </div>
   <div class="head-actions">
     <button type="button" class="btn-outline" (click)="load()">تحديث</button>
   </div>
+</div>
+
+<div class="severity-filter">
+  <button type="button" [class.active]="minSeverity() === ''" (click)="setSeverityFilter('')">الكل</button>
+  <button type="button" [class.active]="minSeverity() === 'Warning'" (click)="setSeverityFilter('Warning')">المهمة والخطيرة</button>
+  <button type="button" class="critical" [class.active]="minSeverity() === 'Critical'" (click)="setSeverityFilter('Critical')">الخطيرة بس</button>
 </div>
 
 @if (errorMessage()) {
@@ -15,11 +21,14 @@
 
 <div class="notif-list">
   @for (n of notifications(); track n.id) {
-    <div class="notif-card" [class.unread]="n.status !== 'Read'">
+    <div class="notif-card" [class.unread]="n.status !== 'Read'" [class.critical]="n.severity === 'Critical'">
       <div class="notif-dot" [class.unread]="n.status !== 'Read'"></div>
       <div class="notif-body">
         <div class="notif-title-row">
-          <span class="notif-title">{{ n.title }}</span>
+          <span class="notif-title">
+            <span class="severity-chip" [class]="'severity-chip ' + n.severity.toLowerCase()">{{ severityLabels[n.severity] }}</span>
+            {{ n.title }}
+          </span>
           <span class="notif-time">{{ n.createdAtUtc | date: 'yyyy-MM-dd HH:mm' }}</span>
         </div>
         <p class="notif-message">{{ n.message }}</p>

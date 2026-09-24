@@ -11,6 +11,19 @@ public enum NotificationChannel
     Telegram = 5
 }
 
+/// <summary>
+/// درجة خطورة التنبيه - طلب صاحب المشروع (24/9/2026): أي شي بيكشف سرقة أو بيحذّر لازم يطلع
+/// بالتنبيهات، والخطير منها يتميّز. Critical = احتمال سرقة/خسارة فعلية (عجز صندوق، فاتورة
+/// أوفلاين انحذفت، نقص جرد، قفل حساب)؛ Warning = بحاجة نظرة (إرجاع، إلغاء، خصم فوق الحد)؛
+/// Info = معلومة (ملخص أسبوعي).
+/// </summary>
+public enum NotificationSeverity
+{
+    Info = 1,
+    Warning = 2,
+    Critical = 3
+}
+
 public enum NotificationStatus
 {
     Pending = 1,
@@ -47,6 +60,7 @@ public class Notification : AuditableEntity
     public string Message { get; private set; } = null!;
     public NotificationChannel Channel { get; private set; }
     public NotificationStatus Status { get; private set; }
+    public NotificationSeverity Severity { get; private set; }
     public DateTime? ReadAtUtc { get; private set; }
 
     private readonly List<NotificationLog> _deliveryAttempts = new();
@@ -54,12 +68,15 @@ public class Notification : AuditableEntity
 
     private Notification() { } // EF Core
 
-    public Notification(Guid? targetUserId, string title, string message, NotificationChannel channel)
+    public Notification(
+        Guid? targetUserId, string title, string message, NotificationChannel channel,
+        NotificationSeverity severity = NotificationSeverity.Warning)
     {
         TargetUserId = targetUserId;
         Title = title;
         Message = message;
         Channel = channel;
+        Severity = severity;
         Status = NotificationStatus.Pending;
     }
 

@@ -27,5 +27,7 @@ public interface INotificationSender
 /// </summary>
 public interface INotificationDispatcher
 {
-    Task NotifyAsync(string title, string message, CancellationToken cancellationToken);
+    Task NotifyAsync(
+        string title, string message, CancellationToken cancellationToken,
+        NotificationSeverity severity = NotificationSeverity.Warning);
 }
