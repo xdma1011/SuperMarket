@@ -686,10 +686,12 @@ public class RolePermissionConfiguration : IEntityTypeConfiguration<RolePermissi
             PermissionId = Guid.Parse("ece946d9-376c-48e4-baa1-d076180d6251")
         });
         // Master Admin حصرًا -> Finance.Manage (عمدًا بلا مساعد أدمن، راجع PermissionCodes.FinanceManage).
+        // كان مربوط بالغلط بمساعد أدمن من أول ما انبنى (Master Admin ياخد 403 على
+        // صفحة المالية) - انصلح بـMigration FixFinanceManageRoleToMasterAdmin.
         builder.HasData(new
         {
             Id = Guid.Parse("d3e4f5a6-b7c8-4d9e-8f0a-1b2c3d4e5f6a"),
-            RoleId = Guid.Parse("5d0b3578-417e-4706-ab9b-fc9a208b6642"),
+            RoleId = Guid.Parse("50e6125a-cac0-4d82-a0b8-9f3c6fff59d7"),
             PermissionId = Guid.Parse("c4d5e6f7-a8b9-4c0d-9e1f-2a3b4c5d6e7f")
         });
     }

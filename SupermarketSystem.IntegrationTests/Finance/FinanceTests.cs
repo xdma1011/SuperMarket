@@ -1,3 +1,4 @@
+﻿using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SupermarketSystem.Application.Common.Pagination;
@@ -31,6 +32,22 @@ namespace SupermarketSystem.IntegrationTests.Finance;
 public sealed class FinanceTests : IntegrationTestBase
 {
     public FinanceTests(DatabaseFixture fixture) : base(fixture) { }
+
+    [Fact]
+    public async Task صلاحية_المالية_لـMaster_Admin_حصرًا_لا_لمساعد_الأدمن()
+    {
+        // خطأ بذر قديم: Finance.Manage كانت مربوطة بمساعد أدمن بدل Master Admin -
+        // صاحب المحل ياخد 403 على صفحة المالية، ومساعد الأدمن يفوت عليها.
+        var adminClient = await CreateAuthenticatedClientAsync();
+        var adminResponse = await adminClient.GetAsync("/api/v1/finance/capital-transactions");
+        Assert.Equal(HttpStatusCode.OK, adminResponse.StatusCode);
+
+        var (_, assistantUsername) = await UsersTestDataHelper.CreateUserWithRoleReturningUsernameAsync(
+            Fixture.Factory.Services, Fixture.TestBranchId, UsersTestDataHelper.AssistantAdminRoleId, "finance.assistant");
+        var assistantClient = await LoginHelper.LoginAsAsync(Fixture, assistantUsername, UsersTestDataHelper.DefaultPassword);
+        var assistantResponse = await assistantClient.GetAsync("/api/v1/finance/capital-transactions");
+        Assert.Equal(HttpStatusCode.Forbidden, assistantResponse.StatusCode);
+    }
 
     [Fact]
     public async Task تسجيل_مصروف_ثم_جلبه_بفلترة_الفترة()
