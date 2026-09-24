@@ -43,6 +43,7 @@ public class StockMovementConfiguration : IEntityTypeConfiguration<StockMovement
         builder.Property(m => m.ReviewedAtUtc).HasColumnType("datetime2");
         // Nullable - ذو معنى فقط لـWasteOut (راجع تعليق الخاصية بالـDomain).
         builder.Property(m => m.WasteReason).HasConversion<int?>();
+        builder.Property(m => m.IsReplacedBySupplier).IsRequired().HasDefaultValue(false);
 
         // "قائمة المراجعات المعلَّقة" (unified reviews page) بتستعلم بهذا
         // الشرط تحديدًا — فهرس مخصص يخليها سريعة حتى مع تراكم آلاف السجلات

@@ -14,7 +14,8 @@ public sealed record WasteLogItemDto(
     WasteReason Reason,
     string? Notes,
     bool NeedsReview,
-    DateTime OccurredAtUtc);
+    DateTime OccurredAtUtc,
+    bool IsReplacedBySupplier);
 
 /// <summary>
 /// سجل حركات التلف/الهلاك (MovementType.WasteOut) - منفصل كليًا عن سجل
@@ -60,7 +61,8 @@ public sealed class GetWasteLogHandler
                     m.WasteReason,
                     m.Reason,
                     m.NeedsReview,
-                    m.OccurredAtUtc
+                    m.OccurredAtUtc,
+                    m.IsReplacedBySupplier
                 })
             .ToListAsync(cancellationToken);
 
@@ -73,7 +75,8 @@ public sealed class GetWasteLogHandler
             x.WasteReason!.Value,
             x.Reason,
             x.NeedsReview,
-            x.OccurredAtUtc)).ToList();
+            x.OccurredAtUtc,
+            x.IsReplacedBySupplier)).ToList();
 
         return new PagedResult<WasteLogItemDto>(items, totalCount, paging.PageNumber, paging.PageSize);
     }

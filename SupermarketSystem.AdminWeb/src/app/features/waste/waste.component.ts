@@ -67,6 +67,8 @@ export class WasteComponent implements OnInit {
   quantity: number | null = null;
   reason: number | null = WASTE_REASONS[0].value;
   notes = '';
+  /** الشركة عوّضت البضاعة - ما بتنحسب خسارة بكشف الربح الشهري. */
+  isReplacedBySupplier = false;
 
   constructor(private readonly apiClient: ApiClient) {}
 
@@ -141,13 +143,15 @@ export class WasteComponent implements OnInit {
           branchId: this.selectedBranchId,
           quantity: this.quantity,
           reason: this.reason,
-          notes: this.notes.trim() || null
+          notes: this.notes.trim() || null,
+          isReplacedBySupplier: this.isReplacedBySupplier
         })
       );
 
       this.successMessage.set('تم تسجيل التلف/الهلاك بنجاح، ونقص المخزون فورًا.');
       this.quantity = null;
       this.notes = '';
+      this.isReplacedBySupplier = false;
     } catch (err: unknown) {
       const message =
         err && typeof err === 'object' && 'error' in err

@@ -71,6 +71,7 @@ describe('FinanceComponent', () => {
         costOfGoodsSold: 60, itemsExcludedNoCostHistory: 0, grossProfit: 40,
         totalExpenses: 10, expensesByCategory: [{ category: 1 as const, amount: 10 }],
         stocktakeSurplusValue: 5, stocktakeShortageValue: 15, stocktakeMovementsExcludedNoCostHistory: 1,
+        wasteLossValue: 7, wasteMovementsExcludedNoCostHistory: 0,
         netProfit: 30
       };
       apiClientSpy.get.and.returnValue(of(response));
@@ -82,6 +83,7 @@ describe('FinanceComponent', () => {
       expect(component.statement()?.stocktakeSurplusValue).toBe(5);
       expect(component.statement()?.stocktakeShortageValue).toBe(15);
       expect(component.statement()?.stocktakeMovementsExcludedNoCostHistory).toBe(1);
+      expect(component.statement()?.wasteLossValue).toBe(7);
       expect(component.statementError()).toBeNull();
     });
 

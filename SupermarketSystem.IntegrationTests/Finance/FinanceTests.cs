@@ -12,6 +12,7 @@ using SupermarketSystem.Application.Inventory.CompleteStocktake;
 using SupermarketSystem.Application.Inventory.CreateStocktake;
 using SupermarketSystem.Application.Inventory.ReceiveStockTransfer;
 using SupermarketSystem.Application.Inventory.RecordStocktakeCount;
+using SupermarketSystem.Application.Inventory.RecordWasteIssue;
 using SupermarketSystem.Application.Sales.CompleteSale;
 using SupermarketSystem.Domain.Finance;
 using SupermarketSystem.Domain.Inventory;
@@ -354,8 +355,67 @@ public sealed class FinanceTests : IntegrationTestBase
         Assert.Equal(10m, statement.Value.StocktakeSurplusValue); // 5 × 2
         Assert.Equal(0, statement.Value.StocktakeMovementsExcludedNoCostHistory);
         Assert.Equal(
-            statement.Value.GrossProfit - statement.Value.TotalExpenses + statement.Value.StocktakeSurplusValue - statement.Value.StocktakeShortageValue,
+            statement.Value.GrossProfit - statement.Value.TotalExpenses + statement.Value.StocktakeSurplusValue
+                - statement.Value.StocktakeShortageValue - statement.Value.WasteLossValue,
             statement.Value.NetProfit);
+    }
+
+    [Fact]
+    public async Task التلف_خسارة_بكشف_الربح_إلا_المستبدَل_من_الشركة()
+    {
+        using var scope = CreateScope();
+        await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+        var db = CreateDbContext(scope);
+
+        var (product, unit) = await TestDataBuilder.CreateActiveProductAsync(db, "منتج تلف بكشف الربح");
+        await TestDataBuilder.CreateProductBranchAsync(db, product.Id, Fixture.TestBranchId, sellingPrice: 5m);
+        await TestDataBuilder.SetStockAsync(db, product.Id, Fixture.TestBranchId, 20m);
+
+        var (noCostProduct, noCostUnit) = await TestDataBuilder.CreateActiveProductAsync(db, "منتج تلف بلا تاريخ شراء");
+        await TestDataBuilder.CreateProductBranchAsync(db, noCostProduct.Id, Fixture.TestBranchId, sellingPrice: 5m);
+        await TestDataBuilder.SetStockAsync(db, noCostProduct.Id, Fixture.TestBranchId, 5m);
+
+        var supplier = await TestDataBuilder.CreateSupplierAsync(db);
+        var invoice = new PurchaseInvoice(Fixture.TestBranchId, supplier.Id, "PI-WASTE-LOSS", null);
+        invoice.AddItem(product.Id, unit.Id, null, 20m, 4m); // تكلفة الوحدة = 4
+        invoice.MarkReceived();
+        db.PurchaseInvoices.Add(invoice);
+        await db.SaveChangesAsync();
+
+        var now = DateTime.UtcNow;
+        var statementHandler = scope.ServiceProvider.GetRequiredService<GetMonthlyProfitStatementHandler>();
+        var before = await statementHandler.HandleAsync(
+            new GetMonthlyProfitStatementQuery(Fixture.TestBranchId, now.Year, now.Month), CancellationToken.None);
+        Assert.True(before.IsSuccess);
+
+        var wasteHandler = scope.ServiceProvider.GetRequiredService<RecordWasteIssueHandler>();
+        var lost = await wasteHandler.HandleAsync(
+            new RecordWasteIssueCommand(product.Id, unit.Id, Fixture.TestBranchId, 3m, WasteReason.Expired, null),
+            CancellationToken.None);
+        var replaced = await wasteHandler.HandleAsync(
+            new RecordWasteIssueCommand(product.Id, unit.Id, Fixture.TestBranchId, 2m, WasteReason.Expired, null, IsReplacedBySupplier: true),
+            CancellationToken.None);
+        var noCost = await wasteHandler.HandleAsync(
+            new RecordWasteIssueCommand(noCostProduct.Id, noCostUnit.Id, Fixture.TestBranchId, 1m, WasteReason.Broken, null),
+            CancellationToken.None);
+        Assert.True(lost.IsSuccess && replaced.IsSuccess && noCost.IsSuccess);
+
+        // المستبدَل بينقص المخزون عادي - التلف فعلي، بس الشركة عوّضت.
+        var stock = await db.Stocks.AsNoTracking().FirstAsync(s => s.ProductId == product.Id && s.BranchId == Fixture.TestBranchId);
+        Assert.Equal(15m, stock.QuantityOnHand);
+
+        var after = await statementHandler.HandleAsync(
+            new GetMonthlyProfitStatementQuery(Fixture.TestBranchId, now.Year, now.Month), CancellationToken.None);
+        Assert.True(after.IsSuccess);
+
+        // فرق قبل/بعد (نفس الفرع والشهر مشترك مع اختبارات تانية): 3 × 4 بس.
+        Assert.Equal(12m, after.Value.WasteLossValue - before.Value.WasteLossValue);
+        Assert.Equal(1, after.Value.WasteMovementsExcludedNoCostHistory - before.Value.WasteMovementsExcludedNoCostHistory);
+        Assert.Equal(-12m, after.Value.NetProfit - before.Value.NetProfit);
+        Assert.Equal(
+            after.Value.GrossProfit - after.Value.TotalExpenses + after.Value.StocktakeSurplusValue
+                - after.Value.StocktakeShortageValue - after.Value.WasteLossValue,
+            after.Value.NetProfit);
     }
 
     [Fact]

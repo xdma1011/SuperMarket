@@ -132,6 +132,22 @@ describe('WasteComponent', () => {
       expect(component.notes).toBe('');
     });
 
+    it('يبعت علم "مستبدَل من الشركة" ويصفّره بعد النجاح', async () => {
+      component.selectedProductId = 'p1';
+      component.selectedBranchId = 'b1';
+      component.selectedUnitId = 'u1';
+      component.quantity = 2;
+      component.reason = 1;
+      component.isReplacedBySupplier = true;
+      apiClientSpy.post.and.returnValue(of({}));
+
+      await component.submit();
+
+      const body = apiClientSpy.post.calls.mostRecent().args[2] as { isReplacedBySupplier: boolean };
+      expect(body.isReplacedBySupplier).toBeTrue();
+      expect(component.isReplacedBySupplier).toBeFalse();
+    });
+
     it('يعرض رسالة الخطأ التفصيلية من الباك إند لو موجودة (مثلًا تجاوز حد سماح مع مراجعة)', async () => {
       component.selectedProductId = 'p1';
       component.selectedBranchId = 'b1';

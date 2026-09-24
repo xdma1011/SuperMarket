@@ -344,6 +344,9 @@ export class ReportsComponent implements OnInit {
   formatCell(value: unknown, column: { type: string; enumMap?: Record<number, string> }): string {
     if (value === null || value === undefined) return '—';
 
+    if (column.type === 'boolean') {
+      return value ? 'نعم' : 'لا';
+    }
     if (column.type === 'enum' && column.enumMap) {
       return column.enumMap[value as number] ?? String(value);
     }

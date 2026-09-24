@@ -60,6 +60,11 @@
       <span>ملاحظات (اختياري)</span>
       <input type="text" [(ngModel)]="notes" placeholder="تفاصيل إضافية عن سبب التلف" />
     </label>
+
+    <label class="field checkbox-field" style="grid-column: span 2">
+      <input type="checkbox" [(ngModel)]="isReplacedBySupplier" />
+      <span>مستبدَل من الشركة (ما بينحسب خسارة بكشف الربح)</span>
+    </label>
   </div>
 
   <button type="button" class="btn-primary" [disabled]="submitting() || loading()" (click)="submit()">

@@ -62,6 +62,8 @@ interface GetMonthlyProfitStatementResponse {
   stocktakeSurplusValue: number;
   stocktakeShortageValue: number;
   stocktakeMovementsExcludedNoCostHistory: number;
+  wasteLossValue: number;
+  wasteMovementsExcludedNoCostHistory: number;
   netProfit: number;
 }
 

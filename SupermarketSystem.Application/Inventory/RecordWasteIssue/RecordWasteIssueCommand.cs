@@ -22,7 +22,8 @@ public sealed record RecordWasteIssueCommand(
     Guid BranchId,
     decimal Quantity,
     WasteReason Reason,
-    string? Notes);
+    string? Notes,
+    bool IsReplacedBySupplier = false);
 
 public sealed record RecordWasteIssueResponse(Guid StockMovementId, decimal QuantityBase, bool FlaggedForReview);
 
@@ -35,6 +36,9 @@ public sealed record RecordWasteIssueResponse(Guid StockMovementId, decimal Quan
 /// "سماح مع مراجعة": نفس آلية الضيافة بالضبط، بس بعتبة مستقلة
 /// (WasteSettingsKeys.DailyReviewThresholdQuantity) ومجمَّعة على
 /// MovementType.WasteOut فقط (لا تختلط بعدّاد الضيافة).
+///
+/// IsReplacedBySupplier: الشركة عوّضت البضاعة - الحركة بتنقص المخزون عادي،
+/// بس ما بتنحسب خسارة بكشف الربح الشهري (راجع GetMonthlyProfitStatementHandler).
 /// </summary>
 public sealed class RecordWasteIssueHandler
 {
@@ -122,7 +126,8 @@ public sealed class RecordWasteIssueHandler
                 StockMovementReferenceType.ManualAdjustment,
                 referenceId: Guid.NewGuid(),
                 needsReview: needsReview,
-                wasteReason: command.Reason);
+                wasteReason: command.Reason,
+                isReplacedBySupplier: command.IsReplacedBySupplier);
 
             _context.StockMovements.Add(movement);
             await _context.SaveChangesAsync(ct);

@@ -1,4 +1,4 @@
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using SupermarketSystem.Application.Common.Pagination;
 using SupermarketSystem.Application.Inventory.RecordWasteIssue;
 using SupermarketSystem.Application.Reporting.GetWasteLog;
@@ -38,6 +38,7 @@ public sealed class GetWasteLogTests : IntegrationTestBase
         Assert.Equal(WasteReason.Expired, item.Reason);
         Assert.Equal("دفعة قديمة", item.Notes);
         Assert.False(item.NeedsReview);
+        Assert.False(item.IsReplacedBySupplier);
     }
 
     [Fact]

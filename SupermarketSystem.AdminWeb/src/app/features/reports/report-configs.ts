@@ -1,6 +1,6 @@
 import { ReportsOperation } from '../../core/api/operations';
 
-export type ColumnType = 'text' | 'number' | 'currency' | 'date' | 'enum';
+export type ColumnType = 'text' | 'number' | 'currency' | 'date' | 'enum' | 'boolean';
 
 export interface ReportColumn {
   key: string;
@@ -215,6 +215,7 @@ export const REPORT_CONFIGS: ReportConfig[] = [
       { key: 'quantityBase', label: 'الكمية', type: 'number' },
       { key: 'reason', label: 'السبب', type: 'enum', enumMap: wasteReasonMap },
       { key: 'notes', label: 'ملاحظات', type: 'text' },
+      { key: 'isReplacedBySupplier', label: 'مستبدَل من الشركة', type: 'boolean' },
       { key: 'occurredAtUtc', label: 'التاريخ', type: 'date' }
     ]
   },

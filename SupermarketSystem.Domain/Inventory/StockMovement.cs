@@ -99,6 +99,13 @@ public class StockMovement : Entity, IBranchOwned
     /// </summary>
     public WasteReason? WasteReason { get; private set; }
 
+    /// <summary>
+    /// ذو معنى فقط لـMovementType.WasteOut: الشركة/المورد عوّض البضاعة التالفة
+    /// (استبدال) - فما في خسارة فعلية على المحل. قرار صاحب المشروع (24/9/2026):
+    /// التلف خسارة بكشف الربح الشهري إلا لو مستبدَل من الشركة.
+    /// </summary>
+    public bool IsReplacedBySupplier { get; private set; }
+
     private StockMovement() { } // EF Core
 
     public StockMovement(
@@ -114,7 +121,8 @@ public class StockMovement : Entity, IBranchOwned
         StockMovementReferenceType referenceType,
         Guid referenceId,
         bool needsReview = false,
-        WasteReason? wasteReason = null)
+        WasteReason? wasteReason = null,
+        bool isReplacedBySupplier = false)
     {
         if (quantityBase <= 0)
         {
@@ -124,6 +132,11 @@ public class StockMovement : Entity, IBranchOwned
         if (movementType == MovementType.WasteOut && wasteReason is null)
         {
             throw new DomainException("WasteOut requires a WasteReason.");
+        }
+
+        if (isReplacedBySupplier && movementType != MovementType.WasteOut)
+        {
+            throw new DomainException("Only WasteOut can be marked as replaced by supplier.");
         }
 
         NeedsReview = needsReview;
@@ -139,6 +152,7 @@ public class StockMovement : Entity, IBranchOwned
         ReferenceType = referenceType;
         ReferenceId = referenceId;
         WasteReason = wasteReason;
+        IsReplacedBySupplier = isReplacedBySupplier;
     }
 
     public void MarkReviewed(Guid reviewedByUserId, DateTime reviewedAtUtc)

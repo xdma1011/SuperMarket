@@ -51,8 +51,14 @@ public sealed record ExpenseByCategoryDto(ExpenseCategory Category, decimal Amou
 ///   `StocktakeMovementsExcludedNoCostHistory`: نفس فلسفة
 ///   `ItemsExcludedNoCostHistory` بالضبط - حركة جرد لمنتج بلا تاريخ شراء
 ///   سابق تُستبعَد كليًا، لا تُحتسب بتكلفة صفر.
+/// - WasteLossValue: قرار صاحب المشروع (24/9/2026) - التلف/الهلاك
+///   (`MovementType.WasteOut`) خسارة بشهر حدوثه، **إلا** لو مستبدَل من
+///   الشركة (`IsReplacedBySupplier` - الشركة عوّضت، فما في خسارة على المحل).
+///   نفس تقييم فروقات الجرد بالضبط (تكلفة دفعة/متوسط مرجّح حتى نهاية الشهر،
+///   محسوب لحظيًا لا مجمَّد)، و`WasteMovementsExcludedNoCostHistory` نفس
+///   فلسفة الاستبعاد (بلا تاريخ شراء = مستبعد، لا تكلفة صفر).
 /// - NetProfit = GrossProfit - TotalExpenses + StocktakeSurplusValue -
-///   StocktakeShortageValue. هذا الرقم النهائي "ربح الشهر".
+///   StocktakeShortageValue - WasteLossValue. هذا الرقم النهائي "ربح الشهر".
 /// </summary>
 public sealed class GetMonthlyProfitStatementHandler
 {
@@ -117,33 +123,40 @@ public sealed class GetMonthlyProfitStatementHandler
 
         var totalExpenses = expensesByCategory.Sum(e => e.Amount);
 
-        var (stocktakeSurplusValue, stocktakeShortageValue, stocktakeMovementsExcludedNoCostHistory) =
-            await GetStocktakeVarianceAsync(query.BranchId, periodStartUtc, periodEndUtc, cancellationToken);
+        var inventory = await GetInventoryVarianceAndWasteAsync(query.BranchId, periodStartUtc, periodEndUtc, cancellationToken);
 
-        var netProfit = grossProfit - totalExpenses + stocktakeSurplusValue - stocktakeShortageValue;
+        var netProfit = grossProfit - totalExpenses
+            + inventory.StocktakeSurplusValue - inventory.StocktakeShortageValue - inventory.WasteLossValue;
 
         return Result.Success(new GetMonthlyProfitStatementResponse(
             query.BranchId, query.Year, query.Month,
             totalSales, totalReturnedAmount, netRevenue,
             costOfGoodsSold, itemsExcludedNoCostHistory, grossProfit,
             totalExpenses, expensesByCategory,
-            stocktakeSurplusValue, stocktakeShortageValue, stocktakeMovementsExcludedNoCostHistory,
+            inventory.StocktakeSurplusValue, inventory.StocktakeShortageValue, inventory.StocktakeExcludedNoCostHistory,
+            inventory.WasteLossValue, inventory.WasteExcludedNoCostHistory,
             netProfit));
     }
 
-    private async Task<(decimal SurplusValue, decimal ShortageValue, int ExcludedNoCostHistory)> GetStocktakeVarianceAsync(
+    private sealed record InventoryValuation(
+        decimal StocktakeSurplusValue, decimal StocktakeShortageValue, int StocktakeExcludedNoCostHistory,
+        decimal WasteLossValue, int WasteExcludedNoCostHistory);
+
+    private async Task<InventoryValuation> GetInventoryVarianceAndWasteAsync(
         Guid branchId, DateTime periodStartUtc, DateTime periodEndUtc, CancellationToken cancellationToken)
     {
         var movements = await _context.StockMovements.AsNoTracking()
             .Where(m => m.BranchId == branchId
-                        && (m.MovementType == MovementType.StocktakeCorrectionIncrease || m.MovementType == MovementType.StocktakeCorrectionDecrease)
+                        && (m.MovementType == MovementType.StocktakeCorrectionIncrease
+                            || m.MovementType == MovementType.StocktakeCorrectionDecrease
+                            || (m.MovementType == MovementType.WasteOut && !m.IsReplacedBySupplier))
                         && m.OccurredAtUtc >= periodStartUtc && m.OccurredAtUtc < periodEndUtc)
             .Select(m => new { m.MovementType, m.ProductId, m.ProductBatchId, m.QuantityBase })
             .ToListAsync(cancellationToken);
 
         if (movements.Count == 0)
         {
-            return (0m, 0m, 0);
+            return new InventoryValuation(0m, 0m, 0, 0m, 0);
         }
 
         var batchIds = movements.Where(m => m.ProductBatchId is not null)
@@ -172,7 +185,9 @@ public sealed class GetMonthlyProfitStatementHandler
 
         var surplusValue = 0m;
         var shortageValue = 0m;
-        var excludedCount = 0;
+        var stocktakeExcludedCount = 0;
+        var wasteLossValue = 0m;
+        var wasteExcludedCount = 0;
 
         foreach (var movement in movements)
         {
@@ -180,14 +195,27 @@ public sealed class GetMonthlyProfitStatementHandler
                 ? (batchUnitCosts.TryGetValue(batchId, out var batchCost) ? batchCost : null)
                 : (weightedAverageCosts.TryGetValue(movement.ProductId, out var avgCost) ? avgCost : null);
 
+            var isWaste = movement.MovementType == MovementType.WasteOut;
+
             if (unitCost is null)
             {
-                excludedCount++;
+                if (isWaste)
+                {
+                    wasteExcludedCount++;
+                }
+                else
+                {
+                    stocktakeExcludedCount++;
+                }
                 continue;
             }
 
             var value = movement.QuantityBase * unitCost.Value;
-            if (movement.MovementType == MovementType.StocktakeCorrectionIncrease)
+            if (isWaste)
+            {
+                wasteLossValue += value;
+            }
+            else if (movement.MovementType == MovementType.StocktakeCorrectionIncrease)
             {
                 surplusValue += value;
             }
@@ -197,7 +225,7 @@ public sealed class GetMonthlyProfitStatementHandler
             }
         }
 
-        return (surplusValue, shortageValue, excludedCount);
+        return new InventoryValuation(surplusValue, shortageValue, stocktakeExcludedCount, wasteLossValue, wasteExcludedCount);
     }
 }
 
@@ -216,4 +244,6 @@ public sealed record GetMonthlyProfitStatementResponse(
     decimal StocktakeSurplusValue,
     decimal StocktakeShortageValue,
     int StocktakeMovementsExcludedNoCostHistory,
+    decimal WasteLossValue,
+    int WasteMovementsExcludedNoCostHistory,
     decimal NetProfit);

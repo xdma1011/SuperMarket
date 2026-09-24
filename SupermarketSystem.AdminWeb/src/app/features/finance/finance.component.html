@@ -53,6 +53,12 @@
         </div>
       }
 
+      @if (s.wasteMovementsExcludedNoCostHistory > 0) {
+        <div class="alert-banner warn">
+          تنبيه: {{ s.wasteMovementsExcludedNoCostHistory }} عملية تلف بهالشهر بلا تكلفة معروفة - مُستبعدة كليًا من خسارة التلف أدناه.
+        </div>
+      }
+
       <div class="kpi-grid">
         <div class="kpi-card">
           <span class="kpi-label">صافي الإيراد</span>
@@ -81,6 +87,7 @@
         <div class="detail-row"><span>إجمالي المرتجعات</span><span class="mono">{{ s.totalReturnedAmount | number: '1.2-2' }}</span></div>
         <div class="detail-row"><span>فائض الجرد (زيادة)</span><span class="mono">+{{ s.stocktakeSurplusValue | number: '1.2-2' }}</span></div>
         <div class="detail-row"><span>نقص الجرد (خسارة)</span><span class="mono">-{{ s.stocktakeShortageValue | number: '1.2-2' }}</span></div>
+        <div class="detail-row"><span>التلف والهلاك (خسارة، غير المستبدَل من الشركة)</span><span class="mono">-{{ s.wasteLossValue | number: '1.2-2' }}</span></div>
       </div>
 
       @if (s.expensesByCategory.length > 0) {

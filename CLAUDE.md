@@ -415,6 +415,18 @@ Frontend وقت الإنجاز.
 حارس التوجيه بالواجهة (`requirePermissionGuard`) fail-open لحد ما تتحمّل
 الصلاحيات - مقصود وموثَّق بالكود، الحماية الحقيقية بالباك إند.
 
+✅ **خلص (24/9/2026) — التلف خسارة بكشف الربح الشهري، إلا المستبدَل من الشركة (قرار
+صاحب المشروع):** `StockMovement.IsReplacedBySupplier` (عمود جديد، Migration
+`AddWasteReplacedBySupplier`، افتراضي `false` - كل تلف قديم صار خسارة). علم
+اختياري وقت تسجيل التلف (`RecordWasteIssueCommand.IsReplacedBySupplier` + checkbox
+"مستبدَل من الشركة" بصفحة `/waste` + عمود بسجل التلف). المستبدَل بينقص المخزون
+عادي، بس ما بينحسب خسارة. `GetMonthlyProfitStatementQuery.WasteLossValue` بنفس
+تقييم فروقات الجرد بالضبط (تكلفة دفعة/متوسط مرجّح حتى نهاية الشهر، محسوب لحظيًا)،
+و`WasteMovementsExcludedNoCostHistory` للمستبعَد بلا تاريخ شراء.
+`NetProfit = GrossProfit - TotalExpenses + StocktakeSurplusValue - StocktakeShortageValue - WasteLossValue`.
+**حدود معروفة:** العلم بينحط وقت التسجيل بس (بلا تعديل لاحق لو الشركة عوّضت بعدين)؛
+والضيافة لسه مش خسارة بالكشف (ما انطلب). 368/368 Backend، 638/638 Frontend.
+
 ---
 
 ✅ **خلص (24/9/2026) — طرد فوري عند إلغاء جلسة أو تعطيل مستخدم (طلب صاحب المشروع المباشر):**

@@ -227,6 +227,11 @@ describe('ReportsComponent', () => {
       expect(component.formatCell(2, { type: 'enum', enumMap: { 1: 'طلب الزبون', 2: 'تالف' } })).toBe('تالف');
     });
 
+    it('يترجم القيمة المنطقية لنعم/لا', () => {
+      expect(component.formatCell(true, { type: 'boolean' })).toBe('نعم');
+      expect(component.formatCell(false, { type: 'boolean' })).toBe('لا');
+    });
+
     it('يرجّع القيمة الخام كنص لو enum بلا خريطة مطابقة', () => {
       expect(component.formatCell(99, { type: 'enum', enumMap: { 1: 'طلب الزبون' } })).toBe('99');
     });
