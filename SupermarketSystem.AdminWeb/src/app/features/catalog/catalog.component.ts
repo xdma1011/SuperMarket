@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -13,6 +13,7 @@ import {
 } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
 import { BarcodeScannerComponent } from './barcode-scanner/barcode-scanner.component';
+import { AuthService } from '../../core/services/auth.service';
 
 interface CategoryDto {
   id: string;
@@ -98,6 +99,8 @@ type Tab = 'products' | 'categories';
   styleUrl: './catalog.component.css'
 })
 export class CatalogComponent implements OnInit {
+  private readonly auth = inject(AuthService);
+
   readonly activeTab = signal<Tab>('products');
 
   readonly products = signal<ProductDto[]>([]);
@@ -215,7 +218,7 @@ export class CatalogComponent implements OnInit {
         this.productCategoryId = categoriesResult.items[0].id;
       }
       if (branchesResult.items.length > 0 && !this.newBranchId) {
-        this.newBranchId = branchesResult.items[0].id;
+        this.newBranchId = this.auth.defaultBranchId(branchesResult.items);
       }
     } catch {
       this.errorMessage.set('تعذّر تحميل الكتالوج.');

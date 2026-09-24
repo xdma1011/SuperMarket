@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -6,6 +6,7 @@ import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { StockTransfersOperation, BranchesOperation, ProductsOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
+import { AuthService } from '../../core/services/auth.service';
 
 interface BranchDto {
   id: string;
@@ -85,6 +86,8 @@ interface TransferLine {
   styleUrl: './stock-transfers.component.css'
 })
 export class StockTransfersComponent implements OnInit {
+  private readonly auth = inject(AuthService);
+
   readonly transfers = signal<StockTransferListItemDto[]>([]);
   readonly totalCount = signal(0);
   readonly pageNumber = signal(1);
@@ -135,8 +138,8 @@ export class StockTransfersComponent implements OnInit {
       this.products.set(productsResult.items);
 
       if (branchesResult.items.length > 0) {
-        this.sourceBranchId = branchesResult.items[0].id;
-        this.destinationBranchId = branchesResult.items.length > 1 ? branchesResult.items[1].id : branchesResult.items[0].id;
+        this.sourceBranchId = this.auth.defaultBranchId(branchesResult.items);
+        this.destinationBranchId = branchesResult.items.find(b => b.id !== this.sourceBranchId)?.id ?? this.sourceBranchId;
       }
       if (productsResult.items.length > 0) {
         this.newLineProductId = productsResult.items[0].id;

@@ -227,6 +227,34 @@ describe('ReportsComponent', () => {
       expect(component.formatCell('Defective', { type: 'enum', enumMap: { CustomerChangedMind: 'غيّر رأيه', Defective: 'تالف/معيب' } })).toBe('تالف/معيب');
     });
 
+    it('مقارنة أسعار الموردين ما بتطلب التقرير قبل اختيار منتج، وبعد الاختيار بتبعت productId', async () => {
+      apiClientSpy.get.calls.reset();
+      apiClientSpy.get.and.returnValue(of({ items: [{ id: 'p1', name: 'حليب' }], totalCount: 1 }));
+      component.activeReportId.set('supplier-price-comparison');
+      await component.loadActiveReport();
+
+      const reportCallsBefore = apiClientSpy.get.calls.all().filter(c => c.args[1] === 'suppliers/price-comparison');
+      expect(reportCallsBefore.length).toBe(0);
+      expect(component.errorMessage()).toBe('اختر منتجًا لعرض مقارنة أسعار الموردين.');
+      expect(component.products().length).toBe(1);
+
+      component.selectedProductId = 'p1';
+      await component.loadActiveReport();
+
+      const reportCall = apiClientSpy.get.calls.all().find(c => c.args[1] === 'suppliers/price-comparison');
+      expect((reportCall?.args[3] as Record<string, unknown>)['productId']).toBe('p1');
+    });
+
+    it('فترة التقرير بتشمل يوم "إلى" كامل - عمليات اليوم ما بتنقطع', () => {
+      component.fromDate = '2026-09-24';
+      component.toDate = '2026-09-24';
+      const start = new Date(component.rangeStartUtc());
+      const end = new Date(component.rangeEndUtc());
+      const eveningLocal = new Date(2026, 8, 24, 21, 30);
+      expect(start <= eveningLocal && eveningLocal <= end).toBeTrue();
+      expect(end.getTime() - start.getTime()).toBe(24 * 60 * 60 * 1000 - 1);
+    });
+
     it('يترجم القيمة المنطقية لنعم/لا', () => {
       expect(component.formatCell(true, { type: 'boolean' })).toBe('نعم');
       expect(component.formatCell(false, { type: 'boolean' })).toBe('لا');

@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -6,6 +6,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { PurchaseInvoiceDraftsOperation, BranchesOperation, PaymentMethodsOperation } from '../../core/api/operations';
+import { AuthService } from '../../core/services/auth.service';
 
 interface PurchaseInvoiceDraftListItemDto {
   id: string;
@@ -50,6 +51,8 @@ interface PagedResult<T> {
   styleUrl: './purchasing-drafts.component.css'
 })
 export class PurchasingDraftsComponent implements OnInit {
+  private readonly auth = inject(AuthService);
+
   readonly drafts = signal<PurchaseInvoiceDraftListItemDto[]>([]);
   readonly branches = signal<BranchDto[]>([]);
   readonly paymentMethods = signal<PaymentMethodDto[]>([]);
@@ -92,7 +95,7 @@ export class PurchasingDraftsComponent implements OnInit {
       this.branches.set(branchesResult.items);
       this.paymentMethods.set(paymentMethodsResult);
       if (branchesResult.items.length > 0 && !this.selectedBranchId) {
-        this.selectedBranchId = branchesResult.items[0].id;
+        this.selectedBranchId = this.auth.defaultBranchId(branchesResult.items);
       }
       if (paymentMethodsResult.length > 0 && !this.paidNowPaymentMethodId) {
         this.paidNowPaymentMethodId = paymentMethodsResult[0].id;

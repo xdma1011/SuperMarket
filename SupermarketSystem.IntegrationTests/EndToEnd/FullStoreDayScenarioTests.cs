@@ -327,11 +327,11 @@ public sealed class FullStoreDayScenarioTests : IntegrationTestBase
 
         // --- المنتجات: استهلاك، ركود، إعادة طلب ---
         var since = Uri.EscapeDataString(DateTime.UtcNow.AddDays(-30).ToString("o"));
-        var consumption = Items(await GetJsonAsync(admin, $"/api/v1/reports/products/consumption-levels?branchId={branchId}&sinceUtc={since}")).ToList();
-        // خطأ معروف: التقرير بيعدّ الفواتير الملغاة وما بيطرح المرتجع (GetProductConsumptionLevelsQuery).
-        KnownBug("مستوى الاستهلاك: حليب مباع (بلا الملغاة)", 3m, consumption.Where(c => c.GetProperty("productId").GetGuid() == milkId).Select(c => (decimal?)c.GetProperty("quantitySold").GetDecimal()).FirstOrDefault());
-        KnownBug("مستوى الاستهلاك: رز مباع صافي (3 - 1 مرتجع)", 2m, consumption.Where(c => c.GetProperty("productId").GetGuid() == riceId).Select(c => (decimal?)c.GetProperty("quantitySold").GetDecimal()).FirstOrDefault());
-        var stagnant = Items(await GetJsonAsync(admin, $"/api/v1/reports/products/stagnant?branchId={branchId}&sinceUtc={since}")).ToList();
+        var consumption = Items(await GetJsonAsync(admin, $"/api/v1/reports/products/consumption-levels?branchId={branchId}&fromUtc={since}")).ToList();
+        // كان بيعدّ الملغاة وما بيطرح المرتجع - انصلح 24/9/2026.
+        Check("مستوى الاستهلاك: حليب مباع (بلا الملغاة)", 3m, consumption.Where(c => c.GetProperty("productId").GetGuid() == milkId).Select(c => (decimal?)c.GetProperty("quantitySold").GetDecimal()).FirstOrDefault());
+        Check("مستوى الاستهلاك: رز مباع صافي (3 - 1 مرتجع)", 2m, consumption.Where(c => c.GetProperty("productId").GetGuid() == riceId).Select(c => (decimal?)c.GetProperty("quantitySold").GetDecimal()).FirstOrDefault());
+        var stagnant = Items(await GetJsonAsync(admin, $"/api/v1/reports/products/stagnant?branchId={branchId}&fromUtc={since}")).ToList();
         Check("الأصناف الراكدة: ولا صنف (الاثنين انباعوا)", 0, stagnant.Count);
         var reorder = Items(await GetJsonAsync(admin, $"/api/v1/reports/products/reorder-needed?branchId={branchId}")).ToList();
         Check("إعادة الطلب: حليب (15 < 18)", true, reorder.Any(r => r.GetProperty("productId").GetGuid() == milkId));

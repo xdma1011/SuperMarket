@@ -56,6 +56,21 @@ export class AuthService {
   readonly currentUserFullName = signal<string | null>(null);
   readonly isAuthenticated = signal<boolean>(false);
 
+  /** فرع جلسة المستخدم (claim branch_id بالتوكن) - الافتراضي بكل صفحة فيها اختيار فرع. */
+  readonly currentBranchId = signal<string | null>(null);
+
+  /**
+   * الفرع الافتراضي لقائمة فروع: فرع المستخدم لو موجود فيها، وإلا أول فرع. كانت كل صفحة
+   * تختار أول فرع بالقائمة - صاحب محل بفرعين كان يشوف تقارير الفرع التاني أو صفحة فاضية.
+   */
+  defaultBranchId(branches: { id: string }[]): string {
+    const current = this.currentBranchId();
+    if (current && branches.some(b => b.id.toLowerCase() === current.toLowerCase())) {
+      return branches.find(b => b.id.toLowerCase() === current.toLowerCase())!.id;
+    }
+    return branches[0]?.id ?? '';
+  }
+
   constructor(private readonly apiClient: ApiClient) {}
 
   async getPublicBranches(): Promise<PublicBranchDto[]> {
@@ -137,6 +152,7 @@ export class AuthService {
     this.accessToken.set(accessToken);
     this.currentUserFullName.set(fullNameOrUsername);
     this.isAuthenticated.set(true);
+    this.currentBranchId.set(this.readTokenClaim(accessToken, 'branch_id'));
     sessionStorage.setItem(this.refreshTokenStorageKey, refreshToken);
   }
 
@@ -144,6 +160,7 @@ export class AuthService {
     this.accessToken.set(null);
     this.currentUserFullName.set(null);
     this.isAuthenticated.set(false);
+    this.currentBranchId.set(null);
     sessionStorage.removeItem(this.refreshTokenStorageKey);
   }
 
@@ -156,11 +173,15 @@ export class AuthService {
    * هون (التحقق الفعلي من صحة التوكن دائمًا مسؤولية الباك إند).
    */
   private extractUsernameFromToken(token: string): string | null {
+    return this.readTokenClaim(token, 'unique_name');
+  }
+
+  private readTokenClaim(token: string, claim: string): string | null {
     try {
       const payloadBase64 = token.split('.')[1];
       const payloadJson = atob(payloadBase64.replace(/-/g, '+').replace(/_/g, '/'));
       const payload = JSON.parse(payloadJson) as Record<string, unknown>;
-      return (payload['unique_name'] as string) ?? null;
+      return (payload[claim] as string) ?? null;
     } catch {
       return null;
     }

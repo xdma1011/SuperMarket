@@ -183,12 +183,12 @@ public static class ReportingEndpoints
 
         group.MapGet("/products/stagnant", async (
             int? pageNumber, int? pageSize, string? search, string? sortBy, string? sortDirection,
-            Guid branchId, DateTime sinceUtc,
+            Guid branchId, DateTime fromUtc, DateTime? toUtc,
             GetStagnantProductsHandler handler,
             CancellationToken cancellationToken) =>
         {
             var paging = PagingBinder.Build(pageNumber, pageSize, search, sortBy, sortDirection);
-            var result = await handler.HandleAsync(new GetStagnantProductsQuery(paging, branchId, sinceUtc), cancellationToken);
+            var result = await handler.HandleAsync(new GetStagnantProductsQuery(paging, branchId, fromUtc, toUtc), cancellationToken);
             return Results.Ok(result);
         })
         .WithName("GetStagnantProducts")
@@ -196,12 +196,12 @@ public static class ReportingEndpoints
 
         group.MapGet("/products/consumption-levels", async (
             int? pageNumber, int? pageSize, string? search, string? sortBy, string? sortDirection,
-            Guid branchId, DateTime sinceUtc,
+            Guid branchId, DateTime fromUtc, DateTime? toUtc,
             GetProductConsumptionLevelsHandler handler,
             CancellationToken cancellationToken) =>
         {
             var paging = PagingBinder.Build(pageNumber, pageSize, search, sortBy, sortDirection);
-            var result = await handler.HandleAsync(new GetProductConsumptionLevelsQuery(paging, branchId, sinceUtc), cancellationToken);
+            var result = await handler.HandleAsync(new GetProductConsumptionLevelsQuery(paging, branchId, fromUtc, toUtc), cancellationToken);
             return Results.Ok(result);
         })
         .WithName("GetProductConsumptionLevels")
@@ -210,7 +210,7 @@ public static class ReportingEndpoints
 
         group.MapGet("/products/reorder-needed", async (
             int? pageNumber, int? pageSize, string? search, string? sortBy, string? sortDirection,
-            Guid branchId,
+            Guid? branchId,
             GetReorderNeededProductsHandler handler,
             CancellationToken cancellationToken) =>
         {

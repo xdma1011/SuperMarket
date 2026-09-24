@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using SupermarketSystem.Domain.Sales;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Pagination;
 
 namespace SupermarketSystem.Application.Reporting.GetStagnantProducts;
 
-public sealed record GetStagnantProductsQuery(PagedRequest Paging, Guid BranchId, DateTime SinceUtc);
+// FromUtc/ToUtc بدل SinceUtc - نفس سبب GetProductConsumptionLevelsQuery (الواجهة بتبعت فترة).
+public sealed record GetStagnantProductsQuery(PagedRequest Paging, Guid BranchId, DateTime FromUtc, DateTime? ToUtc = null);
 
 public sealed record StagnantProductItemDto(
     Guid ProductId,
@@ -34,10 +36,15 @@ public sealed class GetStagnantProductsHandler
     {
         var paging = query.Paging.Normalized();
 
+        // "انباع" = بفاتورة مش ملغاة وما رجع كله - بيعة ملغاة أو مرتجعة بالكامل ما بتخلّي
+        // الصنف "مش راكد" (كانت بتخلّيه).
+        var toUtc = query.ToUtc ?? DateTime.MaxValue;
         var soldProductIds = _context.SaleInvoiceItems.AsNoTracking()
             .Join(_context.SaleInvoices.AsNoTracking(),
-                i => i.SaleInvoiceId, s => s.Id, (i, s) => new { i.ProductId, s.BranchId, s.CreatedAtUtc })
-            .Where(x => x.BranchId == query.BranchId && x.CreatedAtUtc >= query.SinceUtc)
+                i => i.SaleInvoiceId, s => s.Id, (i, s) => new { i.ProductId, i.Quantity, i.QuantityReturned, s.BranchId, s.Status, s.CreatedAtUtc })
+            .Where(x => x.BranchId == query.BranchId && x.Status != SaleInvoiceStatus.Voided
+                        && x.Quantity > x.QuantityReturned
+                        && x.CreatedAtUtc >= query.FromUtc && x.CreatedAtUtc <= toUtc)
             .Select(x => x.ProductId);
 
         var stagnant = _context.ProductBranches.AsNoTracking()

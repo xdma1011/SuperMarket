@@ -149,4 +149,26 @@ describe('AuthService', () => {
       expect(sessionStorage.getItem('refresh_token')).toBeNull();
     });
   });
+
+  describe('defaultBranchId', () => {
+    it('بيقرأ فرع الجلسة من التوكن وقت الدخول ويفضّله على أول فرع بالقائمة', async () => {
+      const payload = { unique_name: 'owner', branch_id: 'b2' };
+      const fakeToken = `header.${btoa(JSON.stringify(payload))}.signature`;
+      apiClientSpy.post.and.returnValue(of({
+        accessToken: fakeToken, accessTokenExpiresAtUtc: '', refreshToken: 'r', refreshTokenExpiresAtUtc: '',
+        userId: 'u1', fullName: 'صاحب المحل', branchId: 'b2', previousSessionRevoked: false
+      }));
+
+      await service.login('owner', 'pass', null);
+
+      expect(service.currentBranchId()).toBe('b2');
+      expect(service.defaultBranchId([{ id: 'b1' }, { id: 'b2' }])).toBe('b2');
+    });
+
+    it('بيرجع لأول فرع لو فرع الجلسة مش بالقائمة، وفاضي لو القائمة فاضية', () => {
+      service.currentBranchId.set('zz');
+      expect(service.defaultBranchId([{ id: 'b1' }, { id: 'b2' }])).toBe('b1');
+      expect(service.defaultBranchId([])).toBe('');
+    });
+  });
 });

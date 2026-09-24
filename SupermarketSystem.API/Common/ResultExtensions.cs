@@ -94,6 +94,15 @@ public sealed class ExceptionHandlingMiddleware
             await WriteProblemAsync(context, StatusCodes.Status409Conflict, "Conflict.DuplicateValue",
                 "A record with the same unique value already exists.");
         }
+        catch (BadHttpRequestException ex)
+        {
+            // طلب ناقص/غلط (بارامتر إلزامي مش مبعوث، قيمة مش قابلة للتحويل) - خطأ العميل، مش
+            // عطل بالسيرفر. كان بيوقع تحت Exception العام ويرجع 500 ويتسجّل كـError. الرسالة
+            // هون آمنة (بتسمّي البارامتر بس، بلا أي تفاصيل داخلية).
+            _logger.LogWarning(ex, "Bad request on {Path}", context.Request.Path);
+            await WriteProblemAsync(context, ex.StatusCode, "Request.Invalid",
+                $"طلب غير صالح: {ex.Message}");
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unhandled exception on {Path}", context.Request.Path);

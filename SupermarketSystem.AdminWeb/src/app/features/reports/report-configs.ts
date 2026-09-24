@@ -18,6 +18,8 @@ export interface ReportConfig {
   requiresDateRange?: boolean;
   /** لتقارير تحتاج branchId إلزامي بالباك إند. */
   requiresBranch?: boolean;
+  /** لتقارير تحتاج productId إلزامي بالباك إند (مقارنة أسعار الموردين). */
+  requiresProduct?: boolean;
 }
 
 // مطابقة لـReturnReason / VoidReason / WasteReason بالـDomain.
@@ -174,6 +176,7 @@ export const REPORT_CONFIGS: ReportConfig[] = [
     id: 'supplier-price-comparison',
     title: 'مقارنة أسعار الموردين',
     operation: ReportsOperation.SupplierPriceComparison,
+    requiresProduct: true,
     columns: [
       { key: 'supplierName', label: 'المورد', type: 'text' },
       { key: 'unitCost', label: 'تكلفة الوحدة', type: 'currency' },

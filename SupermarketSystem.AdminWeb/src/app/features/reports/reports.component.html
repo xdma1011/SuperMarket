@@ -49,6 +49,20 @@
       </div>
     }
 
+    @if (!isSpecial() && activeConfig?.requiresProduct) {
+      <div class="date-filter">
+        <label>
+          <span>المنتج</span>
+          <select [(ngModel)]="selectedProductId" (ngModelChange)="onProductChanged()">
+            <option value="">— اختر منتجًا —</option>
+            @for (p of products(); track p.id) {
+              <option [value]="p.id">{{ p.name }}</option>
+            }
+          </select>
+        </label>
+      </div>
+    }
+
     @if (!isSpecial() && activeConfig?.requiresDateRange) {
       <div class="date-filter">
         <label>

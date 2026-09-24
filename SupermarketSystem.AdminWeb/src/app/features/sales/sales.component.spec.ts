@@ -99,6 +99,17 @@ describe('SalesComponent', () => {
       expect(component.remainingDebt({ ...sampleInvoice, statusCode: 2, totalPaidAmount: 0 })).toBe(0);
     });
 
+    it('الفاتورة الملغاة ما بتنكتب عليها "مسدَّدة" بعمود الدين', () => {
+      apiClientSpy.get.and.returnValue(of({ items: [], totalCount: 0 }));
+      fixture.detectChanges();
+      component.invoices.set([{ ...sampleInvoice, statusCode: 2, statusTitle: 'ملغاة', totalPaidAmount: 0 }]);
+      fixture.detectChanges();
+
+      const debtCell = (fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr td')[3];
+      expect(debtCell.textContent).not.toContain('مسدَّدة');
+      expect(debtCell.textContent?.trim()).toBe('—');
+    });
+
     it('openPaymentModal يفتح النافذة ويقترح كامل الدين المتبقي', () => {
       component.openPaymentModal(sampleInvoice);
 

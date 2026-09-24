@@ -74,7 +74,9 @@
             </td>
             <td class="mono">{{ row.totalAmount | number: '1.2-2' }}</td>
             <td class="mono">
-              @if (remainingDebt(row) > 0) {
+              @if (row.statusCode === 2) {
+                <span>—</span>
+              } @else if (remainingDebt(row) > 0) {
                 <span class="debt-chip">{{ remainingDebt(row) | number: '1.2-2' }}</span>
               } @else {
                 <span class="paid-chip">مسدَّدة</span>

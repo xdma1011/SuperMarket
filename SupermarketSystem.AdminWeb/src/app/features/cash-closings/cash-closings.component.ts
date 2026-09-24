@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -6,6 +6,7 @@ import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { CashClosingsOperation, BranchesOperation, PaymentMethodsOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
+import { AuthService } from '../../core/services/auth.service';
 
 interface BranchDto {
   id: string;
@@ -49,6 +50,8 @@ interface CountedDetailRow {
   styleUrl: './cash-closings.component.css'
 })
 export class CashClosingsComponent implements OnInit {
+  private readonly auth = inject(AuthService);
+
   readonly closings = signal<CashClosingListItemDto[]>([]);
   readonly totalCount = signal(0);
   readonly pageNumber = signal(1);
@@ -88,7 +91,7 @@ export class CashClosingsComponent implements OnInit {
       this.paymentMethods.set(paymentMethods);
       this.countedDetails.set(paymentMethods.map(pm => ({ paymentMethodId: pm.id, paymentMethodName: pm.name, countedAmount: null })));
 
-      if (branchesResult.items.length > 0) this.selectedBranchId = branchesResult.items[0].id;
+      if (branchesResult.items.length > 0) this.selectedBranchId = this.auth.defaultBranchId(branchesResult.items);
     } catch {
       this.errorMessage.set('تعذّر تحميل الفروع/طرق الدفع.');
     }

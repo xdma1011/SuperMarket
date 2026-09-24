@@ -1,12 +1,13 @@
-import { Component, OnInit, signal, computed } from '@angular/core';
+import { Component, OnInit, signal, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
-import { ReportsOperation, PurchaseInvoicesOperation, SalesOperation, BranchesOperation } from '../../core/api/operations';
+import { ReportsOperation, PurchaseInvoicesOperation, SalesOperation, BranchesOperation, ProductsOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
 import { REPORT_CONFIGS, ReportConfig } from './report-configs';
+import { AuthService } from '../../core/services/auth.service';
 
 interface PagedResult<T> {
   items: T[];
@@ -104,6 +105,8 @@ type SpecialReportId = 'sales-summary' | 'capital-value' | 'supplier-debts' | 'p
   styleUrl: './reports.component.css'
 })
 export class ReportsComponent implements OnInit {
+  private readonly auth = inject(AuthService);
+
   readonly standardReports = REPORT_CONFIGS;
   readonly activeReportId = signal<string>(REPORT_CONFIGS[0].id);
   private readonly SPECIAL_IDS: SpecialReportId[] = ['sales-summary', 'capital-value', 'supplier-debts', 'product-margin', 'customer-debts'];
@@ -122,6 +125,10 @@ export class ReportsComponent implements OnInit {
 
   readonly branches = signal<{ id: string; name: string }[]>([]);
   selectedBranchId = '';
+
+  /** لتقرير مقارنة أسعار الموردين - كان بلا أي طريقة تختار منتج، فكان دايمًا يفشل. */
+  readonly products = signal<{ id: string; name: string }[]>([]);
+  selectedProductId = '';
 
   readonly salesSummary = signal<GetSalesSummaryResponse | null>(null);
   readonly capitalValue = signal<GetCurrentCapitalValueResponse | null>(null);
@@ -143,7 +150,7 @@ export class ReportsComponent implements OnInit {
       );
       this.branches.set(result.items);
       if (result.items.length > 0) {
-        this.selectedBranchId = result.items[0].id;
+        this.selectedBranchId = this.auth.defaultBranchId(result.items);
       }
     } catch {
       /* فشل تحميل الفروع - التقارير اللي تحتاج فرع بترجّع رسالة خطأ واضحة عند التحميل. */
@@ -184,8 +191,19 @@ export class ReportsComponent implements OnInit {
         pageSize: this.pageSize()
       };
       if (config.requiresDateRange) {
-        queryParams['fromUtc'] = new Date(this.fromDate).toISOString();
-        queryParams['toUtc'] = new Date(this.toDate).toISOString();
+        queryParams['fromUtc'] = this.rangeStartUtc();
+        queryParams['toUtc'] = this.rangeEndUtc();
+      }
+      if (config.requiresProduct) {
+        if (!this.selectedProductId) {
+          await this.ensureProductsLoaded();
+          this.errorMessage.set('اختر منتجًا لعرض مقارنة أسعار الموردين.');
+          this.rows.set([]);
+          this.totalCount.set(0);
+          this.loading.set(false);
+          return;
+        }
+        queryParams['productId'] = this.selectedProductId;
       }
       if (config.requiresBranch) {
         if (!this.selectedBranchId) {
@@ -222,8 +240,8 @@ export class ReportsComponent implements OnInit {
     try {
       const result = await firstValueFrom(
         this.apiClient.get<GetSalesSummaryResponse>(ApiController.Reports, ReportsOperation.SalesSummary, undefined, {
-          fromUtc: new Date(this.fromDate).toISOString(),
-          toUtc: new Date(this.toDate).toISOString()
+          fromUtc: this.rangeStartUtc(),
+          toUtc: this.rangeEndUtc()
         })
       );
       this.salesSummary.set(result);
@@ -273,8 +291,8 @@ export class ReportsComponent implements OnInit {
             pageNumber: this.pageNumber(),
             pageSize: this.pageSize(),
             branchId: this.selectedBranchId,
-            fromUtc: new Date(this.fromDate).toISOString(),
-            toUtc: new Date(this.toDate).toISOString()
+            fromUtc: this.rangeStartUtc(),
+            toUtc: this.rangeEndUtc()
           }
         )
       );
@@ -341,6 +359,23 @@ export class ReportsComponent implements OnInit {
     this.loadActiveReport();
   }
 
+  onProductChanged(): void {
+    this.pageNumber.set(1);
+    this.loadActiveReport();
+  }
+
+  private async ensureProductsLoaded(): Promise<void> {
+    if (this.products().length > 0) return;
+    try {
+      const result = await firstValueFrom(
+        this.apiClient.get<{ items: { id: string; name: string }[] }>(ApiController.Products, ProductsOperation.List, undefined, { pageSize: 500 })
+      );
+      this.products.set(result.items);
+    } catch {
+      /* فشل تحميل المنتجات - رسالة "اختر منتجًا" بتضل ظاهرة. */
+    }
+  }
+
   formatCell(value: unknown, column: { type: string; enumMap?: Record<string, string> }): string {
     if (value === null || value === undefined) return '—';
 
@@ -362,13 +397,39 @@ export class ReportsComponent implements OnInit {
     return String(value);
   }
 
+  /**
+   * "من"/"إلى" أيام تقويم محلية (توقيت الجهاز)، والفترة بتشمل يوم "إلى" كامل. كانت
+   * new Date('yyyy-mm-dd') = منتصف ليل UTC بداية اليوم، فالافتراضي (إلى = اليوم) كان
+   * يقطع كل عمليات اليوم - إرجاع أو إلغاء صار الصبح ما كان يبين بالتقارير لحد بكرة.
+   */
+  rangeStartUtc(): string {
+    return this.parseLocalDate(this.fromDate).toISOString();
+  }
+
+  rangeEndUtc(): string {
+    const end = this.parseLocalDate(this.toDate);
+    end.setDate(end.getDate() + 1);
+    end.setMilliseconds(end.getMilliseconds() - 1);
+    return end.toISOString();
+  }
+
+  private parseLocalDate(value: string): Date {
+    const [year, month, day] = value.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
+
+  private formatLocalDate(date: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  }
+
   private defaultFromDate(): string {
     const d = new Date();
     d.setDate(d.getDate() - 30);
-    return d.toISOString().slice(0, 10);
+    return this.formatLocalDate(d);
   }
 
   private defaultToDate(): string {
-    return new Date().toISOString().slice(0, 10);
+    return this.formatLocalDate(new Date());
   }
 }

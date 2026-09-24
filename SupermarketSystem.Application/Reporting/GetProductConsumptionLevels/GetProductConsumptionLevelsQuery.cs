@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SupermarketSystem.Domain.Sales;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Pagination;
 
@@ -19,7 +20,9 @@ public enum ConsumptionLevel
     NearZero = 4
 }
 
-public sealed record GetProductConsumptionLevelsQuery(PagedRequest Paging, Guid BranchId, DateTime SinceUtc);
+// FromUtc/ToUtc بدل SinceUtc لحاله: شاشة التقارير بتبعت فترة (من/إلى) - الاسم القديم كان يرجّع
+// 500 من الواجهة دايمًا. ToUtc اختياري (null = لحد الآن).
+public sealed record GetProductConsumptionLevelsQuery(PagedRequest Paging, Guid BranchId, DateTime FromUtc, DateTime? ToUtc = null);
 
 public sealed record ProductConsumptionItemDto(
     Guid ProductId,
@@ -64,12 +67,21 @@ public sealed class GetProductConsumptionLevelsHandler
         // نجيب "كمية كل منتج المباعة" كـdictionary صغير بالذاكرة أول (نفس
         // مبدأ CLAUDE.md §3.1)، وبعدين نطابقها يدويًا بـC# مع منتجات الفرع -
         // كتالوج فرع واحد حجمه محدود بطبيعته، لا مليارات الصفوف.
+        // الكمية المباعة فعليًا: بلا الفواتير الملغاة، ناقص المرتجع، وبالوحدة الأساسية (كرتونة
+        // = معاملها) - نفس تعريف باقي التقارير (ملخص المبيعات، الربح). كانت بتعدّ الملغاة
+        // كأنها انباعت، وما بتطرح المرتجع، وبتجمع كراتين مع حبّات كأنها نفس الوحدة.
+        var toUtc = query.ToUtc ?? DateTime.MaxValue;
         var soldQuantityByProduct = await _context.SaleInvoiceItems.AsNoTracking()
             .Join(_context.SaleInvoices.AsNoTracking(),
-                i => i.SaleInvoiceId, s => s.Id, (i, s) => new { i.ProductId, i.Quantity, s.BranchId, s.CreatedAtUtc })
-            .Where(x => x.BranchId == query.BranchId && x.CreatedAtUtc >= query.SinceUtc)
+                i => i.SaleInvoiceId, s => s.Id,
+                (i, s) => new { i.ProductId, i.ProductUnitId, i.Quantity, i.QuantityReturned, s.BranchId, s.Status, s.CreatedAtUtc })
+            .Join(_context.ProductUnits.AsNoTracking(),
+                x => x.ProductUnitId, u => u.Id,
+                (x, u) => new { x.ProductId, NetBaseQuantity = (x.Quantity - x.QuantityReturned) * u.ConversionFactorToBase, x.BranchId, x.Status, x.CreatedAtUtc })
+            .Where(x => x.BranchId == query.BranchId && x.Status != SaleInvoiceStatus.Voided
+                        && x.CreatedAtUtc >= query.FromUtc && x.CreatedAtUtc <= toUtc)
             .GroupBy(x => x.ProductId)
-            .Select(g => new { ProductId = g.Key, QuantitySold = g.Sum(x => x.Quantity) })
+            .Select(g => new { ProductId = g.Key, QuantitySold = g.Sum(x => x.NetBaseQuantity) })
             .ToDictionaryAsync(x => x.ProductId, x => x.QuantitySold, cancellationToken);
 
         var branchProducts = _context.ProductBranches.AsNoTracking()

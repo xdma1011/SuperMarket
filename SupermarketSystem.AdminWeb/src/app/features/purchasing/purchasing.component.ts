@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -6,6 +6,7 @@ import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { PurchaseInvoicesOperation, ProductsOperation, SuppliersOperation, BranchesOperation, PaymentMethodsOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
+import { AuthService } from '../../core/services/auth.service';
 
 interface PurchaseInvoiceListItemDto {
   id: string;
@@ -78,6 +79,8 @@ interface PagedResult<T> {
   styleUrl: './purchasing.component.css'
 })
 export class PurchasingComponent implements OnInit {
+  private readonly auth = inject(AuthService);
+
   readonly invoices = signal<PurchaseInvoiceListItemDto[]>([]);
   readonly totalCount = signal(0);
   readonly pageNumber = signal(1);
@@ -142,7 +145,7 @@ export class PurchasingComponent implements OnInit {
       if (paymentMethodsResult.length > 0) this.paymentMethodId = paymentMethodsResult[0].id;
 
       if (suppliersResult.items.length > 0) this.selectedSupplierId = suppliersResult.items[0].id;
-      if (branchesResult.items.length > 0) this.selectedBranchId = branchesResult.items[0].id;
+      if (branchesResult.items.length > 0) this.selectedBranchId = this.auth.defaultBranchId(branchesResult.items);
       if (productsResult.items.length > 0) this.newLineProductId = productsResult.items[0].id;
     } catch {
       this.errorMessage.set('تعذّر تحميل بيانات المشتريات.');

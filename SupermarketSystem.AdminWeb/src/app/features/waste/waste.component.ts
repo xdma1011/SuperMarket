@@ -1,10 +1,11 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { ProductsOperation, BranchesOperation, InventoryOperation } from '../../core/api/operations';
+import { AuthService } from '../../core/services/auth.service';
 
 interface ProductDto {
   id: string;
@@ -49,6 +50,8 @@ const WASTE_REASONS: ReadonlyArray<{ value: number; label: string }> = [
   styleUrl: './waste.component.css'
 })
 export class WasteComponent implements OnInit {
+  private readonly auth = inject(AuthService);
+
   readonly products = signal<ProductDto[]>([]);
   readonly branches = signal<BranchDto[]>([]);
   readonly units = signal<ProductUnitDto[]>([]);
@@ -89,7 +92,7 @@ export class WasteComponent implements OnInit {
       this.products.set(productsResult.items);
       this.branches.set(branchesResult.items);
 
-      if (branchesResult.items.length > 0) this.selectedBranchId = branchesResult.items[0].id;
+      if (branchesResult.items.length > 0) this.selectedBranchId = this.auth.defaultBranchId(branchesResult.items);
       if (productsResult.items.length > 0) {
         this.selectedProductId = productsResult.items[0].id;
         await this.onProductChange();

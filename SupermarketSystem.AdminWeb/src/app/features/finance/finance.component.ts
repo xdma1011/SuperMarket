@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -6,6 +6,7 @@ import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { BranchesOperation, FinanceOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
+import { AuthService } from '../../core/services/auth.service';
 
 interface BranchDto {
   id: string;
@@ -102,6 +103,8 @@ const MONTH_NAMES = [
   styleUrl: './finance.component.css'
 })
 export class FinanceComponent implements OnInit {
+  private readonly auth = inject(AuthService);
+
   readonly branches = signal<BranchDto[]>([]);
   readonly errorMessage = signal<string | null>(null);
 
@@ -174,9 +177,9 @@ export class FinanceComponent implements OnInit {
       );
       this.branches.set(result.items);
       if (result.items.length > 0) {
-        this.statementBranchId ||= result.items[0].id;
-        this.newExpenseBranchId ||= result.items[0].id;
-        this.newCapitalBranchId ||= result.items[0].id;
+        this.statementBranchId ||= this.auth.defaultBranchId(result.items);
+        this.newExpenseBranchId ||= this.auth.defaultBranchId(result.items);
+        this.newCapitalBranchId ||= this.auth.defaultBranchId(result.items);
       }
     } catch {
       this.errorMessage.set('تعذّر تحميل الفروع.');

@@ -1,10 +1,11 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { PurchaseInvoiceDraftsOperation, BranchesOperation, PaymentMethodsOperation } from '../../core/api/operations';
+import { AuthService } from '../../core/services/auth.service';
 
 interface BranchDto {
   id: string;
@@ -41,6 +42,8 @@ interface PagedResult<T> {
   styleUrl: './upload-invoice-image.component.css'
 })
 export class UploadInvoiceImageComponent implements OnInit {
+  private readonly auth = inject(AuthService);
+
   readonly branches = signal<BranchDto[]>([]);
   readonly paymentMethods = signal<PaymentMethodDto[]>([]);
   readonly uploading = signal(false);
@@ -66,7 +69,7 @@ export class UploadInvoiceImageComponent implements OnInit {
         this.apiClient.get<PagedResult<BranchDto>>(ApiController.Branches, BranchesOperation.List, undefined, { pageSize: 500 })
       );
       this.branches.set(result.items);
-      if (result.items.length > 0) this.selectedBranchId = result.items[0].id;
+      if (result.items.length > 0) this.selectedBranchId = this.auth.defaultBranchId(result.items);
     } catch {
       this.errorMessage.set('تعذّر تحميل قائمة الفروع.');
     }

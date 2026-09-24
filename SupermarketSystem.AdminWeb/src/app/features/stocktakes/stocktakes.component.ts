@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -7,6 +7,7 @@ import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { StocktakesOperation, BranchesOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
+import { AuthService } from '../../core/services/auth.service';
 
 interface StocktakeListItemDto {
   stocktakeId: string;
@@ -49,6 +50,8 @@ interface CreateStocktakeResponse {
   styleUrl: './stocktakes.component.css'
 })
 export class StocktakesComponent implements OnInit {
+  private readonly auth = inject(AuthService);
+
   readonly stocktakes = signal<StocktakeListItemDto[]>([]);
   readonly totalCount = signal(0);
   readonly pageNumber = signal(1);
@@ -80,7 +83,7 @@ export class StocktakesComponent implements OnInit {
       );
       this.branches.set(result.items);
       if (result.items.length > 0) {
-        this.selectedBranchId = result.items[0].id;
+        this.selectedBranchId = this.auth.defaultBranchId(result.items);
       }
     } catch {
       /* فشل تحميل الفروع لا يمنع عرض القائمة. */
