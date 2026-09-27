@@ -5,7 +5,7 @@ namespace SupermarketSystem.Application.Catalog.GetUnitsOfMeasure;
 
 public sealed record GetUnitsOfMeasureQuery(bool ActiveOnly);
 
-public sealed record UnitOfMeasureDto(Guid Id, string Name, bool IsActive);
+public sealed record UnitOfMeasureDto(Guid Id, string Name, bool IsActive, int SortOrder);
 
 /// <summary>
 /// كانت مفقودة بالكامل - وحدة كل منتج (ProductUnit.UnitName) كانت نص حر
@@ -32,8 +32,9 @@ public sealed class GetUnitsOfMeasureHandler
         }
 
         return await units
-            .OrderBy(u => u.Name)
-            .Select(u => new UnitOfMeasureDto(u.Id, u.Name, u.IsActive))
+            .OrderBy(u => u.SortOrder)
+            .ThenBy(u => u.Name)
+            .Select(u => new UnitOfMeasureDto(u.Id, u.Name, u.IsActive, u.SortOrder))
             .ToListAsync(cancellationToken);
     }
 }

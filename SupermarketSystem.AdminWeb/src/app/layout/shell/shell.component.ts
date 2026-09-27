@@ -8,8 +8,16 @@ import { AuthService } from '../../core/services/auth.service';
 import { PermissionsService } from '../../core/services/permissions.service';
 import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
-import { ProductsOperation, SuppliersOperation, PurchaseInvoicesOperation } from '../../core/api/operations';
-import { NAV_ITEMS } from '../../shared/models/nav-item';
+import { CashierSyncOperation, ProductsOperation, SuppliersOperation, PurchaseInvoicesOperation } from '../../core/api/operations';
+import { NAV_GROUPS, NAV_ICONS, NAV_ITEMS, NavGroupId, NavItem } from '../../shared/models/nav-item';
+
+interface NavSection {
+  id: NavGroupId;
+  label: string | null;
+  items: NavItem[];
+}
+
+const COLLAPSED_GROUPS_STORAGE_KEY = 'nav.collapsedGroups';
 
 interface SearchResultItem {
   type: 'product' | 'supplier' | 'invoice';
@@ -31,6 +39,31 @@ export class ShellComponent {
   readonly navItems = computed(() =>
     NAV_ITEMS.filter(item => !item.requiredPermission || this.permissionsService.has(item.requiredPermission))
   );
+
+  /** المجموعات الظاهرة بس (مجموعة كل عناصرها مخفية بالصلاحيات ما بتطلع عنوانها فاضي). */
+  readonly navSections = computed<NavSection[]>(() => {
+    const visible = this.navItems();
+    return NAV_GROUPS
+      .map(g => ({ id: g.id, label: g.label, items: visible.filter(i => i.group === g.id) }))
+      .filter(section => section.items.length > 0);
+  });
+
+  readonly icons = NAV_ICONS;
+
+  /** مفضّلة شخصية لكل متصفح - لو التخزين مش متاح بتفتح كل المجموعات عادي. */
+  readonly collapsedGroups = signal<Set<NavGroupId>>(this.readCollapsedGroups());
+
+  /** اسم المحل من الإعدادات (نفس اللي بينطبع على فاتورة الكاشير) - بدل اسم تجريبي ثابت. */
+  readonly storeName = signal<string | null>(null);
+
+  readonly userInitials = computed(() => {
+    const name = (this.authService.currentUserFullName() ?? '').trim();
+    if (!name) {
+      return '؟';
+    }
+    const parts = name.split(/\s+/).filter(Boolean);
+    return parts.length > 1 ? `${parts[0][0]}.${parts[1][0]}` : parts[0].slice(0, 2);
+  });
 
   readonly drawerOpen = signal(false);
   readonly searchQuery = signal('');
@@ -55,7 +88,65 @@ export class ShellComponent {
     this.router.events.pipe(filter(e => e instanceof NavigationEnd)).subscribe(() => {
       this.drawerOpen.set(false);
       this.searchOpen.set(false);
+      this.expandGroupOfCurrentRoute();
     });
+
+    this.loadStoreName();
+  }
+
+  isGroupCollapsed(groupId: NavGroupId): boolean {
+    return this.collapsedGroups().has(groupId);
+  }
+
+  toggleGroup(groupId: NavGroupId): void {
+    const next = new Set(this.collapsedGroups());
+    if (next.has(groupId)) {
+      next.delete(groupId);
+    } else {
+      next.add(groupId);
+    }
+    this.collapsedGroups.set(next);
+    this.writeCollapsedGroups(next);
+  }
+
+  /** الصفحة المفتوحة حاليًا ما بتضل مخبّاية جوّا مجموعة مطويّة. */
+  private expandGroupOfCurrentRoute(): void {
+    const path = this.router.url.split('?')[0];
+    const active = NAV_ITEMS
+      .filter(i => i.route === '/' ? path === '/' : path === i.route || path.startsWith(i.route + '/'))
+      .sort((a, b) => b.route.length - a.route.length)[0];
+
+    if (active && this.collapsedGroups().has(active.group)) {
+      this.toggleGroup(active.group);
+    }
+  }
+
+  private readCollapsedGroups(): Set<NavGroupId> {
+    try {
+      const raw = localStorage.getItem(COLLAPSED_GROUPS_STORAGE_KEY);
+      return new Set(raw ? (JSON.parse(raw) as NavGroupId[]) : []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  private writeCollapsedGroups(groups: Set<NavGroupId>): void {
+    try {
+      localStorage.setItem(COLLAPSED_GROUPS_STORAGE_KEY, JSON.stringify([...groups]));
+    } catch {
+      /* تفضيل شكلي بس - فشل الحفظ ما بيأثر على شي. */
+    }
+  }
+
+  private async loadStoreName(): Promise<void> {
+    try {
+      const branding = await firstValueFrom(
+        this.apiClient.get<{ storeName: string | null }>(ApiController.CashierSync, CashierSyncOperation.StoreBranding)
+      );
+      this.storeName.set(branding?.storeName?.trim() || null);
+    } catch {
+      /* بلا صلاحية Sales.Create أو بلا اتصال - بيضل الاسم العام. */
+    }
   }
 
   toggleDrawer(): void {

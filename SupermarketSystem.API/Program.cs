@@ -66,11 +66,9 @@ builder.Services.AddCors(options =>
     options.AddPolicy(AdminWebCorsPolicy, policy =>
     {
         policy
-            .WithOrigins(new[] { "http://localhost:4200", "https://localhost:4200" }
-                // origins إضافية من الإعدادات بس (افتراضيًا ولا وحدة) - مثلًا تطبيق الزبائن (Flutter)
-                // على Chrome وقت التست: Cors__AdditionalOrigins__0=http://localhost:5300
-                .Concat(builder.Configuration.GetSection("Cors:AdditionalOrigins").Get<string[]>() ?? [])
-                .ToArray())
+            .WithOrigins(
+                "http://localhost:4200",
+                "https://localhost:4200")
             .AllowAnyHeader()
             .AllowAnyMethod();
         // بلا AllowCredentials(): المصادقة هون عبر Authorization header

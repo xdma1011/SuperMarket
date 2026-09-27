@@ -66,6 +66,7 @@ using SupermarketSystem.Application.Catalog.SetProductBranchAvailability;
 using SupermarketSystem.Application.Catalog.CreateUnitOfMeasure;
 using SupermarketSystem.Application.Catalog.GetUnitsOfMeasure;
 using SupermarketSystem.Application.Catalog.SetUnitOfMeasureActive;
+using SupermarketSystem.Application.Catalog.MoveUnitOfMeasure;
 using SupermarketSystem.Application.Catalog.CreatePromotion;
 using SupermarketSystem.Application.Catalog.UpdatePromotion;
 using SupermarketSystem.Application.Catalog.SetPromotionBranchActive;
@@ -211,6 +212,7 @@ public static class DependencyInjection
         services.AddScoped<CreateUnitOfMeasureHandler>();
         services.AddScoped<GetUnitsOfMeasureHandler>();
         services.AddScoped<SetUnitOfMeasureActiveHandler>();
+        services.AddScoped<MoveUnitOfMeasureHandler>();
         services.AddScoped<CreateStockTransferHandler>();
         services.AddScoped<ReceiveStockTransferHandler>();
         services.AddScoped<GetStockTransfersHandler>();

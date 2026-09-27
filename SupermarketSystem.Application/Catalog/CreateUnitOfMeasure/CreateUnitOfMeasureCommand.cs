@@ -35,7 +35,11 @@ public sealed class CreateUnitOfMeasureHandler
                 Error.Conflict("UnitOfMeasure.AlreadyExists", $"وحدة قياس بالاسم '{name}' موجودة أصلًا."));
         }
 
-        var unit = new UnitOfMeasure(name);
+        // الوحدة الجديدة بآخر القائمة - صاحب المحل بيطلّعها لفوق بالأسهم لو بدّه.
+        var lastSortOrder = await _context.UnitsOfMeasure.AsNoTracking()
+            .MaxAsync(u => (int?)u.SortOrder, cancellationToken) ?? 0;
+
+        var unit = new UnitOfMeasure(name, lastSortOrder + 1);
         _context.UnitsOfMeasure.Add(unit);
         await _context.SaveChangesAsync(cancellationToken);
 

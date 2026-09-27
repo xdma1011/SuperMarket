@@ -2,5 +2,6 @@
 export enum UnitsOfMeasureOperation {
   List = '',
   Create = '',
-  SetActive = '{unitOfMeasureId}/active'
+  SetActive = '{unitOfMeasureId}/active',
+  Move = '{unitOfMeasureId}/move'
 }

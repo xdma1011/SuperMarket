@@ -2,6 +2,7 @@ export * from './auth.operations';
 export * from './backups.operations';
 export * from './branches.operations';
 export * from './cash-closings.operations';
+export * from './cashier-sync.operations';
 export * from './catalog.operations';
 export * from './customers.operations';
 export * from './driver.operations';

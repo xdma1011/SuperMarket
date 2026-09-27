@@ -1,0 +1,41 @@
+@if (open()) {
+  <div
+    #panel
+    class="select-filter-panel"
+    role="dialog"
+    aria-label="اختيار من القائمة"
+    [style.top.px]="position().top"
+    [style.left.px]="position().left"
+    [style.width.px]="position().width"
+    [style.max-height.px]="position().maxHeight"
+  >
+    <input
+      #searchInput
+      type="search"
+      class="search"
+      placeholder="ابحث…"
+      autocomplete="off"
+      [value]="query()"
+      (input)="onQueryInput($any($event.target).value)"
+      (keydown)="onSearchKeyDown($event)"
+    />
+    <div #list class="options" role="listbox">
+      @for (o of filtered(); track o.index; let i = $index) {
+        <div
+          class="option"
+          role="option"
+          [class.active]="i === activeIndex()"
+          [class.selected]="o.index === selectedIndex()"
+          [class.disabled]="o.disabled"
+          [attr.aria-selected]="o.index === selectedIndex()"
+          (mouseenter)="!o.disabled && activeIndex.set(i)"
+          (click)="choose(o)"
+        >
+          {{ o.label || '—' }}
+        </div>
+      } @empty {
+        <div class="empty">لا نتائج مطابقة</div>
+      }
+    </div>
+  </div>
+}

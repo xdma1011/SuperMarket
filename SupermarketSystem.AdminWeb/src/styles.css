@@ -6,6 +6,7 @@
 
 :root,
 [data-theme='light'] {
+  color-scheme: light;
   --bg: oklch(0.975 0.008 85);
   --surface: oklch(1 0 0);
   --surface-2: oklch(0.955 0.012 85);
@@ -22,6 +23,7 @@
 }
 
 [data-theme='dark'] {
+  color-scheme: dark;
   --bg: oklch(0.185 0.012 60);
   --surface: oklch(0.235 0.014 60);
   --surface-2: oklch(0.275 0.014 60);

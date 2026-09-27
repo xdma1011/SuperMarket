@@ -1,4 +1,4 @@
-import { NAV_ITEMS } from './nav-item';
+import { NAV_GROUPS, NAV_ICONS, NAV_ITEMS } from './nav-item';
 
 describe('NAV_ITEMS', () => {
   it('كل عنصر عنده id ومسار (route) فريدين (بلا تكرار)', () => {
@@ -27,5 +27,17 @@ describe('NAV_ITEMS', () => {
     for (const item of NAV_ITEMS) {
       expect(item.route.startsWith('/')).toBeTrue();
     }
+  });
+
+  it('كل عنصر مربوط بمجموعة موجودة وأيقونة موجودة', () => {
+    const groupIds = new Set(NAV_GROUPS.map(g => g.id));
+    for (const item of NAV_ITEMS) {
+      expect(groupIds.has(item.group)).withContext(item.id).toBeTrue();
+      expect(NAV_ICONS[item.icon]?.length).withContext(item.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('ما في شارة (badge) ثابتة وهمية على أي عنصر', () => {
+    expect(NAV_ITEMS.filter(i => i.badge).length).toBe(0);
   });
 });

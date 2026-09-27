@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using SupermarketSystem.Infrastructure.Services;
 
@@ -11,7 +11,7 @@ namespace SupermarketSystem.Infrastructure.Persistence;
 /// (ICurrentUserContext) that the tooling cannot resolve on its own.
 ///
 /// The connection string here is used ONLY to determine the provider and to
-/// scaffold migrations — `dotnet ef migrations add` does not connect to a
+/// scaffold migrations â€” `dotnet ef migrations add` does not connect to a
 /// database. `dotnet ef database update` uses the API project's
 /// configuration instead.
 /// </summary>
@@ -21,7 +21,7 @@ public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
     {
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
         optionsBuilder.UseSqlServer(
-            "Server=(localdb)\\mssqllocaldb;Database=SupermarketSystem;Trusted_Connection=True;TrustServerCertificate=True",
+            "YES",
             sql => sql.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName));
 
         return new AppDbContext(optionsBuilder.Options, new PlaceholderCurrentUserContext());

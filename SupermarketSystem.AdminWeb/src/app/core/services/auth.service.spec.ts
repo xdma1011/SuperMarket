@@ -69,6 +69,20 @@ describe('AuthService', () => {
       expect(result).toEqual({ success: false, message: 'اسم المستخدم أو كلمة السر غير صحيحة.' });
       expect(service.isAuthenticated()).toBeFalse();
     });
+
+    it('يعرض رسالة الخطأ التفصيلية من الباك إند (err.error.detail) لو موجودة - مثال: حساب مقفل مؤقتًا', async () => {
+      apiClientSpy.post.and.returnValue(
+        throwError(() => ({ error: { detail: 'الحساب مقفل مؤقتًا بسبب محاولات دخول فاشلة متكررة. حاول مرة أخرى بعد 15 دقيقة تقريبًا.' } }))
+      );
+
+      const result = await service.login('ahmad', 'wrong', null);
+
+      expect(result).toEqual({
+        success: false,
+        message: 'الحساب مقفل مؤقتًا بسبب محاولات دخول فاشلة متكررة. حاول مرة أخرى بعد 15 دقيقة تقريبًا.'
+      });
+      expect(service.isAuthenticated()).toBeFalse();
+    });
   });
 
   describe('forceLogoutLocally', () => {

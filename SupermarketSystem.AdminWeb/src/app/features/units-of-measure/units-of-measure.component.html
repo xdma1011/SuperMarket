@@ -2,7 +2,7 @@
   <div class="head-text">
     <span class="crumb">الإعدادات / وحدات القياس</span>
     <h1>وحدات القياس</h1>
-    <span class="subtitle">مرجع موحَّد لأسماء الوحدات (كيلو، لتر، حبة...) - يظهر كقائمة اختيار عند إضافة وحدة لمنتج، بدل إدخال حر.</span>
+    <span class="subtitle">مرجع موحَّد لأسماء الوحدات (كيلو، لتر، حبة...) - يظهر كقائمة اختيار عند إضافة وحدة لمنتج، بدل إدخال حر. رتّبها بالأسهم ↑↓ - نفس الترتيب بيطلع بالقائمة، وأول وحدة فعّالة هي الافتراضية.</span>
   </div>
   <div class="head-actions">
     <button type="button" class="btn-primary" (click)="openCreateForm()">وحدة جديدة</button>
@@ -18,14 +18,24 @@
     <table>
       <thead>
         <tr>
+          <th>الترتيب</th>
           <th>الاسم</th>
           <th>الحالة</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
-        @for (u of units(); track u.id) {
+        @for (u of units(); track u.id; let first = $first; let last = $last; let i = $index) {
           <tr>
+            <td>
+              <div class="order-cell">
+                <span class="order-num">{{ i + 1 }}</span>
+                <button type="button" class="arrow-btn" title="لفوق" aria-label="تحريك لفوق"
+                        [disabled]="first || movingId() !== null" (click)="move(u, true)">↑</button>
+                <button type="button" class="arrow-btn" title="لتحت" aria-label="تحريك لتحت"
+                        [disabled]="last || movingId() !== null" (click)="move(u, false)">↓</button>
+              </div>
+            </td>
             <td>{{ u.name }}</td>
             <td>
               <span class="status-chip" [class.inactive]="!u.isActive">

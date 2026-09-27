@@ -70,6 +70,26 @@ describe('ShellComponent', () => {
     });
   });
 
+  describe('navSections', () => {
+    it('بيجمّع العناصر الظاهرة بمجموعات، وبيخفي أي مجموعة كل عناصرها مخفية', () => {
+      permissionsSpy.has.and.callFake((code: string) => code === 'Catalog.Manage');
+
+      const sections = component.navSections();
+
+      expect(sections.map(s => s.id)).toEqual(['main', 'inventory']);
+      expect(sections[1].items.every(i => i.requiredPermission === 'Catalog.Manage')).toBeTrue();
+    });
+  });
+
+  describe('toggleGroup', () => {
+    it('بيطوي المجموعة وبيفتحها بالضغطة التانية', () => {
+      component.toggleGroup('sales');
+      expect(component.isGroupCollapsed('sales')).toBeTrue();
+      component.toggleGroup('sales');
+      expect(component.isGroupCollapsed('sales')).toBeFalse();
+    });
+  });
+
   describe('toggleDrawer / closeDrawer', () => {
     it('toggleDrawer يبدّل حالة الفتح', () => {
       expect(component.drawerOpen()).toBeFalse();
@@ -117,6 +137,8 @@ describe('ShellComponent', () => {
     afterEach(() => jasmine.clock().uninstall());
 
     it('يمسح النتائج بلا استدعاء API لنص أقل من حرفين', () => {
+      // المنشئ بيجيب اسم المحل (store-branding) - مش جزء من البحث.
+      apiClientSpy.get.calls.reset();
       component.onSearchInput('س');
       jasmine.clock().tick(400);
 

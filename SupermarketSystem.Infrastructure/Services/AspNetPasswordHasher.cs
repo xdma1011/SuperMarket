@@ -46,13 +46,30 @@ public sealed class AspNetPasswordHasher : IPasswordHasher
 
         // VerifyHashedPassword نفسها محمية ضد هجمات التوقيت (تقارن بزمن
         // ثابت) — نقطة أخرى ما كنا لنضبطها بسهولة لو كتبناها بأنفسنا.
-        var result = _hasher.VerifyHashedPassword(HashingContext, storedHash, plainPassword);
+        // مضمون غير null/فاضي هون - الفحص أعلاه (IsNullOrWhiteSpace) بيرجع
+        // مبكرًا قبل ما نوصل لهون.
+        var cleanHash = storedHash!.Trim();
 
-        return result switch
+        try
         {
-            PasswordVerificationResult.Success => PasswordVerificationOutcome.Success,
-            PasswordVerificationResult.SuccessRehashNeeded => PasswordVerificationOutcome.SuccessRehashNeeded,
-            _ => PasswordVerificationOutcome.Failed
-        };
+            var result = _hasher.VerifyHashedPassword(HashingContext, cleanHash, plainPassword);
+
+            return result switch
+            {
+                PasswordVerificationResult.Success => PasswordVerificationOutcome.Success,
+                PasswordVerificationResult.SuccessRehashNeeded => PasswordVerificationOutcome.SuccessRehashNeeded,
+                _ => PasswordVerificationOutcome.Failed
+            };
+        }
+        catch (FormatException)
+        {
+            // PasswordHash مخزَّن مش Base64 صحيح (بيانات تالفة - تعديل يدوي
+            // غلط بـSSMS، استيراد قديم، إلخ) - VerifyHashedPassword نفسها ما
+            // بتلقط هالحالة وبترمي استثناء يطيح كل طلب الدخول بـ500. المبدأ
+            // الحاكم لهالـclass (رسالة فشل واحدة لكل الأسباب، راجع تعليق
+            // LoginHandler) بينطبق هون بالضبط: بيانات مشوَّهة = فشل تحقق
+            // عادي، مش كرش.
+            return PasswordVerificationOutcome.Failed;
+        }
     }
 }

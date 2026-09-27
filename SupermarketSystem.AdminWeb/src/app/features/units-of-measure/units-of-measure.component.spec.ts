@@ -127,4 +127,29 @@ describe('UnitsOfMeasureComponent', () => {
       expect(component.errorMessage()).toBe('تعذّر تغيير حالة وحدة القياس.');
     });
   });
+
+  describe('move', () => {
+    it('يرسل اتجاه التحريك ويعيد التحميل', async () => {
+      apiClientSpy.post.and.returnValue(of({}));
+
+      await component.move({ id: 'u2', name: 'غرام', isActive: true }, true);
+
+      expect(apiClientSpy.post).toHaveBeenCalledWith(
+        jasmine.anything(),
+        '{unitOfMeasureId}/move',
+        { moveUp: true },
+        { unitOfMeasureId: 'u2' }
+      );
+      expect(apiClientSpy.get).toHaveBeenCalled();
+      expect(component.movingId()).toBeNull();
+    });
+
+    it('يعرض رسالة خطأ عربية واضحة عند الفشل', async () => {
+      apiClientSpy.post.and.returnValue(throwError(() => new Error('network')));
+
+      await component.move({ id: 'u2', name: 'غرام', isActive: true }, false);
+
+      expect(component.errorMessage()).toBe('تعذّر تغيير ترتيب وحدة القياس.');
+    });
+  });
 });

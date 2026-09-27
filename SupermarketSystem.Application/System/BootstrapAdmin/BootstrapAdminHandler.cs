@@ -45,10 +45,7 @@ public sealed class BootstrapAdminHandler
 
     public async Task<Result<BootstrapAdminResponse>> HandleAsync(CancellationToken cancellationToken)
     {
-        // مستخدم "system" مبذور بالـMigrations نفسها (User.SystemUserId، معطّل وبلا كلمة سر) - موجود
-        // بكل قاعدة من أول لحظة، فعدّه كان بيخلّي التمهيد يرفض دايمًا على قاعدة جديدة فاضية.
-        var anyUserExists = await _context.Users.IgnoreQueryFilters()
-            .AnyAsync(u => u.Id != User.SystemUserId, cancellationToken);
+        var anyUserExists = await _context.Users.IgnoreQueryFilters().AnyAsync(cancellationToken);
         if (anyUserExists)
         {
             return Result.Failure<BootstrapAdminResponse>(Error.Conflict(
@@ -59,7 +56,9 @@ public sealed class BootstrapAdminHandler
         var branch = new Branch(MainBranchName, MainBranchCode, address: null, phoneNumber: null);
         _context.Branches.Add(branch);
 
-        // نفس CreateBranchHandler: بلا تسلسلات الترقيم، أول بيع/شراء/إرجاع بالفرع كان بيوقع (500).
+        // نفس CreateBranchCommand بالضبط: عدّاد أرقام لكل نوع مستند. بدونها
+        // الفرع الرئيسي ما بيقدر يصدر ولا فاتورة (بيع/شراء/إرجاع...) -
+        // DocumentNumberGenerator بيرمي "No document sequence exists".
         foreach (var documentType in Enum.GetValues<DocumentType>())
         {
             _context.BranchDocumentSequences.Add(new BranchDocumentSequence(branch.Id, documentType));

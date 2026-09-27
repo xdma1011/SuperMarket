@@ -94,9 +94,18 @@ export class AuthService {
       this.applySession(response.accessToken, response.refreshToken, response.fullName);
 
       return { success: true };
-    } catch {
-      // نفس رسالة الباك إند الموحّدة بالضبط — بلا تمييز بين الأسباب.
-      return { success: false, message: 'اسم المستخدم أو كلمة السر غير صحيحة.' };
+    } catch (err: unknown) {
+      // نعرض رسالة الباك إند الفعلية (err.error.detail) لو موجودة - نفس
+      // نمط باقي الصفحات بالتطبيق. الباك إند بالفعل بيرجّع رسائل مختلفة
+      // ومقصودة لأسباب مختلفة (قفل مؤقت بمدة محدَّدة، فرع غير مصرَّح) -
+      // مبدأ "رسالة واحدة" عنده مقصور فقط على حالة اسم المستخدم/كلمة السر
+      // غلط (لمنع تخمين أسماء المستخدمين)، مش كل سبب فشل ممكن. بلع الرسالة
+      // هون كان يخفي حتى أعطال سيرفر حقيقية (500) خلف "كلمة سر غلط" مضلِّلة.
+      const detail =
+        err && typeof err === 'object' && 'error' in err
+          ? (err as { error?: { detail?: string } }).error?.detail
+          : null;
+      return { success: false, message: detail ?? 'اسم المستخدم أو كلمة السر غير صحيحة.' };
     }
   }
 

@@ -6,5 +6,6 @@ describe('UnitsOfMeasureOperation enum', () => {
     expect(UnitsOfMeasureOperation.List).toBe('');
     expect(UnitsOfMeasureOperation.Create).toBe('');
     expect(UnitsOfMeasureOperation.SetActive).toBe('{unitOfMeasureId}/active');
+    expect(UnitsOfMeasureOperation.Move).toBe('{unitOfMeasureId}/move');
   });
 });

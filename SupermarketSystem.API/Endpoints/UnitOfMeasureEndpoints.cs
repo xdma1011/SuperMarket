@@ -2,6 +2,7 @@ using SupermarketSystem.API.Common;
 using SupermarketSystem.Application.Catalog.CreateUnitOfMeasure;
 using SupermarketSystem.Application.Catalog.GetUnitsOfMeasure;
 using SupermarketSystem.Application.Catalog.SetUnitOfMeasureActive;
+using SupermarketSystem.Application.Catalog.MoveUnitOfMeasure;
 using SupermarketSystem.Application.Common.Interfaces;
 
 namespace SupermarketSystem.API.Endpoints;
@@ -53,8 +54,25 @@ public static class UnitOfMeasureEndpoints
         .Produces(StatusCodes.Status204NoContent)
         .ProducesProblem(StatusCodes.Status404NotFound);
 
+        group.MapPost("/{unitOfMeasureId:guid}/move", async (
+            Guid unitOfMeasureId,
+            MoveUnitOfMeasureRequest request,
+            MoveUnitOfMeasureHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(
+                new MoveUnitOfMeasureCommand(unitOfMeasureId, request.MoveUp), cancellationToken);
+            return result.ToHttpResult();
+        })
+        .WithName("MoveUnitOfMeasure")
+        .WithSummary("تحريك وحدة خانة لفوق/لتحت بترتيب قائمة الاختيار.")
+        .Produces(StatusCodes.Status204NoContent)
+        .ProducesProblem(StatusCodes.Status404NotFound);
+
         return app;
     }
 
     public sealed record SetUnitOfMeasureActiveRequest(bool IsActive);
+
+    public sealed record MoveUnitOfMeasureRequest(bool MoveUp);
 }

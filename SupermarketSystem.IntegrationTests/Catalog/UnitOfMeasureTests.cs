@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SupermarketSystem.Application.Catalog.CreateUnitOfMeasure;
 using SupermarketSystem.Application.Catalog.GetUnitsOfMeasure;
 using SupermarketSystem.Application.Catalog.SetUnitOfMeasureActive;
+using SupermarketSystem.Application.Catalog.MoveUnitOfMeasure;
 using SupermarketSystem.Application.Common.Results;
 using Xunit;
 
@@ -86,6 +87,65 @@ public sealed class UnitOfMeasureTests : IntegrationTestBase
         var all = await getHandler.HandleAsync(new GetUnitsOfMeasureQuery(ActiveOnly: false), CancellationToken.None);
         var deactivated = Assert.Single(all, u => u.Id == created.Value.UnitOfMeasureId);
         Assert.False(deactivated.IsActive);
+    }
+
+    [Fact]
+    public async Task الوحدات_الجاهزة_موجودة_ومرتبة_حسب_الترتيب_لا_أبجديًا()
+    {
+        using var scope = CreateScope();
+        var getHandler = scope.ServiceProvider.GetRequiredService<GetUnitsOfMeasureHandler>();
+
+        var all = await getHandler.HandleAsync(new GetUnitsOfMeasureQuery(ActiveOnly: false), CancellationToken.None);
+
+        var names = all.Select(u => u.Name).ToList();
+        Assert.Contains("حبة", names);
+        Assert.Contains("كيلو", names);
+        Assert.Contains("كرتونة", names);
+        Assert.True(names.IndexOf("حبة") < names.IndexOf("كيلو"));
+        Assert.Equal(all.OrderBy(u => u.SortOrder).ThenBy(u => u.Name).Select(u => u.Id), all.Select(u => u.Id));
+    }
+
+    [Fact]
+    public async Task وحدة_جديدة_بتنحط_بآخر_القائمة_والتحريك_لفوق_بيبدلها_مع_اللي_قبلها()
+    {
+        using var scope = CreateScope();
+        var createHandler = scope.ServiceProvider.GetRequiredService<CreateUnitOfMeasureHandler>();
+        var created = await createHandler.HandleAsync(new CreateUnitOfMeasureCommand(UniqueName("صينية")), CancellationToken.None);
+        Assert.True(created.IsSuccess);
+
+        var getHandler = scope.ServiceProvider.GetRequiredService<GetUnitsOfMeasureHandler>();
+        var before = await getHandler.HandleAsync(new GetUnitsOfMeasureQuery(ActiveOnly: false), CancellationToken.None);
+        Assert.Equal(created.Value.UnitOfMeasureId, before[^1].Id);
+        var previousLastId = before[^2].Id;
+
+        var moveHandler = scope.ServiceProvider.GetRequiredService<MoveUnitOfMeasureHandler>();
+        var moveResult = await moveHandler.HandleAsync(
+            new MoveUnitOfMeasureCommand(created.Value.UnitOfMeasureId, MoveUp: true), CancellationToken.None);
+        Assert.True(moveResult.IsSuccess);
+
+        var after = await getHandler.HandleAsync(new GetUnitsOfMeasureQuery(ActiveOnly: false), CancellationToken.None);
+        Assert.Equal(created.Value.UnitOfMeasureId, after[^2].Id);
+        Assert.Equal(previousLastId, after[^1].Id);
+        Assert.Equal(Enumerable.Range(1, after.Count), after.Select(u => u.SortOrder));
+
+        // الأخيرة لتحت = بلا تغيير، بلا خطأ.
+        var noOp = await moveHandler.HandleAsync(
+            new MoveUnitOfMeasureCommand(previousLastId, MoveUp: false), CancellationToken.None);
+        Assert.True(noOp.IsSuccess);
+        var unchanged = await getHandler.HandleAsync(new GetUnitsOfMeasureQuery(ActiveOnly: false), CancellationToken.None);
+        Assert.Equal(after.Select(u => u.Id), unchanged.Select(u => u.Id));
+    }
+
+    [Fact]
+    public async Task تحريك_وحدة_غير_موجودة_يفشل_بـNotFound()
+    {
+        using var scope = CreateScope();
+        var handler = scope.ServiceProvider.GetRequiredService<MoveUnitOfMeasureHandler>();
+
+        var result = await handler.HandleAsync(new MoveUnitOfMeasureCommand(Guid.NewGuid(), true), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ErrorType.NotFound, result.Error!.Type);
     }
 
     [Fact]

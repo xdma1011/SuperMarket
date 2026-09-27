@@ -32,11 +32,10 @@ public partial class App : Application
 
         // Migrate() لا EnsureCreated() - كانت المشكلة إنه EnsureCreated() ما
         // بيطبّق أي تعديل سكيما لاحق على local.db موجودة أصلًا عند مستخدم -
-        // جدول جديد كان رح يظل غايب للأبد بدون Migration حقيقية. ما في
-        // مستخدمين حاليين على local.db بالإصدار القديم (المشروع لسه قبل
-        // الإطلاق)، فما في داعي backfill يدوي.
+        // جدول جديد كان رح يظل غايب للأبد بدون Migration حقيقية.
         using (var db = new LocalDbContext(dbPath))
         {
+            BaselineLegacyEnsureCreatedDatabase(db);
             db.Database.Migrate();
         }
 
@@ -53,6 +52,67 @@ public partial class App : Application
 
         var loginWindow = new LoginWindow(apiClient, authSession, dbPath, backgroundSync, receiptPrinter, config.AdminScreenPassword);
         loginWindow.Show();
+    }
+
+    // local.db انعملت بـEnsureCreated() (قبل ما تنضاف الـMigrations) فيها
+    // الجداول بس بلا أي سطر بـ__EFMigrationsHistory - فـMigrate() بيحاول
+    // ينشئ الجداول من جديد وبيوقع ("table PaymentMethods already exists").
+    // سكيما EnsureCreated القديمة مطابقة حرفيًا لـInitialLocalSchema، فبنسجّلها
+    // كمطبَّقة بدل ما نحذف الملف (ممكن يكون فيه بيعات معلّقة ما انبعتت).
+    private const string InitialLocalSchemaMigrationId = "20260924111858_InitialLocalSchema";
+
+    private static void BaselineLegacyEnsureCreatedDatabase(LocalDbContext db)
+    {
+        var connection = db.Database.GetDbConnection();
+        connection.Open();
+        try
+        {
+            using var check = connection.CreateCommand();
+            check.CommandText =
+                "SELECT (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='PendingSales'), " +
+                "(SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='__EFMigrationsHistory')";
+            using (var reader = check.ExecuteReader())
+            {
+                reader.Read();
+                var hasLegacyTables = reader.GetInt64(0) > 0;
+                var hasHistoryTable = reader.GetInt64(1) > 0;
+                if (!hasLegacyTables)
+                {
+                    return; // قاعدة جديدة فاضية - Migrate() بتتكفّل فيها عادي
+                }
+
+                if (hasHistoryTable)
+                {
+                    reader.Close();
+                    using var count = connection.CreateCommand();
+                    count.CommandText = "SELECT COUNT(*) FROM \"__EFMigrationsHistory\"";
+                    if ((long)count.ExecuteScalar()! > 0)
+                    {
+                        return; // مسجَّلة أصلًا
+                    }
+                }
+            }
+
+            using var baseline = connection.CreateCommand();
+            baseline.CommandText =
+                "CREATE TABLE IF NOT EXISTS \"__EFMigrationsHistory\" (" +
+                "\"MigrationId\" TEXT NOT NULL CONSTRAINT \"PK___EFMigrationsHistory\" PRIMARY KEY, " +
+                "\"ProductVersion\" TEXT NOT NULL); " +
+                "INSERT INTO \"__EFMigrationsHistory\" (\"MigrationId\", \"ProductVersion\") VALUES ($id, $ver);";
+            var idParam = baseline.CreateParameter();
+            idParam.ParameterName = "$id";
+            idParam.Value = InitialLocalSchemaMigrationId;
+            baseline.Parameters.Add(idParam);
+            var verParam = baseline.CreateParameter();
+            verParam.ParameterName = "$ver";
+            verParam.Value = Microsoft.EntityFrameworkCore.Infrastructure.ProductInfo.GetVersion();
+            baseline.Parameters.Add(verParam);
+            baseline.ExecuteNonQuery();
+        }
+        finally
+        {
+            connection.Close();
+        }
     }
 
     private static async Task RefreshStoreBrandingCacheAsync(ApiClient apiClient, string dataDir)

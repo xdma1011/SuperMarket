@@ -35,7 +35,7 @@ if exist "%LAUNCH_SETTINGS%" (
 
 if not defined API_URL (
     echo [FAILED] Could not read applicationUrl from launchSettings.json.
-    echo          Pass the API URL manually, e.g.: bootstrap-admin.bat http://localhost:5200
+    echo          Pass the API URL manually, e.g.: bootstrap-admin.bat http://localhost:5000
     if not "%~1"=="" set "API_URL=%~1"
 )
 

@@ -52,38 +52,74 @@
   .sidebar.drawer-open { transform: translateX(0); }
 }
 
-.brand { display: flex; align-items: center; gap: 11px; padding: 0 8px 20px; }
+.brand { display: flex; align-items: center; gap: 11px; padding: 0 8px 18px; min-width: 0; }
 .brand-mark {
   width: 38px; height: 38px; border-radius: 11px;
   background: var(--accent); display: grid; place-items: center;
-  color: oklch(0.99 0.01 85); font-weight: 700; font-size: 17px;
+  color: oklch(0.99 0.01 85);
   box-shadow: var(--shadow); flex: 0 0 38px;
 }
-.brand-text { display: flex; flex-direction: column; gap: 2px; line-height: 1.15; }
-.brand-name { font-weight: 600; font-size: 15px; }
-.brand-sub { font-size: 11.5px; color: var(--ink-2); letter-spacing: .02em; }
+.brand-text { display: flex; flex-direction: column; gap: 2px; line-height: 1.2; min-width: 0; }
+.brand-name { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brand-sub { font-size: 11.5px; color: var(--ink-2); }
 
-.nav-label { font-size: 10.5px; color: var(--ink-2); letter-spacing: .12em; padding: 0 10px 8px; }
+/* === القائمة === */
+.nav-list {
+  flex: 1;
+  min-height: 0;
+  display: flex; flex-direction: column; gap: 6px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  margin: 0 -6px;
+  padding: 2px 6px 8px;
+  /* شريط تمرير رفيع بلون الخطوط - بدل الشريط الأبيض الافتراضي للمتصفح. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+  overscroll-behavior: contain;
+}
+.nav-list::-webkit-scrollbar { width: 6px; }
+.nav-list::-webkit-scrollbar-track { background: transparent; }
+.nav-list::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; }
+.nav-list::-webkit-scrollbar-thumb:hover { background: var(--ink-2); }
 
-.nav-list { display: flex; flex-direction: column; gap: 3px; overflow-y: auto; flex: 1; }
+.nav-section { display: flex; flex-direction: column; }
+.nav-section + .nav-section { padding-top: 6px; border-top: 1px solid color-mix(in oklab, var(--line) 60%, transparent); }
+
+.nav-section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; border: 0; background: transparent; cursor: pointer;
+  padding: 8px 10px 6px; border-radius: 8px;
+  font-size: 11.5px; font-weight: 700; color: var(--ink-2); letter-spacing: .02em;
+  transition: color .15s ease;
+}
+.nav-section-header:hover { color: var(--ink); }
+.nav-section-header:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.chevron { transition: transform .2s ease; opacity: .7; }
+.chevron.collapsed { transform: rotate(90deg); }
+
+.nav-section-items { display: flex; flex-direction: column; gap: 2px; }
 
 .nav-item {
-  display: flex; align-items: center; gap: 11px; width: 100%;
-  border: 0; border-radius: 10px; padding: 11px 10px;
-  font-size: 13.5px; color: var(--ink-2); font-weight: 400;
-  transition: background .2s ease, color .2s ease, transform .2s ease;
-  background: transparent; cursor: pointer;
+  position: relative;
+  display: flex; align-items: center; gap: 11px; width: 100%; min-width: 0;
+  border-radius: 10px; padding: 8px 10px; min-height: 38px;
+  font-size: 13.5px; color: var(--ink-2); font-weight: 500;
+  text-decoration: none;
+  transition: background .15s ease, color .15s ease;
 }
-.nav-item:hover { background: var(--surface-2); transform: translateX(-3px); }
-.nav-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-
-.nav-dot {
-  width: 7px; height: 7px; border-radius: 2px; flex: 0 0 7px;
-  transform: rotate(45deg); background: var(--line); transition: background .2s ease;
+.nav-item:hover { background: var(--surface-2); color: var(--ink); }
+.nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.nav-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+/* شريط مؤشّر على طرف العنصر النشط (يمين - RTL). */
+.nav-item.active::before {
+  content: ''; position: absolute; right: -6px; top: 8px; bottom: 8px;
+  width: 3px; border-radius: 3px; background: var(--accent);
 }
-.nav-item.active .nav-dot { background: var(--accent); }
 
-.nav-label-text { flex: 1; }
+.nav-icon { flex: 0 0 18px; opacity: .85; }
+.nav-item.active .nav-icon { opacity: 1; }
+
+.nav-label-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .nav-badge {
   min-width: 20px; height: 20px; padding: 0 6px; border-radius: 6px;
@@ -92,7 +128,7 @@
 }
 
 .session-card {
-  margin-top: 14px; border: 1px solid var(--line); border-radius: 12px;
+  margin-top: 10px; border: 1px solid var(--line); border-radius: 12px;
   padding: 13px; display: flex; flex-direction: column; gap: 8px;
   background: var(--surface-2);
 }

@@ -54,6 +54,16 @@ td {
 }
 .status-chip.inactive { background: var(--red-soft); color: var(--red); }
 
+.order-cell { display: flex; align-items: center; gap: 6px; }
+.order-num { min-width: 20px; color: var(--ink-2); font-size: 12px; }
+
+.arrow-btn {
+  width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 8px;
+  background: transparent; color: var(--ink); font-size: 14px; line-height: 1;
+}
+.arrow-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.arrow-btn:disabled { opacity: .35; }
+
 .link-btn {
   border: 0; background: transparent; color: var(--accent);
   font-size: 12px; font-weight: 600; padding: 0; margin-inline-end: 12px;

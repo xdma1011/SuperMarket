@@ -10,6 +10,7 @@ interface UnitOfMeasureDto {
   id: string;
   name: string;
   isActive: boolean;
+  sortOrder?: number;
 }
 
 /** كانت مفقودة بالكامل - وحدة كل منتج كانت نص حر بلا مرجع موحَّد، سبب تكرار مسميات مختلفة لنفس الوحدة. */
@@ -25,6 +26,7 @@ export class UnitsOfMeasureComponent implements OnInit {
   readonly loading = signal(true);
   readonly errorMessage = signal<string | null>(null);
   readonly togglingId = signal<string | null>(null);
+  readonly movingId = signal<string | null>(null);
 
   readonly formOpen = signal(false);
   readonly submitting = signal(false);
@@ -89,6 +91,25 @@ export class UnitsOfMeasureComponent implements OnInit {
       this.formError.set(message ?? 'تعذّر إنشاء وحدة القياس.');
     } finally {
       this.submitting.set(false);
+    }
+  }
+
+  /** سهم ↑/↓: بيبدّل الوحدة مع اللي قبلها/بعدها - نفس الترتيب بيطلع بقوائم الاختيار. */
+  async move(unit: UnitOfMeasureDto, moveUp: boolean): Promise<void> {
+    this.movingId.set(unit.id);
+    this.errorMessage.set(null);
+
+    try {
+      await firstValueFrom(
+        this.apiClient.post(ApiController.UnitsOfMeasure, UnitsOfMeasureOperation.Move, {
+          moveUp
+        }, { unitOfMeasureId: unit.id })
+      );
+      await this.loadUnits();
+    } catch {
+      this.errorMessage.set('تعذّر تغيير ترتيب وحدة القياس.');
+    } finally {
+      this.movingId.set(null);
     }
   }
 

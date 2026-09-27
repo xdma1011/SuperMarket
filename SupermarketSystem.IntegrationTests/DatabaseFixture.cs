@@ -30,8 +30,31 @@ public sealed class DatabaseFixture : IAsyncLifetime
     // بلا أي تعديل على هذا الملف. مفيد لتشغيل عدة تشغيلات اختبار متوازية
     // (worktrees مختلفة) بأمان ضد نفس حاوية SQL Server، كل واحدة بقاعدتها
     // المنطقية الخاصة، بلا تعارض على تصفير Respawn لبعضها.
-    private static readonly string ConnectionString =
-        $"Server=127.0.0.1,14330;Database={Environment.GetEnvironmentVariable("INTEGRATION_TEST_DB_NAME") ?? "sprmrkt_integration_tests"};User Id=sa;Password=Test_Only_P@ss123;TrustServerCertificate=True;";
+    //
+    // INTEGRATION_TEST_CONNECTION_STRING (اختياري) بيستبدل الاتصال كامل - لتشغيل
+    // الاختبارات على SQL Server محلي بلا Docker. حماية إلزامية: Respawn بيمسح كل
+    // البيانات بين الاختبارات، فاسم القاعدة لازم يحتوي "test" وإلا بنرفض نشتغل
+    // (ما بنخاطر بقاعدة المحل الحقيقية بسبب غلطة بمتغيّر بيئة).
+    private static readonly string ConnectionString = ResolveConnectionString();
+
+    private static string ResolveConnectionString()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("INTEGRATION_TEST_CONNECTION_STRING");
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            connectionString =
+                $"Server=127.0.0.1,14330;Database={Environment.GetEnvironmentVariable("INTEGRATION_TEST_DB_NAME") ?? "sprmrkt_integration_tests"};User Id=sa;Password=Test_Only_P@ss123;TrustServerCertificate=True;";
+        }
+
+        var database = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString).InitialCatalog;
+        if (string.IsNullOrWhiteSpace(database) || !database.Contains("test", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"رفض تشغيل الاختبارات على القاعدة '{database}': الاختبارات بتمسح كل البيانات، واسم قاعدة الاختبار لازم يحتوي 'test'.");
+        }
+
+        return connectionString;
+    }
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -67,7 +90,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
                 // بيمسحها نهائيًا بلا رجعة (Respawn ما بيعرف يعيد بذرها،
                 // هذا شغل الـmigrations لا الاختبارات).
                 "Permissions", "Roles", "RolePermissions",
-                "PaymentMethods", "UnitOfMeasures",
+                "PaymentMethods", "UnitsOfMeasure",
                 // مستخدم ودور وفرع الاختبار الثابتين المبذورين هون فوق.
                 "Users", "UserRoles", "UserBranches", "Branches"
             ]
