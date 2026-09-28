@@ -122,6 +122,64 @@ describe('StocktakesComponent', () => {
     });
   });
 
+  describe('جرد جزئي + مواد مرتجعة بانتظار جرد', () => {
+    const pending = [
+      { branchId: 'b1', branchName: 'الرئيسي', productId: 'p1', productName: 'حليب', quantityReturnedBase: 2, returnCount: 1,
+        lastReturnAtUtc: '', lastCountedAtUtc: null,
+        returns: [{ returnInvoiceNumber: 'RI-1', originalSaleInvoiceNumber: 'SI-1', returnedAtUtc: '', quantityBase: 2, cashierName: 'سامي' }] },
+      { branchId: 'b1', branchName: 'الرئيسي', productId: 'p2', productName: 'لبن', quantityReturnedBase: 1, returnCount: 1,
+        lastReturnAtUtc: '', lastCountedAtUtc: null, returns: [] }
+    ];
+
+    it('بيحمّل المواد المرتجعة بانتظار جرد للفرع المختار', async () => {
+      apiClientSpy.get.and.callFake(((controller: string, operation: string) => {
+        if (controller === 'branches') return of({ items: [{ id: 'b1', name: 'الرئيسي' }], totalCount: 1 });
+        if (operation === 'returned-pending') return of(pending);
+        return of({ items: [], totalCount: 0 });
+      }) as unknown as typeof apiClientSpy.get);
+
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(component.returnedPending().length).toBe(2);
+      const call = apiClientSpy.get.calls.all().find(c => c.args[1] === 'returned-pending')!;
+      expect((call.args[3] as Record<string, unknown>)['branchId']).toBe('b1');
+    });
+
+    it('"جرد جزئي لهالمواد" بيفتح النموذج بمواد مختارة جاهزة وبيبعتها بدل الفرع كامل', async () => {
+      component.returnedPending.set(pending);
+      component.selectedBranchId = 'b1';
+      apiClientSpy.post.and.returnValue(of({ stocktakeId: 'st1', stocktakeNumber: 'ST-1', itemCount: 2 }));
+
+      component.openReturnedPendingStocktake();
+      expect(component.formOpen()).toBeTrue();
+      expect(component.scope()).toBe('selected');
+      await component.submitCreate();
+
+      expect(apiClientSpy.post).toHaveBeenCalledWith(jasmine.anything(), jasmine.anything(),
+        jasmine.objectContaining({ includeAllProductsAtBranch: false, productIds: ['p1', 'p2'] }));
+    });
+
+    it('جرد جزئي بلا مواد = رسالة واضحة بلا طلب', async () => {
+      component.selectedBranchId = 'b1';
+      component.openCreateForm();
+      component.scope.set('selected');
+
+      await component.submitCreate();
+
+      expect(component.formError()).toBe('اختر مادة وحدة عالأقل للجرد الجزئي.');
+      expect(apiClientSpy.post).not.toHaveBeenCalled();
+    });
+
+    it('إضافة وشيل مادة، وما بتتكرر', () => {
+      component.addProduct({ id: 'p1', name: 'حليب' });
+      component.addProduct({ id: 'p1', name: 'حليب' });
+      expect(component.selectedProducts().length).toBe(1);
+      component.removeProduct('p1');
+      expect(component.selectedProducts().length).toBe(0);
+    });
+  });
+
   describe('openStocktake', () => {
     it('ينتقل لصفحة تفاصيل الجرد بالمعرّف الصحيح', () => {
       component.openStocktake('st9');

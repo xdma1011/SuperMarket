@@ -13,6 +13,59 @@
   <div class="alert-banner">{{ errorMessage() }}</div>
 }
 
+@if (returnedPending().length > 0) {
+  <section class="table-panel pending-panel">
+    <div class="pending-head">
+      <div>
+        <h2>مواد مرتجعة بانتظار جرد ({{ returnedPending().length }})</h2>
+        <span class="pending-hint">إلها إرجاع بعد آخر مرة انعدّت. عدّها بسرعة: لو الإرجاع وهمي بيطلع نقص، والتنبيه بيوصلك مربوط بالإرجاع والكاشير. بتختفي لحالها لما تنعدّ.</span>
+      </div>
+      <button type="button" class="btn-primary" (click)="openReturnedPendingStocktake()">جرد جزئي لهالمواد</button>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>المادة</th>
+            <th>الكمية المرتجعة</th>
+            <th>عدد الإرجاعات</th>
+            <th>آخر إرجاع</th>
+            <th>آخر جرد إلها</th>
+            <th>الكاشير</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (p of returnedPending(); track p.branchId + p.productId) {
+            <tr class="clickable-row" (click)="togglePendingDetails(p.productId)">
+              <td>{{ p.productName }}</td>
+              <td class="mono">{{ p.quantityReturnedBase | number: '1.0-3' }}</td>
+              <td class="mono">{{ p.returnCount }}</td>
+              <td class="mono">{{ p.lastReturnAtUtc | date: 'yyyy-MM-dd HH:mm' }}</td>
+              <td class="mono">{{ p.lastCountedAtUtc ? (p.lastCountedAtUtc | date: 'yyyy-MM-dd') : 'ما انعدّت' }}</td>
+              <td>{{ p.returns.length ? p.returns[0].cashierName : "" }}@if (p.returns.length > 1) { <span class="muted"> +{{ p.returns.length - 1 }}</span> }</td>
+            </tr>
+            @if (expandedPendingId() === p.productId) {
+              <tr class="details-row">
+                <td colspan="6">
+                  @for (r of p.returns; track r.returnInvoiceNumber) {
+                    <div class="return-line">
+                      <span class="mono">{{ r.returnInvoiceNumber }}</span>
+                      <span>فاتورة <span class="mono">{{ r.originalSaleInvoiceNumber }}</span></span>
+                      <span class="mono">{{ r.quantityBase | number: '1.0-3' }}</span>
+                      <span>{{ r.cashierName }}</span>
+                      <span class="mono">{{ r.returnedAtUtc | date: 'yyyy-MM-dd HH:mm' }}</span>
+                    </div>
+                  }
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+}
+
 <section class="table-panel">
   <div class="table-scroll">
     <table>
@@ -70,7 +123,7 @@
       <div class="modal-head">
         <div class="modal-title-group">
           <h2>جرد جديد</h2>
-          <span class="modal-hint">يشمل كل أصناف الفرع المختار، ويبدأ جاهزًا للعدّ فورًا.</span>
+          <span class="modal-hint">الفرع كامل (الجرد الشهري) أو مواد مختارة (جرد جزئي سريع). بيبدأ جاهز للعدّ فورًا.</span>
         </div>
         <button type="button" class="icon-btn" (click)="closeForm()" aria-label="إغلاق">×</button>
       </div>
@@ -82,12 +135,41 @@
       <div class="modal-fields">
         <label class="field" style="grid-column: span 2">
           <span>الفرع</span>
-          <select [(ngModel)]="selectedBranchId">
+          <select [(ngModel)]="selectedBranchId" (ngModelChange)="onBranchChanged()">
             @for (b of branches(); track b.id) {
               <option [value]="b.id">{{ b.name }}</option>
             }
           </select>
         </label>
+
+        <div class="scope-choice" style="grid-column: span 2">
+          <label class="radio"><input type="radio" name="scope" [checked]="scope() === 'all'" (change)="scope.set('all')" /> الفرع كامل</label>
+          <label class="radio"><input type="radio" name="scope" [checked]="scope() === 'selected'" (change)="scope.set('selected')" /> مواد مختارة (جرد جزئي)</label>
+        </div>
+
+        @if (scope() === 'selected') {
+          <div class="field" style="grid-column: span 2">
+            <span>المواد ({{ selectedProducts().length }})</span>
+            @if (returnedPending().length > 0) {
+              <button type="button" class="btn-link" (click)="openReturnedPendingStocktake()">حط المواد المرتجعة بانتظار جرد ({{ returnedPending().length }})</button>
+            }
+            <div class="product-search">
+              <input type="text" placeholder="دوّر على مادة بالاسم أو الباركود…" [(ngModel)]="productSearch" (ngModelChange)="onProductSearchChanged()" />
+              @if (productResults().length > 0) {
+                <div class="product-results">
+                  @for (p of productResults(); track p.id) {
+                    <button type="button" (click)="addProduct(p)">{{ p.name }}</button>
+                  }
+                </div>
+              }
+            </div>
+            <div class="chips">
+              @for (p of selectedProducts(); track p.id) {
+                <span class="chip">{{ p.name }} <button type="button" (click)="removeProduct(p.id)" aria-label="شيل">×</button></span>
+              }
+            </div>
+          </div>
+        }
       </div>
 
       <div class="modal-actions">

@@ -7,6 +7,7 @@ using SupermarketSystem.Application.Inventory.CreateStocktake;
 using SupermarketSystem.Application.Inventory.GetStocktakeById;
 using SupermarketSystem.Application.Inventory.GetStocktakes;
 using SupermarketSystem.Application.Inventory.RecordStocktakeCount;
+using SupermarketSystem.Application.Inventory.ReturnedPendingStocktake;
 
 namespace SupermarketSystem.API.Endpoints;
 
@@ -45,6 +46,17 @@ public static class StocktakeEndpoints
         .RequirePermission(PermissionCodes.StocktakeManage)
         .WithSummary("كل عمليات الجرد، الأحدث أولًا - كانت ناقصة، بلا طريقة تشوف كل الجرد إلا بمعرّف واحد بمعرفة.")
         .Produces<PagedResult<StocktakeListItemDto>>(StatusCodes.Status200OK);
+
+        // مواد مرتجعة بانتظار جرد (ضد الإرجاع الوهمي، 28/9/2026): إلها إرجاع بعد آخر مرة انعدّت - بتنقترح أول شي بالجرد الجزئي.
+        group.MapGet("/returned-pending", async (
+            Guid? branchId,
+            GetReturnedPendingStocktakeHandler handler,
+            CancellationToken cancellationToken) =>
+                Results.Ok(await handler.HandleAsync(new GetReturnedPendingStocktakeQuery(branchId), cancellationToken)))
+        .WithName("GetReturnedPendingStocktake")
+        .RequirePermission(PermissionCodes.StocktakeManage)
+        .WithSummary("مواد إلها إرجاع بعد آخر عدّ إلها بجرد معتمد (آخر 90 يوم) - بتختفي لحالها لما تنعدّ.")
+        .Produces<List<ReturnedPendingStocktakeItemDto>>(StatusCodes.Status200OK);
 
         group.MapGet("/{stocktakeId:guid}", async (
             Guid stocktakeId,

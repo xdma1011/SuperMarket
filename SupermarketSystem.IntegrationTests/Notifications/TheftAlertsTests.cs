@@ -174,6 +174,8 @@ public sealed class TheftAlertsTests : IntegrationTestBase
         AssertAlert("سعر شراء أعلى من المعتاد", "Warning", "1.000", "0.500");
         AssertAlert("تنزيل سعر", "Warning", "1.200", "0.900");
         AssertAlert("نقص بالجرد", "Critical", "ناقص 4");
+        // نفس المادة إلها إرجاع قبل الجرد (إرجاع 1 فوق) - ضد الإرجاع الوهمي (28/9/2026).
+        AssertAlert("فرق جرد بمادة مرتجعة", "Critical", "ناقص 4", "مرتجع منها 1", saleInvoiceNumber, "مستخدم اختبار alerts.cashier");
         AssertAlert("تقفيل صندوق — عجز", "Critical", "فرع الاختبار");
         AssertAlert("حذف فاتورة كاشير أوفلاين نهائيًا", "Critical");
         AssertAlert($"قفل حساب — {victim}", "Critical", "الكاشير");
@@ -185,7 +187,7 @@ public sealed class TheftAlertsTests : IntegrationTestBase
         // فلتر "الخطيرة بس" + عدّاد الرئيسية (آخر 24 ساعة)
         var critical = await GetAlertsAsync(admin, "&minSeverity=Critical");
         Assert.All(critical, a => Assert.Equal("Critical", a.Severity));
-        Assert.Equal(4, critical.Count);
+        Assert.Equal(5, critical.Count);
         var future = await GetAlertsAsync(admin, $"&minSeverity=Critical&sinceUtc={Uri.EscapeDataString(DateTime.UtcNow.AddHours(1).ToString("o"))}");
         Assert.Empty(future);
 
@@ -200,6 +202,7 @@ public sealed class TheftAlertsTests : IntegrationTestBase
         Assert.Equal($"/stocktakes/{stocktakeId}", LinkOf("نقص بالجرد"));
         Assert.Equal("/cash-closings", LinkOf("تقفيل صندوق — عجز"));
         Assert.Equal("/sessions", LinkOf("قفل حساب"));
+        Assert.Equal($"/returns?search={Uri.EscapeDataString(saleInvoiceNumber)}", LinkOf("فرق جرد بمادة مرتجعة"));
 
         // تبويب درجة وحدة بالضبط (severity) - مش "لحد درجة" (minSeverity).
         var warnings = await GetAlertsAsync(admin, "&severity=Warning");
@@ -214,20 +217,20 @@ public sealed class TheftAlertsTests : IntegrationTestBase
         }
 
         var before = await SummaryAsync();
-        Assert.Equal(4, before.Critical);
+        Assert.Equal(5, before.Critical);
         Assert.Equal(alerts.Count(a => a.Severity == "Warning"), before.Warning);
 
         var lockAlert = alerts.First(a => a.Title.StartsWith("قفل حساب"));
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsync($"/api/v1/notifications/{lockAlert.Id}/read", null)).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsync($"/api/v1/notifications/{lockAlert.Id}/read", null)).StatusCode); // مرتين = عادي
-        Assert.Equal((3, before.Warning, before.Info), await SummaryAsync());
+        Assert.Equal((4, before.Warning, before.Info), await SummaryAsync());
         Assert.Equal("Read", (await GetAlertsAsync(admin)).First(a => a.Id == lockAlert.Id).Status);
         Assert.DoesNotContain(await GetAlertsAsync(admin, "&unreadOnly=true"), a => a.Id == lockAlert.Id);
         Assert.Equal(HttpStatusCode.NotFound, (await admin.PostAsync($"/api/v1/notifications/{Guid.NewGuid()}/read", null)).StatusCode);
 
         // "لحد درجة": المتوسطة وأقل بس - العالية بتضل
         await OkJsonAsync(await admin.PostAsync("/api/v1/notifications/read-all?maxSeverity=Warning", null), "تعليم المتوسطة");
-        Assert.Equal((3, 0, 0), await SummaryAsync());
+        Assert.Equal((4, 0, 0), await SummaryAsync());
         await OkJsonAsync(await admin.PostAsync("/api/v1/notifications/read-all", null), "تعليم الكل");
         Assert.Equal((0, 0, 0), await SummaryAsync());
 
@@ -263,5 +266,93 @@ public sealed class TheftAlertsTests : IntegrationTestBase
         Assert.Equal("Warning", surplus.Severity);
         Assert.Contains("زيادة", surplus.Title);
         Assert.Contains("بيعات ما انسجّلت", surplus.Message);
+    }
+
+    /// <summary>
+    /// ضد الإرجاع الوهمي (28/9/2026): إرجاع ← المادة بتطلع "بانتظار جرد" ← جرد جزئي لقى نقص = تنبيه عالي الأولوية مربوط
+    /// بفاتورة الإرجاع والكاشير ← المادة بتختفي من القائمة ← إرجاع جديد بيرجّعها (مع تاريخ آخر جرد).
+    /// </summary>
+    [Fact]
+    public async Task مادة_مرتجعة_بتطلع_بانتظار_جرد_وفرق_بجردها_بينبّه_مربوط_بالإرجاع_والكاشير()
+    {
+        var (productId, unitId, _) = await SeedProductAsync("جبنة الإرجاع", 2.000m, 50m);
+        var (otherId, otherUnitId, _) = await SeedProductAsync("خبز بلا إرجاع", 0.500m, 50m);
+        var admin = await CreateAuthenticatedClientAsync();
+        var cashier = await LoginCashierAsync();
+
+        async Task<List<JsonElement>> PendingAsync() =>
+            (await OkJsonAsync(await admin.GetAsync($"/api/v1/stocktakes/returned-pending?branchId={Fixture.TestBranchId}"), "بانتظار جرد"))
+                .EnumerateArray().ToList();
+
+        async Task<string> ReturnAsync(Guid product, Guid unit, decimal price)
+        {
+            var sale = await SellAsync(cashier, product, unit, 3m, 3 * price);
+            var saleId = sale.GetProperty("saleInvoiceId").GetGuid();
+            var detail = await OkJsonAsync(await cashier.GetAsync($"/api/v1/sales/{saleId}"), "تفاصيل");
+            await OkJsonAsync(await cashier.PostAsJsonAsync("/api/v1/returns", new
+            {
+                originalSaleInvoiceId = saleId, clientRequestId = Guid.NewGuid(), reason = "Defective", notes = (string?)null,
+                items = new[] { new { saleInvoiceItemId = detail.GetProperty("items")[0].GetProperty("saleInvoiceItemId").GetGuid(), quantity = 2m } },
+                refunds = new[] { new { paymentMethodId = TestDataBuilder.CashPaymentMethodId, amount = 2 * price, externalReference = (string?)null, clientRequestId = Guid.NewGuid() } }
+            }), "إرجاع");
+            return sale.GetProperty("invoiceNumber").GetString()!;
+        }
+
+        Assert.DoesNotContain(await PendingAsync(), p => p.GetProperty("productId").GetGuid() == productId);
+        await SellAsync(cashier, otherId, otherUnitId, 1m, 0.500m); // بيع بلا إرجاع ما بيطلع بالقائمة
+        var saleNumber = await ReturnAsync(productId, unitId, 2.000m);
+
+        var pending = Assert.Single(await PendingAsync(), p => p.GetProperty("productId").GetGuid() == productId);
+        Assert.DoesNotContain(await PendingAsync(), p => p.GetProperty("productId").GetGuid() == otherId);
+        Assert.Equal(2m, pending.GetProperty("quantityReturnedBase").GetDecimal());
+        Assert.Equal(1, pending.GetProperty("returnCount").GetInt32());
+        Assert.Equal(JsonValueKind.Null, pending.GetProperty("lastCountedAtUtc").ValueKind);
+        var returnLine = pending.GetProperty("returns")[0];
+        Assert.Equal(saleNumber, returnLine.GetProperty("originalSaleInvoiceNumber").GetString());
+        Assert.Contains("alerts.cashier", returnLine.GetProperty("cashierName").GetString());
+        var returnNumber = returnLine.GetProperty("returnInvoiceNumber").GetString()!;
+
+        // جرد جزئي للمادة: الإرجاع كان وهمي - البضاعة (2) ما رجعت فعليًا → نقص 2.
+        var stocktake = await OkJsonAsync(await admin.PostAsJsonAsync("/api/v1/stocktakes",
+            new { branchId = Fixture.TestBranchId, includeAllProductsAtBranch = false, productIds = new[] { productId } }), "جرد جزئي");
+        var stocktakeId = stocktake.GetProperty("stocktakeId").GetGuid();
+        var item = (await OkJsonAsync(await admin.GetAsync($"/api/v1/stocktakes/{stocktakeId}"), "تفاصيل الجرد")).GetProperty("items")[0];
+        await OkJsonAsync(await admin.PostAsJsonAsync(
+            $"/api/v1/stocktakes/{stocktakeId}/items/{item.GetProperty("stocktakeItemId").GetGuid()}/count",
+            new { countedQuantity = item.GetProperty("expectedQuantity").GetDecimal() - 2m }), "عد");
+        await OkJsonAsync(await admin.PostAsync($"/api/v1/stocktakes/{stocktakeId}/complete", null), "إنهاء");
+        await OkJsonAsync(await admin.PostAsync($"/api/v1/stocktakes/{stocktakeId}/approve", null), "اعتماد");
+
+        var alert = Assert.Single(await GetAlertsAsync(admin), a => a.Title.StartsWith("فرق جرد بمادة مرتجعة"));
+        Assert.Equal("Critical", alert.Severity);
+        Assert.Contains("جبنة الإرجاع", alert.Message);
+        Assert.Contains("ناقص 2", alert.Message);
+        Assert.Contains(returnNumber, alert.Message);
+        Assert.Contains("alerts.cashier", alert.Message);
+        Assert.Contains("إرجاع وهمي", alert.Message);
+        Assert.Equal($"/returns?search={Uri.EscapeDataString(saleNumber)}", alert.LinkRoute);
+
+        // انعدّت = بتختفي. إرجاع جديد بيرجّعها بتاريخ آخر جرد.
+        Assert.DoesNotContain(await PendingAsync(), p => p.GetProperty("productId").GetGuid() == productId);
+        await ReturnAsync(productId, unitId, 2.000m);
+        var again = Assert.Single(await PendingAsync(), p => p.GetProperty("productId").GetGuid() == productId);
+        Assert.Equal(1, again.GetProperty("returnCount").GetInt32());
+        Assert.NotEqual(JsonValueKind.Null, again.GetProperty("lastCountedAtUtc").ValueKind);
+
+        // جرد بلا فرق ما بينبّه حتى لو المادة مرتجعة (الإرجاع حقيقي).
+        var clean = await OkJsonAsync(await admin.PostAsJsonAsync("/api/v1/stocktakes",
+            new { branchId = Fixture.TestBranchId, includeAllProductsAtBranch = false, productIds = new[] { productId } }), "جرد نظيف");
+        var cleanId = clean.GetProperty("stocktakeId").GetGuid();
+        var cleanItem = (await OkJsonAsync(await admin.GetAsync($"/api/v1/stocktakes/{cleanId}"), "تفاصيل")).GetProperty("items")[0];
+        await OkJsonAsync(await admin.PostAsJsonAsync(
+            $"/api/v1/stocktakes/{cleanId}/items/{cleanItem.GetProperty("stocktakeItemId").GetGuid()}/count",
+            new { countedQuantity = cleanItem.GetProperty("expectedQuantity").GetDecimal() }), "عد مطابق");
+        await OkJsonAsync(await admin.PostAsync($"/api/v1/stocktakes/{cleanId}/complete", null), "إنهاء");
+        await OkJsonAsync(await admin.PostAsync($"/api/v1/stocktakes/{cleanId}/approve", null), "اعتماد");
+        Assert.Single(await GetAlertsAsync(admin), a => a.Title.StartsWith("فرق جرد بمادة مرتجعة"));
+        Assert.DoesNotContain(await PendingAsync(), p => p.GetProperty("productId").GetGuid() == productId);
+
+        // الكاشير ما بيشوف القائمة (Stocktake.Manage)
+        Assert.Equal(HttpStatusCode.Forbidden, (await cashier.GetAsync("/api/v1/stocktakes/returned-pending")).StatusCode);
     }
 }

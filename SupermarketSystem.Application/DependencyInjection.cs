@@ -324,6 +324,7 @@ public static class DependencyInjection
         services.AddScoped<GetCurrentStockHandler>();
         services.AddScoped<GetStocktakeByIdHandler>();
         services.AddScoped<GetStocktakesHandler>();
+        services.AddScoped<SupermarketSystem.Application.Inventory.ReturnedPendingStocktake.GetReturnedPendingStocktakeHandler>();
 
         services.AddScoped<GetRecentReturnsHandler>();
         services.AddScoped<GetVoidedSalesHandler>();

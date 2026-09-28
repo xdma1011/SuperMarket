@@ -5,7 +5,7 @@ import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
-import { StocktakesOperation, BranchesOperation } from '../../core/api/operations';
+import { StocktakesOperation, BranchesOperation, ProductsOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
 import { AuthService } from '../../core/services/auth.service';
 
@@ -30,6 +30,24 @@ interface BranchDto {
 interface PagedResult<T> {
   items: T[];
   totalCount: number;
+}
+
+/** مادة إلها إرجاع بعد آخر مرة انعدّت (ضد الإرجاع الوهمي) - GET /stocktakes/returned-pending. */
+export interface ReturnedPendingItemDto {
+  branchId: string;
+  branchName: string;
+  productId: string;
+  productName: string;
+  quantityReturnedBase: number;
+  returnCount: number;
+  lastReturnAtUtc: string;
+  lastCountedAtUtc: string | null;
+  returns: { returnInvoiceNumber: string; originalSaleInvoiceNumber: string; returnedAtUtc: string; quantityBase: number; cashierName: string }[];
+}
+
+interface ProductOption {
+  id: string;
+  name: string;
 }
 
 interface CreateStocktakeResponse {
@@ -66,6 +84,17 @@ export class StocktakesComponent implements OnInit {
   readonly formError = signal<string | null>(null);
   selectedBranchId = '';
 
+  /** نطاق الجرد الجديد: الفرع كامل (الشهري) أو مواد مختارة (الجزئي السريع). */
+  readonly scope = signal<'all' | 'selected'>('all');
+  readonly selectedProducts = signal<ProductOption[]>([]);
+  readonly productResults = signal<ProductOption[]>([]);
+  productSearch = '';
+  private productSearchHandle: ReturnType<typeof setTimeout> | null = null;
+
+  /** مواد مرتجعة بانتظار جرد للفرع المختار - بتنقترح أول شي بالجرد الجزئي. */
+  readonly returnedPending = signal<ReturnedPendingItemDto[]>([]);
+  readonly expandedPendingId = signal<string | null>(null);
+
   constructor(
     private readonly apiClient: ApiClient,
     private readonly router: Router
@@ -88,6 +117,67 @@ export class StocktakesComponent implements OnInit {
     } catch {
       /* فشل تحميل الفروع لا يمنع عرض القائمة. */
     }
+    await this.loadReturnedPending();
+  }
+
+  async loadReturnedPending(): Promise<void> {
+    try {
+      const params: Record<string, string> = {};
+      if (this.selectedBranchId) params['branchId'] = this.selectedBranchId;
+      const items = await firstValueFrom(this.apiClient.get<ReturnedPendingItemDto[]>(
+        ApiController.Stocktakes, StocktakesOperation.ReturnedPending, undefined, params));
+      this.returnedPending.set(Array.isArray(items) ? items : []);
+    } catch {
+      this.returnedPending.set([]);
+    }
+  }
+
+  onBranchChanged(): void {
+    void this.loadReturnedPending();
+  }
+
+  togglePendingDetails(productId: string): void {
+    this.expandedPendingId.update(id => (id === productId ? null : productId));
+  }
+
+  /** "جرد المواد المرتجعة": بيفتح جرد جزئي والمواد محطوطة جاهزة. */
+  openReturnedPendingStocktake(): void {
+    this.openCreateForm();
+    this.scope.set('selected');
+    this.selectedProducts.set(this.returnedPending().map(p => ({ id: p.productId, name: p.productName })));
+  }
+
+  onProductSearchChanged(): void {
+    if (this.productSearchHandle) clearTimeout(this.productSearchHandle);
+    const term = this.productSearch.trim();
+    if (!term) {
+      this.productResults.set([]);
+      return;
+    }
+    this.productSearchHandle = setTimeout(() => void this.searchProducts(term), 250);
+  }
+
+  async searchProducts(term: string): Promise<void> {
+    try {
+      const result = await firstValueFrom(this.apiClient.get<PagedResult<ProductOption>>(
+        ApiController.Products, ProductsOperation.List, undefined, { search: term, pageSize: 8 }));
+      const chosen = new Set(this.selectedProducts().map(p => p.id));
+      this.productResults.set(result.items.filter(p => !chosen.has(p.id)).map(p => ({ id: p.id, name: p.name })));
+    } catch {
+      this.productResults.set([]);
+    }
+  }
+
+  addProduct(product: ProductOption): void {
+    if (!this.selectedProducts().some(p => p.id === product.id)) {
+      this.selectedProducts.update(list => [...list, product]);
+    }
+    this.productSearch = '';
+    this.productResults.set([]);
+  }
+
+  removeProduct(productId: string): void {
+    this.selectedProducts.update(list => list.filter(p => p.id !== productId));
   }
 
   async load(): Promise<void> {
@@ -119,16 +209,25 @@ export class StocktakesComponent implements OnInit {
   openCreateForm(): void {
     this.formOpen.set(true);
     this.formError.set(null);
+    this.scope.set('all');
+    this.selectedProducts.set([]);
+    this.productSearch = '';
+    this.productResults.set([]);
   }
 
   closeForm(): void {
     this.formOpen.set(false);
   }
 
-  /** بدون اختيار أصناف حاليًا عمدًا - "الفرع كامل" بس، أبسط نقطة انطلاق تغطي الاستخدام الأشيع. */
+  /** الفرع كامل (الجرد الشهري) أو مواد مختارة (جرد جزئي - مثلًا المواد المرتجعة بانتظار جرد). */
   async submitCreate(): Promise<void> {
     if (!this.selectedBranchId) {
       this.formError.set('اختر فرع.');
+      return;
+    }
+    const partial = this.scope() === 'selected';
+    if (partial && this.selectedProducts().length === 0) {
+      this.formError.set('اختر مادة وحدة عالأقل للجرد الجزئي.');
       return;
     }
 
@@ -139,8 +238,8 @@ export class StocktakesComponent implements OnInit {
       const response = await firstValueFrom(
         this.apiClient.post<CreateStocktakeResponse>(ApiController.Stocktakes, StocktakesOperation.Create, {
           branchId: this.selectedBranchId,
-          includeAllProductsAtBranch: true,
-          productIds: null
+          includeAllProductsAtBranch: !partial,
+          productIds: partial ? this.selectedProducts().map(p => p.id) : null
         })
       );
 

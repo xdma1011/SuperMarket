@@ -5,5 +5,6 @@ export enum StocktakesOperation {
   GetById = '{id}',
   RecordCount = '{id}/items/{itemId}/count',
   Complete = '{id}/complete',
-  Approve = '{id}/approve'
+  Approve = '{id}/approve',
+  ReturnedPending = 'returned-pending'
 }

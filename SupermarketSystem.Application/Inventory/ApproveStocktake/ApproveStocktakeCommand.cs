@@ -5,6 +5,7 @@ using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Domain.Identity;
 using SupermarketSystem.Domain.Inventory;
+using SupermarketSystem.Application.Inventory.ReturnedPendingStocktake;
 
 namespace SupermarketSystem.Application.Inventory.ApproveStocktake;
 
@@ -185,7 +186,76 @@ public sealed class ApproveStocktakeHandler
                 link: $"/stocktakes/{stocktake.Id}");
         }
 
+        if (result.IsSuccess && result.Value.AppliedCorrections.Count > 0)
+        {
+            await NotifyVarianceOnRecentlyReturnedAsync(stocktake, result.Value.AppliedCorrections, cancellationToken);
+        }
+
         return result;
+    }
+
+    /// <summary>
+    /// ضد الإرجاع الوهمي (28/9/2026): فرق بمادة إلها إرجاع بعد آخر عدّ إلها (وقبل عدّها بهالجرد) = تنبيه عالي الأولوية
+    /// مربوط بفواتير الإرجاع والكاشير اللي سجّلها. نقص = الإشارة الأقوى (الإرجاع رجّع بضاعة بالسستم ما رجعت فعليًا)؛
+    /// زيادة بمادة مرتجعة بتنذكر بنفس التنبيه بس لحالها بتكون متوسطة. فشل هون ما بيأثر عالاعتماد (صار أصلًا).
+    /// </summary>
+    private async Task NotifyVarianceOnRecentlyReturnedAsync(
+        Stocktake stocktake, IReadOnlyList<ApproveStocktakeAppliedCorrectionDto> corrections, CancellationToken cancellationToken)
+    {
+        var productIds = corrections.Select(c => c.ProductId).Distinct().ToList();
+        var pending = await ReturnedPendingStocktakeCalculator.CalculateAsync(
+            _context, _dateTimeProvider.UtcNow, stocktake.BranchId, productIds, excludeStocktakeId: stocktake.Id, cancellationToken);
+        if (pending.Count == 0)
+        {
+            return;
+        }
+
+        var countedAtByProduct = stocktake.Items
+            .Where(i => i.CountedAtUtc != null)
+            .GroupBy(i => i.ProductId)
+            .ToDictionary(g => g.Key, g => g.Max(i => i.CountedAtUtc!.Value));
+
+        var lines = new List<string>();
+        var anyShortage = false;
+        string? linkSaleNumber = null;
+        foreach (var correction in corrections.GroupBy(c => c.ProductId).Select(g => new { ProductId = g.Key, Variance = g.Sum(c => c.Variance) }))
+        {
+            var item = pending.FirstOrDefault(p => p.ProductId == correction.ProductId);
+            if (item is null || correction.Variance == 0)
+            {
+                continue;
+            }
+
+            // إرجاع بعد عدّ المادة بهالجرد ما انشمل بالعدّ - ما إلو علاقة بالفرق.
+            var returns = countedAtByProduct.TryGetValue(correction.ProductId, out var countedAt)
+                ? item.Returns.Where(r => r.ReturnedAtUtc <= countedAt).ToList()
+                : item.Returns.ToList();
+            if (returns.Count == 0)
+            {
+                continue;
+            }
+
+            anyShortage |= correction.Variance < 0;
+            linkSaleNumber ??= returns[0].OriginalSaleInvoiceNumber;
+            var direction = correction.Variance < 0 ? $"ناقص {Math.Abs(correction.Variance):0.###}" : $"زايد {correction.Variance:0.###}";
+            lines.Add($"- {item.ProductName}: {direction} · مرتجع منها {returns.Sum(r => r.QuantityBase):0.###} من آخر جرد:");
+            lines.AddRange(returns.Select(r =>
+                $"    {r.ReturnInvoiceNumber} (فاتورة {r.OriginalSaleInvoiceNumber}) — {r.QuantityBase:0.###} — {r.CashierName} — {r.ReturnedAtUtc:yyyy-MM-dd HH:mm} UTC"));
+        }
+
+        if (lines.Count == 0)
+        {
+            return;
+        }
+
+        var branchName = await AlertText.BranchNameAsync(_context, stocktake.BranchId, cancellationToken);
+        await _notificationDispatcher.NotifyAsync(
+            $"فرق جرد بمادة مرتجعة — {stocktake.StocktakeNumber}",
+            $"الفرع: {branchName}\n{string.Join("\n", lines)}\n" +
+            (anyShortage ? "النقص بمادة مرتجعة ممكن يعني إرجاع وهمي (البضاعة ما رجعت فعليًا) - راجع الإرجاع مع الكاشير والكاميرا." : "راجع الإرجاع - ممكن انرجعت بضاعة زيادة عن المسجّل."),
+            cancellationToken,
+            anyShortage ? NotificationSeverity.Critical : NotificationSeverity.Warning,
+            link: linkSaleNumber is null ? $"/stocktakes/{stocktake.Id}" : $"/returns?search={Uri.EscapeDataString(linkSaleNumber)}");
     }
 
     private async Task<Stock> GetOrCreateTrackedStockAsync(Guid branchId, Guid productId, Guid? productBatchId, CancellationToken cancellationToken)
