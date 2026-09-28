@@ -175,7 +175,7 @@ public partial class ReturnWindow : Window
         _itemRows.Clear();
 
         InvoiceHeaderText.Text =
-            $"فاتورة {invoice.InvoiceNumber} — الحالة: {invoice.StatusTitle} — الإجمالي: {invoice.TotalAmount:0.00} — إجمالي مُرجَع سابقًا: {invoice.TotalReturnedAmount:0.00}";
+            $"فاتورة {invoice.InvoiceNumber} — الحالة: {invoice.StatusTitle} — الإجمالي: {invoice.TotalAmount:0.000} — إجمالي مُرجَع سابقًا: {invoice.TotalReturnedAmount:0.000}";
 
         ItemsPanel.Children.Add(BuildItemsHeaderRow());
 
@@ -195,7 +195,7 @@ public partial class ReturnWindow : Window
             AddCell(row, item.Quantity.ToString("0.###", CultureInfo.InvariantCulture), 1, bold: false, center: true);
             AddCell(row, item.QuantityReturned.ToString("0.###", CultureInfo.InvariantCulture), 2, bold: false, center: true);
             AddCell(row, returnable.ToString("0.###", CultureInfo.InvariantCulture), 3, bold: true, center: true);
-            AddCell(row, item.UnitPriceSnapshot.ToString("0.00", CultureInfo.InvariantCulture), 4, bold: false, center: true);
+            AddCell(row, item.UnitPriceSnapshot.ToString("0.000", CultureInfo.InvariantCulture), 4, bold: false, center: true);
 
             var qtyBox = new TextBox
             {
@@ -274,7 +274,7 @@ public partial class ReturnWindow : Window
             }
         }
 
-        TotalRefundText.Text = $"إجمالي الاسترجاع: {total:0.00}";
+        TotalRefundText.Text = $"إجمالي الاسترجاع: {total:0.000}";
     }
 
     private async void SubmitReturnButton_Click(object sender, RoutedEventArgs e)
@@ -367,7 +367,7 @@ public partial class ReturnWindow : Window
             : "";
 
         MessageBox.Show(
-            $"تم تنفيذ الإرجاع بنجاح.\nرقم الإرجاع: {response.InvoiceNumber}\nالمبلغ المسترجَع: {response.TotalRefundedAmount:0.00}{replaySuffix}{reviewSuffix}",
+            $"تم تنفيذ الإرجاع بنجاح.\nرقم الإرجاع: {response.InvoiceNumber}\nالمبلغ المسترجَع: {response.TotalRefundedAmount:0.000}{replaySuffix}{reviewSuffix}",
             "تم", MessageBoxButton.OK, MessageBoxImage.Information);
 
         NotesBox.Clear();

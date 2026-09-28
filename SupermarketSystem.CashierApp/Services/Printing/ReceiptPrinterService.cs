@@ -1,6 +1,7 @@
 namespace SupermarketSystem.CashierApp.Services.Printing;
 
-public sealed record PrintResult(bool Success, string? ErrorMessage);
+/// <summary>NotConfigured: الطباعة مطفية ("None") أو طابعة USB بلا اسم - مش فشل طباعة، ما في طابعة أصلًا.</summary>
+public sealed record PrintResult(bool Success, string? ErrorMessage, bool NotConfigured = false);
 
 /// <summary>
 /// نقطة دخول واحدة للطباعة — "اطبع هالفاتورة"، بلا ما الطالب (SaleWindow)
@@ -23,6 +24,14 @@ public sealed class ReceiptPrinterService
     public async Task<PrintResult> PrintAsync(ReceiptData receiptData, CancellationToken cancellationToken)
     {
         IPrinterConnection connection;
+
+        // "None" = بلا طابعة (قبل الافتتاح/جهاز بلا طابعة)؛ USB بلا اسم طابعة نفس الشي - بدل ما
+        // كل بيعة ترجّع "تعذّرت الطباعة" وتطلع رسالة للكاشير.
+        if (_config.PrinterConnectionType == "None"
+            || (_config.PrinterConnectionType != "Network" && string.IsNullOrWhiteSpace(_config.PrinterUsbName)))
+        {
+            return new PrintResult(false, "الطباعة مش مضبوطة (PrinterConnectionType بالإعدادات).", NotConfigured: true);
+        }
 
         try
         {

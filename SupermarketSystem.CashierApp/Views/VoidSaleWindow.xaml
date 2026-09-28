@@ -12,7 +12,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="12" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="6" />
+            <RowDefinition Height="Auto" /> <!-- سطر التلميح - كان 6px فالنص مقصوص -->
             <RowDefinition Height="150" />
             <RowDefinition Height="14" />
             <RowDefinition Height="*" />
@@ -45,7 +45,7 @@
                     Click="SearchButton_Click" />
         </Grid>
 
-        <TextBlock Grid.Row="3" FontSize="11.5" Foreground="{StaticResource Ink2Brush}"
+        <TextBlock Grid.Row="3" FontSize="11.5" Margin="0,6,0,8" Foreground="{StaticResource Ink2Brush}"
                    Text="ابحث برقم الفاتورة أو رقم هاتف/اسم الزبون - Enter يبحث مباشرة." />
 
         <!-- نتائج البحث -->
@@ -70,7 +70,7 @@
                                 <TextBlock Grid.Column="2" Text="{Binding CustomerDisplay}" FontSize="12"
                                            Foreground="{StaticResource Ink2Brush}" VerticalAlignment="Center" />
                                 <TextBlock Grid.Column="3" Text="{Binding StatusTitle}" FontSize="12" VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="4" Text="{Binding TotalAmount, StringFormat={}{0:0.00}}"
+                                <TextBlock Grid.Column="4" Text="{Binding TotalAmount, StringFormat={}{0:0.000}}"
                                            FontWeight="Bold" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" />
                             </Grid>
                         </DataTemplate>

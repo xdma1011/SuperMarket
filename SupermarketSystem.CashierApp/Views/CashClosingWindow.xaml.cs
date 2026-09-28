@@ -99,7 +99,7 @@ public partial class CashClosingWindow : Window
 
         var response = result.Response;
         ResultText.Text =
-            $"تم التقفيل بنجاح.\nالمتوقَّع: {response.ExpectedCash:0.00}\nالمعدود: {response.CountedCash:0.00}\nالفرق: {response.Variance:0.00}";
+            $"تم التقفيل بنجاح.\nالمتوقَّع: {response.ExpectedCash:0.000}\nالمعدود: {response.CountedCash:0.000}\nالفرق: {response.Variance:0.000}";
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e)

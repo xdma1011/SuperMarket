@@ -62,7 +62,7 @@
                                            Foreground="{StaticResource Ink2Brush}" VerticalAlignment="Center" />
                                 <TextBlock Grid.Column="2" Text="{Binding UnitName}" FontSize="13"
                                            Foreground="{StaticResource Ink2Brush}" VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="3" Text="{Binding Price, StringFormat={}{0:0.00}}" FontSize="16"
+                                <TextBlock Grid.Column="3" Text="{Binding Price, StringFormat={}{0:0.000}}" FontSize="16"
                                            FontWeight="Bold" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" />
                             </Grid>
                         </DataTemplate>

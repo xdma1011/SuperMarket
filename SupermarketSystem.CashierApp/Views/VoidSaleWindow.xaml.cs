@@ -137,7 +137,7 @@ public partial class VoidSaleWindow : Window
         _loadedInvoiceNumber = invoice.InvoiceNumber;
 
         InvoiceHeaderText.Text =
-            $"فاتورة {invoice.InvoiceNumber} — الحالة: {invoice.StatusTitle} — الإجمالي: {invoice.TotalAmount:0.00} — إجمالي مُرجَع سابقًا: {invoice.TotalReturnedAmount:0.00}";
+            $"فاتورة {invoice.InvoiceNumber} — الحالة: {invoice.StatusTitle} — الإجمالي: {invoice.TotalAmount:0.000} — إجمالي مُرجَع سابقًا: {invoice.TotalReturnedAmount:0.000}";
 
         if (invoice.StatusTitle != "مكتملة")
         {
@@ -156,7 +156,7 @@ public partial class VoidSaleWindow : Window
         {
             var line = new TextBlock
             {
-                Text = $"{item.ProductName} — الكمية: {item.Quantity:0.###} × {item.UnitPriceSnapshot:0.00} = {item.LineTotal:0.00}",
+                Text = $"{item.ProductName} — الكمية: {item.Quantity:0.###} × {item.UnitPriceSnapshot:0.000} = {item.LineTotal:0.000}",
                 FontSize = 13,
                 Margin = new Thickness(0, 0, 0, 6)
             };
@@ -211,7 +211,7 @@ public partial class VoidSaleWindow : Window
             $"تم إلغاء الفاتورة '{response.InvoiceNumber}' بنجاح.\n" +
             $"حركات مخزون معكوسة: {response.StockMovementsReversed}\n" +
             $"دفعات معكوسة: {response.PaymentsReversed}\n" +
-            $"كاش أُعيد للدرج: {response.CashReturnedToDrawer:0.00}",
+            $"كاش أُعيد للدرج: {response.CashReturnedToDrawer:0.000}",
             "تم", MessageBoxButton.OK, MessageBoxImage.Information);
 
         NotesBox.Clear();

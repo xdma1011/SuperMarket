@@ -1,3 +1,5 @@
+using SupermarketSystem.Application.CashManagement.RecordDrawerOpen;
+using SupermarketSystem.Application.Reporting.GetDrawerOpenCounts;
 using Microsoft.Extensions.DependencyInjection;
 using SupermarketSystem.Application.Authentication.Login;
 using SupermarketSystem.Application.Authentication.GetActiveSessions;
@@ -282,6 +284,7 @@ public static class DependencyInjection
         services.AddScoped<GetCustomerDebtsHandler>();
 
         services.AddScoped<CompleteCashClosingHandler>();
+        services.AddScoped<RecordDrawerOpenHandler>();
         services.AddScoped<GetCashClosingsHandler>();
 
         services.AddScoped<CreateStocktakeHandler>();
@@ -317,6 +320,7 @@ public static class DependencyInjection
         services.AddScoped<GetWasteLogHandler>();
         services.AddScoped<GetSupplierPaymentDueHandler>();
         services.AddScoped<GetCashierVarianceReportHandler>();
+        services.AddScoped<GetDrawerOpenCountsHandler>();
         services.AddScoped<GetNotificationsHandler>();
 
         services.AddScoped<TriggerBackupHandler>();

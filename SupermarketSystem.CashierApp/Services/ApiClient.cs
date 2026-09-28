@@ -287,6 +287,28 @@ public sealed class ApiClient
         }
     }
 
+    /// <summary>
+    /// زر "فتح الصندوق": بيسجّل فتح الدرج بلا بيع بالسيرفر (POST /cash-drawer/open-events). تسجيل بس -
+    /// ما بيفتح درج حقيقي. أونلاين بس حاليًا: بلا اتصال بيرجع فشل والكاشير بيشوف السبب.
+    /// </summary>
+    public async Task<(bool Success, string? ErrorMessage)> RecordDrawerOpenAsync(Guid branchId, string? reason, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await _http.PostAsJsonAsync("cash-drawer/open-events", new { branchId, reason }, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                return (true, null);
+            }
+
+            return (false, ServerError(await response.Content.ReadAsStringAsync(cancellationToken)));
+        }
+        catch (Exception ex)
+        {
+            return (false, $"تعذّر الاتصال بالسيرفر: {ex.Message}");
+        }
+    }
+
     /// <summary>طرق الدفع نادرًا ما تتغيّر - تُجلب مرة بالذاكرة بعد الدخول، بلا حاجة لآلية مزامنة كاملة.</summary>
     public async Task<List<PaymentMethodDto>> GetPaymentMethodsAsync(CancellationToken cancellationToken)
     {

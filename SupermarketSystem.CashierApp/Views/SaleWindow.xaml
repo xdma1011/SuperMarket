@@ -37,9 +37,10 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
+            <!-- باركود، أو كمية*باركود (مثلًا 5*6250000000011) لإضافة 5 مرة وحدة؛ +/− والحقل فاضي بتعدّل آخر سطر -->
             <TextBox x:Name="BarcodeBox" Grid.Column="0" Height="42" FontSize="16" Padding="10,0"
                      VerticalContentAlignment="Center" Background="White"
-                     KeyDown="BarcodeBox_KeyDown" />
+                     KeyDown="BarcodeBox_KeyDown" ToolTip="باركود، أو كمية*باركود (5*باركود). + و − والحقل فاضي بتعدّل كمية آخر صنف." />
 
             <Button x:Name="AddButton" Grid.Column="2" Height="42" Width="90" Content="إضافة"
                     Style="{StaticResource SecondaryButton}" Click="AddButton_Click" />
@@ -64,27 +65,75 @@
                        FontSize="12" Text="" />
         </Grid>
 
-        <!-- شريط إجراءات الجلسة/الوردية - منفصل عن أزرار البيع عمدًا (ليست عمليات بيع) -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Left">
-            <Button x:Name="CashClosingButton" Height="32" Width="120" FontSize="12" Content="🧮 إغلاق الصندوق"
-                    Style="{StaticResource SecondaryButton}" Click="CashClosingButton_Click" Margin="0,0,8,0" />
-            <Button x:Name="LogoutButton" Height="32" Width="110" FontSize="12" Content="🔒 تسجيل خروج"
-                    Style="{StaticResource SecondaryButton}" Click="LogoutButton_Click" />
-        </StackPanel>
+        <!-- شريط الإجراءات: عمليات جانبية بلا ما تطلع من شاشة البيع (كانت بتحتاج تسجيل خروج للرجوع للإرجاع/رفع
+             فاتورة) + سطر حالة آخر عملية بدل الرسالة المنبثقة بعد كل بيعة. -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <Button x:Name="HomeButton" Height="34" Width="96" FontSize="12" Content="🏠 القائمة"
+                        Style="{StaticResource SecondaryButton}" Click="HomeButton_Click" Margin="0,0,6,0" />
+                <Button x:Name="ReturnButton" Height="34" Width="96" FontSize="12" Content="↩ إرجاع"
+                        Style="{StaticResource SecondaryButton}" Click="ReturnButton_Click" Margin="0,0,6,0" />
+                <Button x:Name="VoidSaleButton" Height="34" Width="112" FontSize="12" Content="✕ إلغاء فاتورة"
+                        Style="{StaticResource SecondaryButton}" Click="VoidSaleButton_Click" Margin="0,0,6,0" />
+                <Button x:Name="DrawerOpenButton" Height="34" Width="112" FontSize="12" Content="🗄 فتح الصندوق"
+                        Style="{StaticResource SecondaryButton}" Click="DrawerOpenButton_Click" Margin="0,0,6,0" />
+                <Button x:Name="CashClosingButton" Height="34" Width="120" FontSize="12" Content="🧮 إغلاق الصندوق"
+                        Style="{StaticResource SecondaryButton}" Click="CashClosingButton_Click" Margin="0,0,6,0" />
+                <Button x:Name="LogoutButton" Height="34" Width="110" FontSize="12" Content="🔒 تسجيل خروج"
+                        Style="{StaticResource SecondaryButton}" Click="LogoutButton_Click" />
+            </StackPanel>
+
+            <Border x:Name="SaleStatusBanner" Grid.Column="2" CornerRadius="8" Padding="12,6"
+                    HorizontalAlignment="Stretch" Visibility="Collapsed">
+                <TextBlock x:Name="SaleStatusText" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"
+                           VerticalAlignment="Center" Typography.NumeralAlignment="Tabular" />
+            </Border>
+        </Grid>
 
         <Border Grid.Row="4" Background="White" CornerRadius="10" BorderBrush="#E5E2DD" BorderThickness="1">
             <DataGrid x:Name="CartGrid" AutoGenerateColumns="False" IsReadOnly="True"
                       HeadersVisibility="Column" GridLinesVisibility="Horizontal" BorderThickness="0"
                       Background="Transparent" RowBackground="White" AlternatingRowBackground="#FAF9F7"
-                      Focusable="False" IsHitTestVisible="True" LoadingRow="CartGrid_LoadingRow">
+                      Focusable="False" IsHitTestVisible="True" LoadingRow="CartGrid_LoadingRow"
+                      FontSize="15" MinRowHeight="42" Typography.NumeralAlignment="Tabular">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="الصنف" Binding="{Binding ProductName}" Width="*" />
                     <DataGridTextColumn Header="الدفعة" Binding="{Binding BatchNumber}" Width="90" />
                     <DataGridTextColumn Header="الوحدة" Binding="{Binding UnitName}" Width="90" />
-                    <DataGridTextColumn Header="الكمية" Binding="{Binding Quantity}" Width="80" />
-                    <DataGridTextColumn Header="السعر" Binding="{Binding UnitPrice, StringFormat={}{0:0.00}}" Width="90" />
-                    <DataGridTextColumn Header="الإجمالي" Binding="{Binding LineTotal, StringFormat={}{0:0.00}}" Width="100" />
+                    <!-- الكمية قابلة للتعديل: كتابة مباشرة أو +/− (بدل مسح نفس الصنف 7 مرات) -->
+                    <DataGridTemplateColumn Header="الكمية" Width="160">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Button Content="−" Width="30" Height="30" Padding="0" FontSize="16" Focusable="False"
+                                            Style="{StaticResource SecondaryButton}" Click="DecreaseQuantity_Click" />
+                                    <TextBox Text="{Binding Quantity, Mode=OneWay, StringFormat={}{0:0.###}}"
+                                             Width="60" Height="30" Margin="4,0" FontSize="15" FontWeight="SemiBold"
+                                             HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                             LostKeyboardFocus="QuantityBox_LostKeyboardFocus" KeyDown="QuantityBox_KeyDown" />
+                                    <Button Content="+" Width="30" Height="30" Padding="0" FontSize="16" Focusable="False"
+                                            Style="{StaticResource SecondaryButton}" Click="IncreaseQuantity_Click" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="السعر" Binding="{Binding UnitPrice, StringFormat={}{0:0.000}}" Width="100" />
+                    <DataGridTextColumn Header="الإجمالي" Binding="{Binding LineTotal, StringFormat={}{0:0.000}}" Width="110" FontWeight="Bold" />
                     <DataGridTextColumn Header="" Binding="{Binding ReviewMark}" Width="90" />
+                    <DataGridTemplateColumn Header="" Width="48">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Content="✕" Width="30" Height="30" Padding="0" Focusable="False" ToolTip="حذف السطر"
+                                        Style="{StaticResource SecondaryButton}" Click="RemoveLine_Click" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                 </DataGrid.Columns>
             </DataGrid>
         </Border>
@@ -106,8 +155,9 @@
 
                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
                     <TextBlock Text="المبلغ المستلم" FontSize="11" Foreground="#6B6355" />
-                    <TextBox x:Name="TenderedAmountBox" Width="130" Height="40" FontSize="16" Padding="8,0"
-                             VerticalContentAlignment="Center" TextChanged="TenderedAmountBox_TextChanged" />
+                    <TextBox x:Name="TenderedAmountBox" Width="130" Height="40" FontSize="18" FontWeight="SemiBold" Padding="8,0"
+                             VerticalContentAlignment="Center" TextChanged="TenderedAmountBox_TextChanged"
+                             Typography.NumeralAlignment="Tabular" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" VerticalAlignment="Center">
@@ -146,8 +196,8 @@
 
                 <StackPanel Grid.Column="8" VerticalAlignment="Center" HorizontalAlignment="Left">
                     <TextBlock Text="الباقي للزبون" FontSize="12" Foreground="#6B6355" HorizontalAlignment="Center" />
-                    <TextBlock x:Name="ChangeAmountText" Text="0.00" FontSize="30" FontWeight="Bold"
-                               Foreground="#16A34A" HorizontalAlignment="Center" />
+                    <TextBlock x:Name="ChangeAmountText" Text="0.000" FontSize="30" FontWeight="Bold"
+                               Foreground="#16A34A" HorizontalAlignment="Center" Typography.NumeralAlignment="Tabular" />
                 </StackPanel>
             </Grid>
         </Border>
@@ -163,8 +213,10 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
+            <!-- الإجمالي أكبر وبلون الهوية الدافي - أهم رقم بالشاشة قدام الكاشير والزبون -->
             <TextBlock x:Name="TotalText" Grid.Column="0" VerticalAlignment="Center"
-                       FontSize="22" FontWeight="Bold" Text="الإجمالي: 0.00" Foreground="#1F1B16" />
+                       FontSize="32" FontWeight="Bold" Text="الإجمالي: 0.000 د.أ" Foreground="{StaticResource AccentHoverBrush}"
+                       Typography.NumeralAlignment="Tabular" />
 
             <ComboBox x:Name="PaymentMethodCombo" Grid.Column="2" Width="160" Height="38"
                       DisplayMemberPath="Name" VerticalContentAlignment="Center" />

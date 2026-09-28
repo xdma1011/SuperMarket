@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
@@ -39,6 +41,15 @@ public partial class SaleWindow : Window
     // 10 ثواني: كافية تلتقط انقطاع/عودة نت بسرعة معقولة، بلا ضغط زائد على السيرفر.
     private readonly DispatcherTimer _connectivityTimer;
 
+    /// <summary>بيخفي سطر حالة آخر عملية بعد ثواني (بدل الرسالة المنبثقة بعد كل بيعة).</summary>
+    private readonly DispatcherTimer _statusTimer = new() { Interval = TimeSpan.FromSeconds(7) };
+
+    /// <summary>تنبيه "بلا طابعة مضبوطة" بيطلع مرة وحدة بكل تشغيل للتطبيق، مش مع كل بيعة.</summary>
+    private static bool s_printerNotConfiguredNoticeShown;
+
+    /// <summary>كمية*باركود - مثلًا "5*6250000000011" أو "1.5*..." (وزن). الكمية لازم تكون أكبر من صفر.</summary>
+    private static readonly Regex QuantityPrefix = new(@"^\s*(\d+(?:[.,]\d+)?)\s*\*\s*(.*)$", RegexOptions.Compiled);
+
     public SaleWindow(
         ApiClient apiClient, AuthSession authSession, string dbPath,
         Services.Printing.ReceiptPrinterService receiptPrinter, BackgroundSyncService backgroundSync,
@@ -59,6 +70,28 @@ public partial class SaleWindow : Window
         _connectivityTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
         _connectivityTimer.Tick += async (_, _) => await RefreshConnectivityStateAsync();
         Closed += (_, _) => _connectivityTimer.Stop();
+
+        _statusTimer.Tick += (_, _) =>
+        {
+            _statusTimer.Stop();
+            SaleStatusBanner.Visibility = Visibility.Collapsed;
+        };
+        Closed += (_, _) => _statusTimer.Stop();
+    }
+
+    /// <summary>سطر حالة داخل الشاشة: أخضر للنجاح، برتقالي لتنبيه - بلا ما يوقف الكاشير بنافذة.</summary>
+    private void ShowSaleStatus(string message, bool isWarning)
+    {
+        SaleStatusText.Text = message;
+        SaleStatusText.Foreground = isWarning
+            ? (System.Windows.Media.Brush)FindResource("AccentHoverBrush")
+            : (System.Windows.Media.Brush)FindResource("GreenBrush");
+        SaleStatusBanner.Background = isWarning
+            ? (System.Windows.Media.Brush)FindResource("AccentSoftBrush")
+            : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEC, 0xFD, 0xF3));
+        SaleStatusBanner.Visibility = Visibility.Visible;
+        _statusTimer.Stop();
+        _statusTimer.Start();
     }
 
     private async void SaleWindow_Loaded(object sender, RoutedEventArgs e)
@@ -227,6 +260,19 @@ public partial class SaleWindow : Window
         {
             e.Handled = true; // يمنع Tab من نقل التركيز لعنصر تاني قبل ما نعالج المسح
             AddScannedItem();
+            return;
+        }
+
+        // + و − والحقل فاضي = كمية آخر صنف انضاف (أسرع من الماوس)؛ الحذف من زر ✕ بالسطر.
+        if (BarcodeBox.Text.Length == 0 && _cart.Count > 0 && e.Key is Key.Add or Key.OemPlus or Key.Subtract or Key.OemMinus)
+        {
+            e.Handled = true;
+            var lastLine = _cart[^1];
+            var delta = e.Key is Key.Add or Key.OemPlus ? 1m : -1m;
+            if (lastLine.Quantity + delta > 0)
+            {
+                SetLineQuantity(lastLine, lastLine.Quantity + delta);
+            }
         }
     }
 
@@ -243,7 +289,7 @@ public partial class SaleWindow : Window
     /// </summary>
     private void AddScannedItem()
     {
-        var barcodeValue = BarcodeBox.Text.Trim();
+        var (quantity, barcodeValue) = ParseQuantityPrefix(BarcodeBox.Text);
         BarcodeBox.Clear();
 
         try
@@ -269,12 +315,12 @@ public partial class SaleWindow : Window
                         return;
                     }
 
-                    AddResolvedItem(db, product, unit);
+                    AddResolvedItem(db, product, unit, quantity);
                     return;
                 }
             }
 
-            OpenSearchWindow(barcodeValue, priceCheckOnly: false);
+            OpenSearchWindow(barcodeValue, priceCheckOnly: false, quantity);
         }
         finally
         {
@@ -287,16 +333,29 @@ public partial class SaleWindow : Window
         }
     }
 
+    private static (decimal Quantity, string Barcode) ParseQuantityPrefix(string rawText)
+    {
+        var match = QuantityPrefix.Match(rawText);
+        if (match.Success
+            && decimal.TryParse(match.Groups[1].Value.Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out var quantity)
+            && quantity > 0)
+        {
+            return (quantity, match.Groups[2].Value.Trim());
+        }
+
+        return (1m, rawText.Trim());
+    }
+
     /// <summary>نقطة إضافة موحَّدة - يقرر بين صنف عادي أو متتبَّع دفعات، مستخدَمة من مسار الباركود المباشر وشاشة البحث الكاملة معًا، صفر تكرار منطق.</summary>
-    private void AddResolvedItem(LocalDbContext db, LocalProduct product, LocalProductUnit unit)
+    private void AddResolvedItem(LocalDbContext db, LocalProduct product, LocalProductUnit unit, decimal quantity = 1m)
     {
         if (product.IsBatchTracked)
         {
-            AddBatchTrackedItem(db, product, unit);
+            AddBatchTrackedItem(db, product, unit, quantity);
         }
         else
         {
-            AddSimpleItem(product, unit);
+            AddSimpleItem(product, unit, quantity);
         }
     }
 
@@ -313,14 +372,14 @@ public partial class SaleWindow : Window
         return (baseUnitPrice, catalogVersion);
     }
 
-    private void AddSimpleItem(LocalProduct product, LocalProductUnit unit)
+    private void AddSimpleItem(LocalProduct product, LocalProductUnit unit, decimal quantity)
     {
         FlashAddedSuccess();
 
         var existingLine = _cart.FirstOrDefault(l => l.ProductUnitId == unit.UnitId && l.ProductBatchId is null);
         if (existingLine is not null)
         {
-            existingLine.Quantity += 1;
+            existingLine.Quantity += quantity;
             CartGrid.Items.Refresh();
         }
         else
@@ -335,7 +394,7 @@ public partial class SaleWindow : Window
                 ProductUnitId = unit.UnitId,
                 ProductName = product.Name,
                 UnitName = unit.UnitName,
-                Quantity = 1,
+                Quantity = quantity,
                 UnitPrice = baseUnitPrice * unit.ConversionFactorToBase,
                 CatalogVersion = catalogVersion
             };
@@ -353,14 +412,14 @@ public partial class SaleWindow : Window
     /// مراجعة (CLAUDE.md §1.6): البضاعة ممكن تكون وصلت فعليًا ولسه ما
     /// انزامنت محليًا؛ الحكم الفعلي عند السيرفر (AllowNegativeStock).
     /// </summary>
-    private void AddBatchTrackedItem(LocalDbContext db, LocalProduct product, LocalProductUnit unit)
+    private void AddBatchTrackedItem(LocalDbContext db, LocalProduct product, LocalProductUnit unit, decimal quantity)
     {
         var existingLine = _cart.FirstOrDefault(l => l.ProductUnitId == unit.UnitId && l.ProductBatchId is not null);
 
         if (existingLine is not null)
         {
             var currentBatch = db.ProductBatches.FirstOrDefault(b => b.BatchId == existingLine.ProductBatchId);
-            existingLine.Quantity += 1;
+            existingLine.Quantity += quantity;
 
             // تجاوز الرصيد المحلي المعروض - سماح مع مراجعة، لا منع (راجع
             // تعليق CartLine.NeedsReview). السيرفر هو الحكم الفعلي.
@@ -379,7 +438,7 @@ public partial class SaleWindow : Window
         // دفعة فعلية للمنتج (حتى لو رصيدها المحلي صفر أو قديم) بدل ما نمنع
         // البيع بالكامل - البضاعة ممكن تكون وصلت فعليًا وما زامنت لسه.
         var batch = db.ProductBatches
-            .Where(b => b.ProductId == product.ProductId && b.QuantityAvailable >= 1)
+            .Where(b => b.ProductId == product.ProductId && b.QuantityAvailable >= quantity)
             .OrderBy(b => b.ExpiryDate ?? DateOnly.MaxValue)
             .FirstOrDefault();
 
@@ -409,7 +468,7 @@ public partial class SaleWindow : Window
             BatchNumber = batch.BatchNumber,
             ProductName = product.Name,
             UnitName = unit.UnitName,
-            Quantity = 1,
+            Quantity = quantity,
             UnitPrice = batchBaseUnitPrice * unit.ConversionFactorToBase,
             CatalogVersion = batchCatalogVersion,
             NeedsReview = needsReview
@@ -423,7 +482,7 @@ public partial class SaleWindow : Window
     private void UpdateTotal()
     {
         var total = _cart.Sum(l => l.LineTotal);
-        TotalText.Text = $"الإجمالي: {total:0.00}";
+        TotalText.Text = $"الإجمالي: {total:0.000} د.أ";
         UpdateChangeDisplay();
     }
 
@@ -437,7 +496,7 @@ public partial class SaleWindow : Window
     {
         if (sender is Button { Tag: string tag } && decimal.TryParse(tag, out var jodAmount))
         {
-            TenderedAmountBox.Text = jodAmount.ToString("0.00");
+            TenderedAmountBox.Text = jodAmount.ToString("0.000", CultureInfo.InvariantCulture);
         }
     }
 
@@ -446,7 +505,7 @@ public partial class SaleWindow : Window
     {
         if (sender is Button { Tag: string tag } && decimal.TryParse(tag, out var usdAmount))
         {
-            TenderedAmountBox.Text = (usdAmount * _usdToJodExchangeRate).ToString("0.00");
+            TenderedAmountBox.Text = (usdAmount * _usdToJodExchangeRate).ToString("0.000", CultureInfo.InvariantCulture);
         }
     }
 
@@ -467,13 +526,13 @@ public partial class SaleWindow : Window
 
         if (tenderedText.Length == 0 || !decimal.TryParse(tenderedText, out var tendered))
         {
-            ChangeAmountText.Text = "0.00";
+            ChangeAmountText.Text = "0.000";
             ChangeAmountText.Foreground = System.Windows.Media.Brushes.Gray;
             return;
         }
 
         var change = tendered - total;
-        ChangeAmountText.Text = change.ToString("0.00");
+        ChangeAmountText.Text = change.ToString("0.000", CultureInfo.InvariantCulture);
         ChangeAmountText.Foreground = change >= 0
             ? System.Windows.Media.Brushes.Green
             : System.Windows.Media.Brushes.Red;
@@ -614,17 +673,29 @@ public partial class SaleWindow : Window
         CompleteSaleButton.IsEnabled = true;
         BarcodeBox.Focus();
 
-        // رسالتان منفصلتان عمدًا - نجاح/فشل الإرسال للسيرفر شي، ونجاح/فشل
-        // الطباعة شي تاني كليًا. فشل الطباعة *أبدًا* ما يعني فشل البيع.
+        // سطر حالة بالشاشة بدل رسالة منبثقة بعد كل بيعة (طلب صاحب المشروع 28/9/2026: "مستفزة").
+        // الإرسال والطباعة منفصلين: فشل الطباعة أبدًا ما يعني فشل البيع.
         var saleMessage = sendResult.Success
-            ? "تم إتمام البيع وإرساله فورًا."
-            : "تم حفظ البيع محليًا - رح يُرسل تلقائيًا بالخلفية (راجع شاشة الفواتير المعلَّقة لو ضلّت متكرّرة).";
-        var printMessage = printResult.Success
-            ? "تمت طباعة الفاتورة."
-            : $"تعذّرت الطباعة: {printResult.ErrorMessage}";
+            ? $"✓ تم البيع ({total:0.000} د.أ) وانبعت للسيرفر"
+            : $"✓ تم البيع ({total:0.000} د.أ) - انحفظ على الجهاز وبينبعت لحاله";
+        var isWarning = !sendResult.Success;
 
-        MessageBox.Show($"{saleMessage}\n{printMessage}", "تم", MessageBoxButton.OK,
-            printResult.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        if (printResult.NotConfigured)
+        {
+            if (!s_printerNotConfiguredNoticeShown)
+            {
+                s_printerNotConfiguredNoticeShown = true;
+                saleMessage += " · ما في طابعة مضبوطة، الفاتورة ما انطبعت";
+                isWarning = true;
+            }
+        }
+        else if (!printResult.Success)
+        {
+            saleMessage += $" · ⚠ تعذّرت الطباعة: {printResult.ErrorMessage}";
+            isWarning = true;
+        }
+
+        ShowSaleStatus(saleMessage, isWarning);
     }
 
     /// <summary>
@@ -686,7 +757,7 @@ public partial class SaleWindow : Window
     /// صار true، بنضيف المنتج/الوحدة المختارة مباشرة لنفس السلة الحالية.
     /// بوضع معرفة السعر، ما في شي يُضاف إطلاقًا مهما اختار الكاشير.
     /// </summary>
-    private void OpenSearchWindow(string initialTerm, bool priceCheckOnly)
+    private void OpenSearchWindow(string initialTerm, bool priceCheckOnly, decimal quantity = 1m)
     {
         var window = new ProductSearchWindow(_dbPath, initialTerm, priceCheckOnly) { Owner = this };
         var result = window.ShowDialog();
@@ -694,7 +765,7 @@ public partial class SaleWindow : Window
         if (result == true && window.SelectedProduct is LocalProduct selectedProduct && window.SelectedUnit is LocalProductUnit selectedUnit)
         {
             using var db = new LocalDbContext(_dbPath);
-            AddResolvedItem(db, selectedProduct, selectedUnit);
+            AddResolvedItem(db, selectedProduct, selectedUnit, quantity);
         }
 
         BarcodeBox.Focus();
@@ -755,5 +826,147 @@ public partial class SaleWindow : Window
         BarcodeBox.Background = flashColor;
         await Task.Delay(200);
         BarcodeBox.Background = System.Windows.Media.Brushes.White;
+    }
+
+    // === تعديل الكمية بالسلة (بدل مسح نفس الصنف كذا مرة) ===
+
+    private static CartLine? LineOf(object sender) => (sender as FrameworkElement)?.DataContext as CartLine;
+
+    /// <summary>
+    /// كمية جديدة لسطر: لسطر دفعات بيعيد فحص الرصيد المحلي (تجاوزه = ⚠ مراجعة، مش منع - §1.6، السيرفر هو
+    /// الحكم). الكمية لازم تكون أكبر من صفر؛ الحذف من زر ✕.
+    /// </summary>
+    private void SetLineQuantity(CartLine line, decimal quantity)
+    {
+        if (quantity <= 0)
+        {
+            return;
+        }
+
+        line.Quantity = quantity;
+        if (line.ProductBatchId is { } batchId)
+        {
+            using var db = new LocalDbContext(_dbPath);
+            var batch = db.ProductBatches.FirstOrDefault(b => b.BatchId == batchId);
+            line.NeedsReview = batch is null || quantity > batch.QuantityAvailable;
+        }
+
+        CartGrid.Items.Refresh();
+        UpdateTotal();
+    }
+
+    private void IncreaseQuantity_Click(object sender, RoutedEventArgs e)
+    {
+        if (LineOf(sender) is { } line)
+        {
+            SetLineQuantity(line, line.Quantity + 1);
+        }
+
+        BarcodeBox.Focus();
+    }
+
+    private void DecreaseQuantity_Click(object sender, RoutedEventArgs e)
+    {
+        if (LineOf(sender) is { } line && line.Quantity - 1 > 0)
+        {
+            SetLineQuantity(line, line.Quantity - 1);
+        }
+
+        BarcodeBox.Focus();
+    }
+
+    private void RemoveLine_Click(object sender, RoutedEventArgs e)
+    {
+        if (LineOf(sender) is { } line)
+        {
+            _cart.Remove(line);
+            UpdateTotal();
+        }
+
+        BarcodeBox.Focus();
+    }
+
+    private void QuantityBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+            BarcodeBox.Focus(); // بيطلق LostKeyboardFocus تحت، اللي بيطبّق الكمية
+        }
+    }
+
+    private void QuantityBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is not TextBox box || box.DataContext is not CartLine line)
+        {
+            return;
+        }
+
+        if (decimal.TryParse(box.Text.Trim().Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out var quantity)
+            && quantity > 0)
+        {
+            if (quantity != line.Quantity)
+            {
+                SetLineQuantity(line, quantity);
+            }
+        }
+        else
+        {
+            // رقم غلط أو صفر - رجّع الكمية القديمة بدل ما نسجّل إشي غلط.
+            box.Text = line.Quantity.ToString("0.###", CultureInfo.InvariantCulture);
+        }
+    }
+
+    // === عمليات جانبية بلا ما تطلع من شاشة البيع ===
+
+    /// <summary>رجوع للشاشة الرئيسية (رفع فاتورة AI وغيرها) بلا تسجيل خروج - المزامنة الخلفية بتضل شغّالة.</summary>
+    private void HomeButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_cart.Count > 0)
+        {
+            var confirm = MessageBox.Show(
+                "فيه أصناف بالسلة لسه ما اتباعت - هل متأكد من الرجوع للقائمة؟ رح تضيع السلة.",
+                "تأكيد", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+            if (confirm != MessageBoxResult.Yes)
+            {
+                return;
+            }
+        }
+
+        var mainWindow = new MainWindow(_apiClient, _authSession, _dbPath, _receiptPrinter, _backgroundSync, _adminScreenPassword);
+        mainWindow.Show();
+        Close();
+    }
+
+    private void ReturnButton_Click(object sender, RoutedEventArgs e)
+    {
+        new ReturnWindow(_apiClient, _authSession) { Owner = this }.ShowDialog();
+        BarcodeBox.Focus();
+    }
+
+    private void VoidSaleButton_Click(object sender, RoutedEventArgs e)
+    {
+        new VoidSaleWindow(_apiClient, _authSession) { Owner = this }.ShowDialog();
+        BarcodeBox.Focus();
+    }
+
+    /// <summary>
+    /// "فتح الصندوق" بلا بيع: تسجيل بس بالسيرفر (مين وإمتى) - ما في ربط بدرج حقيقي لسه. الإدارة بتشوف كم مرة
+    /// لكل كاشير بتقرير "فتح الصندوق بلا بيع".
+    /// </summary>
+    private async void DrawerOpenButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_authSession.BranchId is null)
+        {
+            ShowError("لا يوجد فرع مرتبط بجلستك - راجع الإدارة.");
+            return;
+        }
+
+        DrawerOpenButton.IsEnabled = false;
+        var (success, errorMessage) = await _apiClient.RecordDrawerOpenAsync(_authSession.BranchId.Value, reason: null, CancellationToken.None);
+        DrawerOpenButton.IsEnabled = true;
+
+        ShowSaleStatus(success ? "🗄 انسجّل فتح الصندوق" : $"ما انسجّل فتح الصندوق: {errorMessage}", isWarning: !success);
+        BarcodeBox.Focus();
     }
 }

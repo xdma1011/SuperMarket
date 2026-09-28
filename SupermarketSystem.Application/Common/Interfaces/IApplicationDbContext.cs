@@ -95,6 +95,7 @@ public interface IApplicationDbContext
     // Cash Management
     DbSet<CashDrawerLog> CashDrawerLogs { get; }
     DbSet<CashClosing> CashClosings { get; }
+    DbSet<DrawerOpenEvent> DrawerOpenEvents { get; }
 
     // Customers
     DbSet<Customer> Customers { get; }

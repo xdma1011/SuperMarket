@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using SupermarketSystem.Domain.Branches;
 using SupermarketSystem.Domain.CashManagement;
 using SupermarketSystem.Domain.Identity;
 using SupermarketSystem.Domain.Payments;
@@ -74,5 +75,23 @@ public class CashClosingDetailConfiguration : IEntityTypeConfiguration<CashClosi
         builder.Property(d => d.CountedAmount).HasColumnType("decimal(18,4)");
 
         builder.HasOne<PaymentMethod>().WithMany().HasForeignKey(d => d.PaymentMethodId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class DrawerOpenEventConfiguration : IEntityTypeConfiguration<DrawerOpenEvent>
+{
+    public void Configure(EntityTypeBuilder<DrawerOpenEvent> builder)
+    {
+        builder.ToTable("DrawerOpenEvents");
+        builder.HasKey(e => e.Id);
+
+        builder.Property(e => e.OccurredAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(e => e.Reason).HasMaxLength(DrawerOpenEvent.MaxReasonLength);
+
+        builder.HasIndex(e => new { e.BranchId, e.OccurredAtUtc });
+
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Branch>().WithMany().HasForeignKey(e => e.BranchId).OnDelete(DeleteBehavior.Restrict);
+        // سجل تاريخي بحت - ما في أي مسار تعديل/حذف بالنموذج.
     }
 }

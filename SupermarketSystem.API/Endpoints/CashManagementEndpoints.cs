@@ -3,6 +3,7 @@ using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Pagination;
 using SupermarketSystem.Application.CashManagement.CompleteCashClosing;
 using SupermarketSystem.Application.CashManagement.GetCashClosings;
+using SupermarketSystem.Application.CashManagement.RecordDrawerOpen;
 
 namespace SupermarketSystem.API.Endpoints;
 
@@ -10,6 +11,23 @@ public static class CashManagementEndpoints
 {
     public static IEndpointRouteBuilder MapCashManagementEndpoints(this IEndpointRouteBuilder app)
     {
+        // برّا مجموعة cash-closings عمدًا (§3.4): صلاحيتها Sales.Create (أي كاشير)، مش CashClosing.Manage.
+        app.MapPost("/api/v1/cash-drawer/open-events", async (
+            RecordDrawerOpenCommand command,
+            RecordDrawerOpenHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleAsync(command, cancellationToken);
+            return result.ToHttpResult(response => Results.Created($"/api/v1/cash-drawer/open-events/{response.DrawerOpenEventId}", response));
+        })
+        .WithTags("CashManagement")
+        .RequirePermission(PermissionCodes.SalesCreate)
+        .WithName("RecordDrawerOpen")
+        .WithSummary("تسجيل فتح درج الكاش بلا بيع (زر فتح الصندوق بالكاشير) - تسجيل بس، بلا أثر على المبالغ.")
+        .Produces<RecordDrawerOpenResponse>(StatusCodes.Status201Created)
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status403Forbidden);
+
         var group = app.MapGroup("/api/v1/cash-closings").WithTags("CashManagement").RequirePermission(PermissionCodes.CashClosingManage);
 
         group.MapPost("/", async (

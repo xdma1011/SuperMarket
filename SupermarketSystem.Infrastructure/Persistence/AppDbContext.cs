@@ -107,6 +107,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     // Cash Management
     public DbSet<CashDrawerLog> CashDrawerLogs => Set<CashDrawerLog>();
     public DbSet<CashClosing> CashClosings => Set<CashClosing>();
+    public DbSet<DrawerOpenEvent> DrawerOpenEvents => Set<DrawerOpenEvent>();
 
     // Customers
     public DbSet<Customer> Customers => Set<Customer>();

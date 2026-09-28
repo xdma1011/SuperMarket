@@ -6,6 +6,7 @@ using SupermarketSystem.Application.Reporting.GetBestCustomers;
 using SupermarketSystem.Application.Reporting.GetCurrentCapitalValue;
 using SupermarketSystem.Application.Reporting.GetExpiringBatches;
 using SupermarketSystem.Application.Reporting.GetCashierVarianceReport;
+using SupermarketSystem.Application.Reporting.GetDrawerOpenCounts;
 using SupermarketSystem.Application.Reporting.GetWasteLog;
 using SupermarketSystem.Application.Reporting.GetSupplierPaymentDue;
 using SupermarketSystem.Application.Reporting.GetProductMarginReport;
@@ -234,6 +235,20 @@ public static class ReportingEndpoints
         .WithName("GetExpiringBatches")
         .WithSummary("دفعات قرب انتهاء الصلاحية برصيد فعلي موجب - الحد الزمني قابل للتعديل من الإعدادات (افتراضي 14 يوم).")
         .Produces<PagedResult<ExpiringBatchItemDto>>(StatusCodes.Status200OK);
+
+        group.MapGet("/cashiers/drawer-opens", async (
+            int? pageNumber, int? pageSize, string? search, string? sortBy, string? sortDirection,
+            Guid? branchId, DateTime fromUtc, DateTime toUtc,
+            GetDrawerOpenCountsHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var paging = PagingBinder.Build(pageNumber, pageSize, search, sortBy, sortDirection);
+            var result = await handler.HandleAsync(new GetDrawerOpenCountsQuery(paging, branchId, fromUtc, toUtc), cancellationToken);
+            return Results.Ok(result);
+        })
+        .WithName("GetDrawerOpenCounts")
+        .WithSummary("كم مرة كل كاشير فتح الصندوق بلا بيع بالفترة.")
+        .Produces<PagedResult<DrawerOpenCountItemDto>>(StatusCodes.Status200OK);
 
         group.MapGet("/cashiers/variance", async (
             int? pageNumber, int? pageSize, string? search, string? sortBy, string? sortDirection,

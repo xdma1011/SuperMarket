@@ -163,7 +163,7 @@ public partial class ProductSearchWindow : Window
             PriceCheckUnitText.Text = string.IsNullOrEmpty(row.MatchedBarcode)
                 ? $"الوحدة: {unit.UnitName}"
                 : $"الوحدة: {unit.UnitName} · الباركود: {row.MatchedBarcode}";
-            PriceCheckPriceText.Text = $"{row.Price:0.00}";
+            PriceCheckPriceText.Text = $"{row.Price:0.000}";
             PriceCheckPanel.Visibility = Visibility.Visible;
             return;
         }
