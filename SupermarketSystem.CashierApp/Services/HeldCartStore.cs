@@ -16,6 +16,9 @@ public sealed class HeldCart
     public Guid? PreparedOrderId { get; set; }
     public int? PreparedTicketNumber { get; set; }
 
+    /// <summary>رقم الزبون (اختياري) اللي كان مكتوب وقت التعليق - بيرجع معها.</summary>
+    public string? CustomerPhone { get; set; }
+
     public int ItemCount => Lines.Count;
     public decimal Total => Lines.Sum(l => l.LineTotal);
     public string Summary => string.Join("، ", Lines.Select(l => $"{l.ProductName} × {l.Quantity:0.###}"));

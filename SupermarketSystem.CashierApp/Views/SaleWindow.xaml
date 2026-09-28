@@ -220,6 +220,8 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="10" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <!-- الإجمالي أكبر وبلون الهوية الدافي - أهم رقم بالشاشة قدام الكاشير والزبون -->
@@ -227,20 +229,28 @@
                        FontSize="32" FontWeight="Bold" Text="الإجمالي: 0.000 د.أ" Foreground="{StaticResource AccentHoverBrush}"
                        Typography.NumeralAlignment="Tabular" />
 
-            <ComboBox x:Name="PaymentMethodCombo" Grid.Column="2" Width="160" Height="38"
+            <!-- رقم الزبون اختياري (28/9/2026): زبون مسجّل بنفس الرقم = الفاتورة بتنربط فيه، غير هيك الرقم بينحفظ عالفاتورة -->
+            <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                <TextBlock Text="رقم الزبون (اختياري)" FontSize="11" Foreground="{StaticResource Ink2Brush}" />
+                <TextBox x:Name="CustomerPhoneBox" Width="140" Height="34" FontSize="14" Padding="6,0" Margin="0,2,0,0"
+                         VerticalContentAlignment="Center" FlowDirection="LeftToRight" MaxLength="20"
+                         Typography.NumeralAlignment="Tabular" ToolTip="مثلًا 0791234567 - بيلاقي الزبون المسجّل تلقائيًا" />
+            </StackPanel>
+
+            <ComboBox x:Name="PaymentMethodCombo" Grid.Column="4" Width="160" Height="38"
                       DisplayMemberPath="Name" VerticalContentAlignment="Center" />
 
-            <TextBlock x:Name="ErrorText" Grid.Column="4" Foreground="#DC2626" FontSize="12"
+            <TextBlock x:Name="ErrorText" Grid.Column="6" Foreground="#DC2626" FontSize="12"
                        VerticalAlignment="Center" Visibility="Collapsed" TextWrapping="Wrap" MaxWidth="260" />
 
             <!-- تعليق فاتورة: زبون بدو يبدّل صنف والطابور واقف - السلة بتنحط على جنب وبترجع بدبل كليك (28/9/2026) -->
-            <Button x:Name="HoldButton" Grid.Column="6" Height="42" Width="110" FontSize="13" Content="⏸ تعليق"
+            <Button x:Name="HoldButton" Grid.Column="8" Height="42" Width="110" FontSize="13" Content="⏸ تعليق"
                     Style="{StaticResource SecondaryButton}" Click="HoldButton_Click"
                     ToolTip="حط الفاتورة الحالية على جنب وخدّم الزبون اللي بعده" />
-            <Button x:Name="HeldSalesButton" Grid.Column="8" Height="42" Width="130" FontSize="13" Content="📋 المعلّقة (0)"
+            <Button x:Name="HeldSalesButton" Grid.Column="10" Height="42" Width="130" FontSize="13" Content="📋 المعلّقة (0)"
                     Style="{StaticResource SecondaryButton}" Click="HeldSalesButton_Click" />
 
-            <Button x:Name="CompleteSaleButton" Grid.Column="10" Height="42" Width="140"
+            <Button x:Name="CompleteSaleButton" Grid.Column="12" Height="42" Width="140"
                     Content="إتمام البيع" FontSize="14" Click="CompleteSaleButton_Click" />
         </Grid>
     </Grid>

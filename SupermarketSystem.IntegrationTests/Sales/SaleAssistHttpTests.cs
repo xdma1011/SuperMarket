@@ -306,4 +306,59 @@ public sealed class SaleAssistHttpTests : IntegrationTestBase
         Assert.Single(await SearchAsync($"productSearch={MilkBarcode}"));
         Assert.Empty(await SearchAsync($"productSearch={Uri.EscapeDataString("جبنة")}"));
     }
+
+    [Fact]
+    public async Task رقم_الزبون_الاختياري_بالكاشير_بيربط_الزبون_المسجّل_أو_بينحفظ_عالفاتورة_ورقم_غلط_ما_بيوقف_البيع()
+    {
+        var c = await SetUpAsync();
+        var branchId = Fixture.TestBranchId;
+        Guid customerId;
+        using (var scope = CreateScope())
+        {
+            // مخزّن بصيغة دولية (زي تطبيق الزبائن)، والكاشير بيكتبه محلي.
+            customerId = (await TestDataBuilder.CreateCustomerAsync(CreateDbContext(scope), "أبو خالد", "962791112233")).Id;
+        }
+
+        var cashier = await CashierAsync("cashier.phone");
+
+        async Task<Guid> SellAsync(string? phone)
+        {
+            var sale = await ReadJsonAsync(await cashier.PostAsJsonAsync("/api/v1/sales", new
+            {
+                branchId, clientRequestId = Guid.NewGuid(), customerId = (Guid?)null, invoiceLevelDiscountAmount = 0m,
+                items = new[] { new { productId = c.MilkId, productUnitId = c.MilkUnit, quantity = 1m, manualDiscountAmount = 0m, productBatchId = (Guid?)null } },
+                payments = new[] { new { paymentMethodId = TestDataBuilder.CashPaymentMethodId, amount = 1.250m, externalReference = (string?)null, clientRequestId = Guid.NewGuid() } },
+                customerPhone = phone
+            }), $"بيع برقم {phone}");
+            return sale.GetProperty("saleInvoiceId").GetGuid();
+        }
+
+        var known = await SellAsync("079 111 2233");
+        var unknown = await SellAsync("0785556677");
+        var junk = await SellAsync("abc");
+        var none = await SellAsync(null);
+
+        using (var scope = CreateScope())
+        {
+            var db = CreateDbContext(scope);
+            var invoices = await db.SaleInvoices.IgnoreQueryFilters()
+                .Where(s => new[] { known, unknown, junk, none }.Contains(s.Id)).ToDictionaryAsync(s => s.Id);
+
+            Assert.Equal(customerId, invoices[known].CustomerId);
+            Assert.Equal("أبو خالد", invoices[known].CustomerNameSnapshot);
+
+            Assert.Null(invoices[unknown].CustomerId);
+            Assert.Equal("0785556677", invoices[unknown].CustomerPhoneSnapshot);
+
+            Assert.Null(invoices[junk].CustomerId);
+            Assert.Null(invoices[junk].CustomerPhoneSnapshot);
+            Assert.Null(invoices[none].CustomerPhoneSnapshot);
+        }
+
+        // البحث بالرقم (شاشة الإرجاع) بيلاقي الفاتورة حتى بلا زبون مسجّل، وبيعرض الرقم.
+        var found = (await ReadJsonAsync(await cashier.GetAsync($"/api/v1/sales?branchId={branchId}&search=0785556677"), "بحث بالرقم"))
+            .GetProperty("items").EnumerateArray().Single();
+        Assert.Equal(unknown, found.GetProperty("id").GetGuid());
+        Assert.Equal("0785556677", found.GetProperty("customerPhone").GetString());
+    }
 }

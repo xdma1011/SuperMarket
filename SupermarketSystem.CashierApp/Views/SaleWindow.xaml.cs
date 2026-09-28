@@ -569,6 +569,17 @@ public partial class SaleWindow : Window
             return;
         }
 
+        // رقم الزبون اختياري - بس لو انكتب لازم يكون رقم منطقي (7-15 رقم)، عشان ما ينحفظ غلط على الفاتورة.
+        var customerPhone = CustomerPhoneBox.Text.Trim();
+        var phoneDigits = customerPhone.Count(char.IsAsciiDigit);
+        if (customerPhone.Length > 0
+            && (phoneDigits is < 7 or > 15 || customerPhone.Any(ch => !char.IsAsciiDigit(ch) && ch is not (' ' or '-' or '+'))))
+        {
+            ShowError("رقم الزبون مش صحيح - اكتبه أرقام (مثلًا 0791234567) أو فضّي الخانة.");
+            CustomerPhoneBox.Focus();
+            return;
+        }
+
         HideError();
         CompleteSaleButton.IsEnabled = false;
 
@@ -605,7 +616,9 @@ public partial class SaleWindow : Window
                 }
             },
             // طلب جاهز من مساعد الكاشير (لو السلة نزلت منه) - بيتسكّر بالسيرفر بنفس معاملة البيع.
-            preparedOrderId = _preparedOrderId
+            preparedOrderId = _preparedOrderId,
+            // السيرفر بيربط الزبون المسجّل بنفس الرقم (حتى لو البيعة وصلت متأخرة من الطابور الأوفلاين).
+            customerPhone = customerPhone.Length > 0 ? customerPhone : null
         };
 
         var payloadJson = JsonSerializer.Serialize(payload, JsonOptions);
@@ -684,6 +697,7 @@ public partial class SaleWindow : Window
         _preparedOrderId = null;
         _preparedTicketNumber = null;
         TenderedAmountBox.Clear();
+        CustomerPhoneBox.Clear();
         UpdateTotal();
         CompleteSaleButton.IsEnabled = true;
         BarcodeBox.Focus();
@@ -995,7 +1009,8 @@ public partial class SaleWindow : Window
             CashierName = _authSession.FullName,
             Lines = _cart.ToList(),
             PreparedOrderId = _preparedOrderId,
-            PreparedTicketNumber = _preparedTicketNumber
+            PreparedTicketNumber = _preparedTicketNumber,
+            CustomerPhone = string.IsNullOrWhiteSpace(CustomerPhoneBox.Text) ? null : CustomerPhoneBox.Text.Trim()
         };
 
         try
@@ -1012,6 +1027,7 @@ public partial class SaleWindow : Window
         _preparedOrderId = null;
         _preparedTicketNumber = null;
         TenderedAmountBox.Clear();
+        CustomerPhoneBox.Clear();
         UpdateTotal();
         RefreshHeldCount();
         ShowSaleStatus($"⏸ انعلّقت الفاتورة ({held.ItemCount} صنف، {held.Total:0.000} د.أ) - بترجعها من \"المعلّقة\"", isWarning: false);
@@ -1064,6 +1080,7 @@ public partial class SaleWindow : Window
 
                 _preparedOrderId = resumed.PreparedOrderId;
                 _preparedTicketNumber = resumed.PreparedTicketNumber;
+                CustomerPhoneBox.Text = resumed.CustomerPhone ?? "";
                 HideError();
                 UpdateTotal();
                 ShowSaleStatus($"↩ رجعت الفاتورة المعلّقة ({resumed.ItemCount} صنف، {resumed.Total:0.000} د.أ)", isWarning: false);

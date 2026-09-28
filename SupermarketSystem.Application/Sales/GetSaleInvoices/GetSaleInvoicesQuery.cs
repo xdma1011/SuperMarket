@@ -92,6 +92,8 @@ public sealed class GetSaleInvoicesHandler
             invoices = invoices.Where(x =>
                 EF.Functions.Like(x.Invoice.InvoiceNumber, pattern) ||
                 (x.CustomerPhone != null && EF.Functions.Like(x.CustomerPhone, pattern)) ||
+                // رقم انكتب عند الكاشير بلا زبون مسجّل (28/9/2026) - محفوظ على الفاتورة نفسها.
+                (x.Invoice.CustomerPhoneSnapshot != null && EF.Functions.Like(x.Invoice.CustomerPhoneSnapshot, pattern)) ||
                 (x.CustomerName != null && EF.Functions.Like(x.CustomerName, pattern)));
         }
 
@@ -106,7 +108,8 @@ public sealed class GetSaleInvoicesHandler
             {
                 x.Invoice.Id, x.Invoice.InvoiceNumber, x.Invoice.Status,
                 x.Invoice.TotalAmount, x.Invoice.TotalPaidAmount, x.Invoice.TotalReturnedAmount, x.Invoice.CreatedAtUtc,
-                x.CustomerName, x.CustomerPhone, x.Invoice.CreatedByUserId, x.Invoice.IsAtCostWithdrawal
+                x.CustomerName, x.CustomerPhone, x.Invoice.CreatedByUserId, x.Invoice.IsAtCostWithdrawal,
+                x.Invoice.CustomerNameSnapshot, x.Invoice.CustomerPhoneSnapshot
             })
             .ToListAsync(cancellationToken);
 
@@ -119,7 +122,8 @@ public sealed class GetSaleInvoicesHandler
 
         var items = rawItems.Select(s => new SaleInvoiceListItemDto(
             s.Id, s.InvoiceNumber, (int)s.Status, StatusTitle(s.Status),
-            s.TotalAmount, s.TotalPaidAmount, s.TotalReturnedAmount, s.CreatedAtUtc, s.CustomerName, s.CustomerPhone,
+            s.TotalAmount, s.TotalPaidAmount, s.TotalReturnedAmount, s.CreatedAtUtc,
+            s.CustomerName ?? s.CustomerNameSnapshot, s.CustomerPhone ?? s.CustomerPhoneSnapshot,
             s.CreatedByUserId is { } creatorId && cashierNames.TryGetValue(creatorId, out var cashierName) ? cashierName : null,
             s.IsAtCostWithdrawal))
             .ToList();

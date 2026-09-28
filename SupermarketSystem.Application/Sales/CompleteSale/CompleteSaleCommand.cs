@@ -60,7 +60,11 @@ public sealed record CompleteSaleCommand(
     // طلب جاهز من مساعد الكاشير (SuspendedSale، 28/9/2026) - بعد البيع بيتعلّم "انحاسب" بنفس المعاملة.
     // طلب مش موجود أو مسكّر ما بيوقف البيع (الكاشير ممكن يكون عدّل السلة، أو البيعة وصلت متأخرة من
     // الطابور الأوفلاين) - الفلوس الحقيقية أهم من حالة الطلب.
-    Guid? PreparedOrderId = null);
+    Guid? PreparedOrderId = null,
+    // رقم الزبون اختياري من الكاشير (28/9/2026): لو بيطابق زبون مسجّل (آخر 9 أرقام) الفاتورة بتنربط فيه،
+    // وإلا بينحفظ الرقم على الفاتورة بس (CustomerPhoneSnapshot) بلا إنشاء زبون. رقم غلط ما بيوقف البيع
+    // أبدًا (بينبعت أوفلاين وبيوصل متأخر) - بينتجاهل بس. CustomerId الصريح (لوحة الإدارة/الطلبات) أولى منه.
+    string? CustomerPhone = null);
 
 public sealed record CompleteSaleResponse(
     Guid SaleInvoiceId,
@@ -296,6 +300,7 @@ public sealed class CompleteSaleHandler
         // --- 2. Resolve customer snapshot (historical truth, §11) ---
         string? customerName = null;
         string? customerPhone = null;
+        var linkedCustomerId = command.CustomerId;
         if (command.CustomerId is { } customerId)
         {
             var customer = await _context.Customers.AsNoTracking()
@@ -313,6 +318,23 @@ public sealed class CompleteSaleHandler
             // rewrite what this invoice says (Architecture Review §4/§15).
             customerName = customer.FullName;
             customerPhone = customer.Phone;
+        }
+        else if (SaleCustomerPhone.Normalize(command.CustomerPhone) is { } enteredPhone)
+        {
+            customerPhone = enteredPhone;
+            var lastDigits = SaleCustomerPhone.MatchKey(enteredPhone);
+            var matches = await _context.Customers.AsNoTracking()
+                .Where(c => c.Phone != null && EF.Functions.Like(c.Phone, "%" + lastDigits))
+                .Select(c => new { c.Id, c.FullName })
+                .Take(2)
+                .ToListAsync(cancellationToken);
+
+            // زبون واحد بس بهالرقم = ربط؛ أكتر من واحد (نادر) = الرقم بس، بلا تخمين.
+            if (matches.Count == 1)
+            {
+                linkedCustomerId = matches[0].Id;
+                customerName = matches[0].FullName;
+            }
         }
 
         // --- 3. Resolve units and server-side prices ---
@@ -704,7 +726,7 @@ public sealed class CompleteSaleHandler
 
             var invoice = new SaleInvoice(
                 command.BranchId, invoiceNumber, command.ClientRequestId,
-                command.CustomerId, customerName, customerPhone);
+                linkedCustomerId, customerName, customerPhone);
 
             if (atCost is not null)
             {
