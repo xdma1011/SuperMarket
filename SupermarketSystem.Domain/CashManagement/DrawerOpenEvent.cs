@@ -17,13 +17,25 @@ public class DrawerOpenEvent : Entity, IBranchOwned
     public DateTime OccurredAtUtc { get; private set; }
     public string? Reason { get; private set; }
 
+    /// <summary>
+    /// بلا نت (28/9/2026): الكاشير بيحفظ الفتحة محليًا أول وبيبعتها لما يرجع الاتصال - ClientRequestId (فريد) بيمنع
+    /// تسجيلها مرتين لو انبعتت مرتين، وOccurredAtUtc بيكون وقت الفتح الفعلي عند الكاشير. null = سجل قديم/من غير الكاشير.
+    /// </summary>
+    public Guid? ClientRequestId { get; private set; }
+
+    /// <summary>وقت وصولها للسيرفر - بيختلف عن OccurredAtUtc لما تنبعت بعد انقطاع. null = سجل قديم (نفس OccurredAtUtc).</summary>
+    public DateTime? RecordedAtUtc { get; private set; }
+
     private DrawerOpenEvent() { } // EF Core
 
-    public DrawerOpenEvent(Guid branchId, Guid userId, DateTime occurredAtUtc, string? reason)
+    public DrawerOpenEvent(Guid branchId, Guid userId, DateTime occurredAtUtc, string? reason,
+        Guid? clientRequestId = null, DateTime? recordedAtUtc = null)
     {
         BranchId = branchId;
         UserId = userId;
         OccurredAtUtc = occurredAtUtc;
         Reason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        ClientRequestId = clientRequestId;
+        RecordedAtUtc = recordedAtUtc;
     }
 }

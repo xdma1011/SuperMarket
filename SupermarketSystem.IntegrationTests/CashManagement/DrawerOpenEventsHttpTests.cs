@@ -65,5 +65,50 @@ public sealed class DrawerOpenEventsHttpTests : IntegrationTestBase
         var row = JsonDocument.Parse(reportBody).RootElement.GetProperty("items").EnumerateArray()
             .Single(r => r.GetProperty("username").GetString()!.StartsWith("drawer.open"));
         Assert.Equal(2, row.GetProperty("openCount").GetInt32());
+        Assert.Equal(1, row.GetProperty("withoutReasonCount").GetInt32());
+        Assert.Equal("فكّة لزبون", row.GetProperty("recentReasons").GetString());
+    }
+
+    /// <summary>
+    /// بلا نت (28/9/2026): الكاشير بيحفظ الفتحة محليًا وبيبعتها لاحقًا بوقتها الفعلي ومفتاح فريد - إعادة الإرسال
+    /// بترجّع نفس السجل (200) بلا تكرار، والوقت غير المعقول (بالمستقبل) بيتسجّل بوقت الوصول بدل ما ينرفض.
+    /// </summary>
+    [Fact]
+    public async Task فتحة_محفوظة_بلا_نت_بتنسجّل_بوقتها_الفعلي_ومرة_وحدة_بس()
+    {
+        var cashier = await CashierAsync("drawer.offline");
+        var requestId = Guid.NewGuid();
+        var openedAt = DateTime.UtcNow.AddHours(-3);
+
+        var first = await cashier.PostAsJsonAsync("/api/v1/cash-drawer/open-events",
+            new { branchId = Fixture.TestBranchId, reason = "تبديل عملة", clientRequestId = requestId, occurredAtUtc = openedAt });
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        var firstBody = JsonDocument.Parse(await first.Content.ReadAsStringAsync()).RootElement;
+        Assert.True(Math.Abs((firstBody.GetProperty("occurredAtUtc").GetDateTime().ToUniversalTime() - openedAt).TotalSeconds) < 1,
+            "لازم ينسجّل وقت الفتح الفعلي عند الكاشير، مش وقت الوصول");
+
+        // إعادة إرسال (المزامنة الخلفية بعد ما رجع النت) - نفس السجل، بلا تكرار.
+        var replay = await cashier.PostAsJsonAsync("/api/v1/cash-drawer/open-events",
+            new { branchId = Fixture.TestBranchId, reason = "تبديل عملة", clientRequestId = requestId, occurredAtUtc = openedAt });
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        var replayBody = JsonDocument.Parse(await replay.Content.ReadAsStringAsync()).RootElement;
+        Assert.Equal(firstBody.GetProperty("drawerOpenEventId").GetGuid(), replayBody.GetProperty("drawerOpenEventId").GetGuid());
+        Assert.True(replayBody.GetProperty("wasReplay").GetBoolean());
+
+        // ساعة الجهاز غلط (بكرا) - بينسجّل بوقت الوصول، ما بينرفض (والا بتضل معلّقة بالكاشير للأبد).
+        var future = await cashier.PostAsJsonAsync("/api/v1/cash-drawer/open-events",
+            new { branchId = Fixture.TestBranchId, reason = (string?)null, clientRequestId = Guid.NewGuid(), occurredAtUtc = DateTime.UtcNow.AddDays(1) });
+        Assert.Equal(HttpStatusCode.Created, future.StatusCode);
+        var futureAt = JsonDocument.Parse(await future.Content.ReadAsStringAsync()).RootElement.GetProperty("occurredAtUtc").GetDateTime().ToUniversalTime();
+        Assert.True(futureAt <= DateTime.UtcNow.AddMinutes(1));
+
+        // التقرير: الفتحة المتأخرة بتنعدّ بيومها الفعلي، مرة وحدة.
+        var admin = await CreateAuthenticatedClientAsync();
+        var range = $"branchId={Fixture.TestBranchId}&fromUtc={Iso(DateTime.UtcNow.AddHours(-4))}&toUtc={Iso(DateTime.UtcNow.AddHours(1))}";
+        var reportBody = await (await admin.GetAsync($"/api/v1/reports/cashiers/drawer-opens?{range}")).Content.ReadAsStringAsync();
+        var row = JsonDocument.Parse(reportBody).RootElement.GetProperty("items").EnumerateArray()
+            .Single(r => r.GetProperty("username").GetString()!.StartsWith("drawer.offline"));
+        Assert.Equal(2, row.GetProperty("openCount").GetInt32());
+        Assert.Equal(1, row.GetProperty("withoutReasonCount").GetInt32());
     }
 }

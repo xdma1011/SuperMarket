@@ -312,11 +312,14 @@ public sealed class ApiClient
     /// زر "فتح الصندوق": بيسجّل فتح الدرج بلا بيع بالسيرفر (POST /cash-drawer/open-events). تسجيل بس -
     /// ما بيفتح درج حقيقي. أونلاين بس حاليًا: بلا اتصال بيرجع فشل والكاشير بيشوف السبب.
     /// </summary>
-    public async Task<(bool Success, string? ErrorMessage)> RecordDrawerOpenAsync(Guid branchId, string? reason, CancellationToken cancellationToken)
+    /// <summary>clientRequestId/occurredAtUtc: فتحة محفوظة محليًا (DrawerOpenQueue) - إعادة الإرسال آمنة، والوقت وقت الفتح الفعلي.</summary>
+    public async Task<(bool Success, string? ErrorMessage)> RecordDrawerOpenAsync(
+        Guid branchId, string? reason, Guid? clientRequestId, DateTime? occurredAtUtc, CancellationToken cancellationToken)
     {
         try
         {
-            var response = await _http.PostAsJsonAsync("cash-drawer/open-events", new { branchId, reason }, cancellationToken);
+            var response = await _http.PostAsJsonAsync("cash-drawer/open-events",
+                new { branchId, reason, clientRequestId, occurredAtUtc }, cancellationToken);
             if (response.IsSuccessStatusCode)
             {
                 return (true, null);

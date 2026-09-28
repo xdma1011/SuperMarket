@@ -145,6 +145,9 @@ public sealed class BackgroundSyncService
             var pendingSaleSync = new PendingSaleSyncService(_dbPath, _apiClient);
             await pendingSaleSync.SyncPendingSalesAsync(cancellationToken);
 
+            // فتحات الصندوق المحفوظة بلا نت (28/9/2026) - نفس طابور البيعات المعلّقة بفكرته.
+            await DrawerOpenQueue.FlushAsync(System.IO.Path.GetDirectoryName(_dbPath) ?? "", _apiClient, cancellationToken);
+
             await RefreshPaymentMethodsAsync(cancellationToken);
 
             var catalogSync = new CatalogSyncService(_dbPath, _apiClient, _catalogPageSize);

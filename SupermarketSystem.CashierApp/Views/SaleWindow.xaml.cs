@@ -1266,11 +1266,40 @@ public partial class SaleWindow : Window
             return;
         }
 
+        // السبب اختياري؛ إلغاء = ما في فتحة.
+        var reasonWindow = new DrawerOpenReasonWindow { Owner = this };
+        if (reasonWindow.ShowDialog() != true)
+        {
+            BarcodeBox.Focus();
+            return;
+        }
+
+        // بلا نت (28/9/2026): بتنحفظ على الجهاز أول بوقتها الفعلي، وبعدين محاولة إرسال فورية - فشل = بتنبعت مع
+        // المزامنة الخلفية لما يرجع النت (ClientRequestId بيمنع التكرار).
+        try
+        {
+            DrawerOpenQueue.Enqueue(LocalDirectory, new PendingDrawerOpen
+            {
+                BranchId = _authSession.BranchId.Value,
+                OccurredAtUtc = DateTime.UtcNow,
+                Reason = reasonWindow.Reason
+            });
+        }
+        catch (Exception ex)
+        {
+            ShowError($"ما قدرت أحفظ فتح الصندوق على الجهاز: {ex.Message}");
+            BarcodeBox.Focus();
+            return;
+        }
+
         DrawerOpenButton.IsEnabled = false;
-        var (success, errorMessage) = await _apiClient.RecordDrawerOpenAsync(_authSession.BranchId.Value, reason: null, CancellationToken.None);
+        var (_, remaining) = await DrawerOpenQueue.FlushAsync(LocalDirectory, _apiClient, CancellationToken.None);
         DrawerOpenButton.IsEnabled = true;
 
-        ShowSaleStatus(success ? "🗄 انسجّل فتح الصندوق" : $"ما انسجّل فتح الصندوق: {errorMessage}", isWarning: !success);
+        ShowSaleStatus(remaining == 0
+                ? "🗄 انسجّل فتح الصندوق"
+                : $"🗄 انحفظ فتح الصندوق على الجهاز - بينبعت لما يرجع النت ({remaining} بالانتظار)",
+            isWarning: remaining > 0);
         BarcodeBox.Focus();
     }
 }

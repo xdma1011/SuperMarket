@@ -11,7 +11,14 @@ public sealed record DrawerOpenCountItemDto(
     string Username,
     int OpenCount,
     DateTime FirstOpenedAtUtc,
-    DateTime LastOpenedAtUtc);
+    DateTime LastOpenedAtUtc)
+{
+    /// <summary>فتحات بلا سبب (السبب اختياري بالكاشير، 28/9/2026) - كترتها بحد ذاتها إشارة.</summary>
+    public int WithoutReasonCount { get; init; }
+
+    /// <summary>آخر الأسباب المكتوبة (لحد 3 مختلفة)، مفصولة بـ" · ".</summary>
+    public string? RecentReasons { get; init; }
+}
 
 /// <summary>
 /// كم مرة كل كاشير فتح الصندوق بلا بيع بفترة معيّنة (زر "فتح الصندوق" - DrawerOpenEvent). لتقرير
@@ -67,6 +74,23 @@ public sealed class GetDrawerOpenCountsHandler
                     x.g.FirstOpenedAtUtc,
                     x.g.LastOpenedAtUtc))
             .ToListAsync(cancellationToken);
+
+        // الأسباب لمستخدمي الصفحة بس - استعلام وحد.
+        var userIds = page.Select(p => p.UserId).ToList();
+        var reasons = (await events
+                .Where(e => userIds.Contains(e.UserId))
+                .Select(e => new { e.UserId, e.Reason, e.OccurredAtUtc })
+                .ToListAsync(cancellationToken))
+            .GroupBy(e => e.UserId)
+            .ToDictionary(g => g.Key, g => (
+                Without: g.Count(e => e.Reason == null),
+                Recent: string.Join(" · ", g.Where(e => e.Reason != null).OrderByDescending(e => e.OccurredAtUtc)
+                    .Select(e => e.Reason!).Distinct().Take(3))));
+
+        page = page.Select(p => reasons.TryGetValue(p.UserId, out var r)
+                ? p with { WithoutReasonCount = r.Without, RecentReasons = r.Recent.Length == 0 ? null : r.Recent }
+                : p)
+            .ToList();
 
         return new PagedResult<DrawerOpenCountItemDto>(page, totalCount, paging.PageNumber, paging.PageSize);
     }

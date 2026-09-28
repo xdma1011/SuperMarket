@@ -18,13 +18,17 @@ public static class CashManagementEndpoints
             CancellationToken cancellationToken) =>
         {
             var result = await handler.HandleAsync(command, cancellationToken);
-            return result.ToHttpResult(response => Results.Created($"/api/v1/cash-drawer/open-events/{response.DrawerOpenEventId}", response));
+            // إعادة إرسال فتحة محفوظة أوفلاين بنفس المفتاح = 200 بنفس السجل (مش 201 ولا تكرار).
+            return result.ToHttpResult(response => response.WasReplay
+                ? Results.Ok(response)
+                : Results.Created($"/api/v1/cash-drawer/open-events/{response.DrawerOpenEventId}", response));
         })
         .WithTags("CashManagement")
         .RequirePermission(PermissionCodes.SalesCreate)
         .WithName("RecordDrawerOpen")
         .WithSummary("تسجيل فتح درج الكاش بلا بيع (زر فتح الصندوق بالكاشير) - تسجيل بس، بلا أثر على المبالغ.")
         .Produces<RecordDrawerOpenResponse>(StatusCodes.Status201Created)
+        .Produces<RecordDrawerOpenResponse>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status403Forbidden);
 

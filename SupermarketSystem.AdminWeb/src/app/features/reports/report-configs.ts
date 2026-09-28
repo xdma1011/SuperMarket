@@ -221,6 +221,8 @@ export const REPORT_CONFIGS: ReportConfig[] = [
     columns: [
       { key: 'username', label: 'الكاشير', type: 'text' },
       { key: 'openCount', label: 'عدد مرات الفتح', type: 'number' },
+      { key: 'withoutReasonCount', label: 'بلا سبب', type: 'number' },
+      { key: 'recentReasons', label: 'آخر الأسباب', type: 'text' },
       { key: 'firstOpenedAtUtc', label: 'أول مرة', type: 'date' },
       { key: 'lastOpenedAtUtc', label: 'آخر مرة', type: 'date' }
     ]

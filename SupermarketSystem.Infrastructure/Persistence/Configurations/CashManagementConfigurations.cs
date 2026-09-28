@@ -89,6 +89,9 @@ public class DrawerOpenEventConfiguration : IEntityTypeConfiguration<DrawerOpenE
         builder.Property(e => e.Reason).HasMaxLength(DrawerOpenEvent.MaxReasonLength);
 
         builder.HasIndex(e => new { e.BranchId, e.OccurredAtUtc });
+        builder.Property(e => e.RecordedAtUtc).HasColumnType("datetime2");
+        // Idempotency للفتحات المحفوظة أوفلاين (نفس فلسفة SaleInvoice.ClientRequestId) - السجلات القديمة null.
+        builder.HasIndex(e => e.ClientRequestId).IsUnique().HasFilter("[ClientRequestId] IS NOT NULL");
 
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Branch>().WithMany().HasForeignKey(e => e.BranchId).OnDelete(DeleteBehavior.Restrict);
