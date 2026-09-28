@@ -24,16 +24,31 @@
 }
 
 @if (activeTab() === 'products') {
+  <div class="list-toolbar catalog-toolbar">
+    <input type="search" class="catalog-search" placeholder="دوّر بالاسم أو الباركود…" [(ngModel)]="productSearch" (ngModelChange)="onProductSearchChanged()" />
+    @if (branches().length > 1) {
+      <label class="branch-pick">
+        <span>السعر والرصيد لفرع</span>
+        <select [(ngModel)]="listBranchId" (ngModelChange)="onListBranchChanged()">
+          @for (b of branches(); track b.id) {
+            <option [value]="b.id">{{ b.name }}</option>
+          }
+        </select>
+      </label>
+    }
+  </div>
+
   <section class="table-panel">
     <div class="table-scroll">
       <table>
         <thead>
           <tr>
             <th>اسم المنتج</th>
+            <th>الباركود</th>
             <th>التصنيف</th>
-            <th>سعر البيع المقترح</th>
-            <th>تتبّع دفعات</th>
-            <th>مدة الصلاحية المتوقَّعة</th>
+            <th>سعر الفرع</th>
+            <th>الرصيد</th>
+            <th>الحالة</th>
             <th>ضيافة</th>
             <th></th>
           </tr>
@@ -41,23 +56,43 @@
         <tbody>
           @for (p of products(); track p.id) {
             <tr>
-              <td>{{ p.name }}</td>
+              <td>
+                {{ p.name }}
+                @if (p.isBatchTracked) { <span class="mini-chip" title="تتبّع دفعات وتاريخ صلاحية">دفعات</span> }
+              </td>
+              <td class="mono">
+                {{ p.primaryBarcode || '—' }}
+                @if ((p.barcodeCount ?? 0) > 1) { <span class="muted">+{{ (p.barcodeCount ?? 0) - 1 }}</span> }
+              </td>
               <td>{{ categoryNameOf(p.categoryId) }}</td>
-              <td class="mono">{{ p.suggestedRetailPrice ?? '—' }}</td>
-              <td>{{ p.isBatchTracked ? 'نعم' : 'لا' }}</td>
-              <td class="mono">{{ p.expectedShelfLifeDays ? (p.expectedShelfLifeDays + ' يوم') : '—' }}</td>
+              <td class="mono">
+                @if (p.branchSellingPrice !== null && p.branchSellingPrice !== undefined) {
+                  {{ p.branchSellingPrice | number: '1.3-3' }} <span class="currency">د.أ</span>
+                  @if (p.isAvailableAtBranch === false) { <span class="mini-chip warn" title="مربوط بس موقوف عن البيع بهالفرع">موقوف بالفرع</span> }
+                } @else {
+                  <span class="mini-chip danger" title="ما بيبين بالكاشير لحد ما يتربط بفرع وسعر (تعديل ← الفروع والأسعار)">مش مربوط بالفرع</span>
+                }
+              </td>
+              <td class="mono" [class.negative]="(p.stockOnHand ?? 0) < 0">
+                {{ p.stockOnHand === null || p.stockOnHand === undefined ? '—' : (p.stockOnHand | number: '1.0-3') }}
+              </td>
+              <td>
+                <span class="status-chip" [class.inactive]="p.status !== 'Active'">{{ statusLabel(p.status) }}</span>
+              </td>
               <td>
                 <button
                   type="button"
                   class="toggle-chip"
                   [class.active]="p.isComplimentaryAllowed"
+                  [class.quiet]="!p.isComplimentaryAllowed"
+                  [attr.title]="p.isComplimentaryAllowed ? 'اكبس لتعطيل الضيافة' : 'اكبس لتفعيل الضيافة'"
                   (click)="toggleComplimentaryAllowed(p)"
                 >
-                  {{ p.isComplimentaryAllowed ? 'مفعَّلة' : 'معطَّلة' }}
+                  {{ p.isComplimentaryAllowed ? 'مفعَّلة' : 'تفعيل' }}
                 </button>
               </td>
               <td>
-                <button type="button" class="link-btn" (click)="openEditProductForm(p)">تعديل</button>
+                <button type="button" class="btn-outline btn-sm" (click)="openEditProductForm(p)">تعديل</button>
               </td>
             </tr>
           }
@@ -66,8 +101,12 @@
 
       @if (!loading() && products().length === 0) {
         <div class="no-results">
-          <span class="no-results-title">لا توجد منتجات بعد</span>
-          <span class="no-results-sub">أضف أول منتج عبر الزر أعلاه (يحتاج تصنيفًا موجودًا أولًا).</span>
+          @if (productSearch.trim()) {
+            <span class="no-results-title">ما في منتج بهالاسم أو الباركود</span>
+          } @else {
+            <span class="no-results-title">لا توجد منتجات بعد</span>
+            <span class="no-results-sub">أضف أول منتج عبر الزر أعلاه (يحتاج تصنيفًا موجودًا أولًا).</span>
+          }
         </div>
       }
     </div>

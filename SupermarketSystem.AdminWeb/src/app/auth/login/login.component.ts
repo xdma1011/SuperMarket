@@ -17,6 +17,9 @@ export class LoginComponent implements OnInit {
   password = '';
   selectedBranchId = '';
 
+  /** آخر اسم محل ظهر بعد الدخول (محفوظ بالمتصفح) - أول مرة: "لوحة الإدارة" بدل اسم تجريبي ثابت. */
+  readonly storeName = readLastStoreName();
+
   readonly branches = signal<PublicBranchDto[]>([]);
   readonly isSubmitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
@@ -76,5 +79,16 @@ export class LoginComponent implements OnInit {
       this.errorMessage.set(result.message);
       this.password = '';
     }
+  }
+}
+
+const STORE_NAME_KEY = 'store.name';
+const FALLBACK_STORE_NAME = 'لوحة الإدارة';
+
+function readLastStoreName(): string {
+  try {
+    return localStorage.getItem(STORE_NAME_KEY)?.trim() || FALLBACK_STORE_NAME;
+  } catch {
+    return FALLBACK_STORE_NAME;
   }
 }

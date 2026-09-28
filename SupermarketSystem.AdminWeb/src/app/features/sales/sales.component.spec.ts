@@ -105,8 +105,18 @@ describe('SalesComponent', () => {
       component.invoices.set([{ ...sampleInvoice, statusCode: 2, statusTitle: 'ملغاة', totalPaidAmount: 0 }]);
       fixture.detectChanges();
 
-      const debtCell = (fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr td')[3];
+      const debtCell = (fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr td')[4]; // بعد عمود الكاشير
       expect(debtCell.textContent).not.toContain('مسدَّدة');
+      expect(debtCell.textContent?.trim()).toBe('—');
+    });
+
+    it('فاتورة مسدَّدة ما بتنكتب عليها "مسدَّدة" بكل صف (تشويش) - شرطة بس', () => {
+      apiClientSpy.get.and.returnValue(of({ items: [], totalCount: 0 }));
+      fixture.detectChanges();
+      component.invoices.set([{ ...sampleInvoice, totalPaidAmount: sampleInvoice.totalAmount }]);
+      fixture.detectChanges();
+
+      const debtCell = (fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr td')[4];
       expect(debtCell.textContent?.trim()).toBe('—');
     });
 
@@ -172,6 +182,54 @@ describe('SalesComponent', () => {
     it('يرجّع green لحالة مكتملة (1) أو أي قيمة أخرى غير معروفة', () => {
       expect(component.statusTone(1)).toBe('green');
       expect(component.statusTone(99)).toBe('green');
+    });
+  });
+
+  describe('فلاتر المبيعات (28/9/2026)', () => {
+    it('بيبعت من/إلى كأيام محلية كاملة + الكاشير + طريقة الدفع، ومن أول صفحة', async () => {
+      apiClientSpy.get.and.returnValue(of({ items: [], totalCount: 0 }));
+      component.pageNumber.set(3);
+      component.fromDate = '2026-09-01';
+      component.toDate = '2026-09-28';
+      component.cashierUserId = 'u1';
+      component.filterPaymentMethodId = 'pm1';
+
+      component.onFiltersChanged();
+      await fixture.whenStable();
+
+      const query = apiClientSpy.get.calls.mostRecent().args[3] as Record<string, unknown>;
+      expect(component.pageNumber()).toBe(1);
+      expect(query['fromUtc']).toBe(new Date('2026-09-01T00:00:00').toISOString());
+      expect(query['toUtc']).toBe(new Date('2026-09-28T23:59:59.999').toISOString());
+      expect(query['cashierUserId']).toBe('u1');
+      expect(query['paymentMethodId']).toBe('pm1');
+      expect(component.hasFilters).toBeTrue();
+    });
+
+    it('مسح الفلاتر بيرجّع الكل', async () => {
+      apiClientSpy.get.and.returnValue(of({ items: [], totalCount: 0 }));
+      component.fromDate = '2026-09-01';
+      component.cashierUserId = 'u1';
+
+      component.clearFilters();
+      await fixture.whenStable();
+
+      const query = apiClientSpy.get.calls.mostRecent().args[3] as Record<string, unknown>;
+      expect(query['fromUtc']).toBeUndefined();
+      expect(query['cashierUserId']).toBeUndefined();
+      expect(component.hasFilters).toBeFalse();
+    });
+
+    it('كبسة على فاتورة بتعرض أصنافها، وكبسة تانية بتسكّرها', async () => {
+      apiClientSpy.get.and.returnValue(of({ items: [{ saleInvoiceItemId: 'i1', productName: 'حليب', quantity: 2, quantityReturned: 0, unitPriceSnapshot: 1.25, lineTotal: 2.5 }] }));
+      const row = { id: 's1', invoiceNumber: 'SI-1', statusCode: 1, statusTitle: 'مكتملة', totalAmount: 2.5, totalPaidAmount: 2.5, totalReturnedAmount: 0, createdAtUtc: '', customerName: null, customerPhone: null };
+
+      await component.toggleDetails(row);
+      expect(component.expandedId()).toBe('s1');
+      expect(component.expandedItems()?.[0].productName).toBe('حليب');
+
+      await component.toggleDetails(row);
+      expect(component.expandedId()).toBeNull();
     });
   });
 });

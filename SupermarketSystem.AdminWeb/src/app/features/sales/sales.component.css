@@ -30,7 +30,9 @@
   font-size: 12px;
   color: var(--ink);
   outline: 0;
-  min-width: 200px;
+  min-width: 0;
+  flex: 1 1 300px;
+  max-width: 420px;
   transition: border-color .2s ease;
 }
 .table-search:focus { border-color: var(--accent); }
@@ -235,3 +237,23 @@ td.mono { font-variant-numeric: tabular-nums; }
   background: transparent; font-size: 12.5px; color: var(--ink);
 }
 .btn-ghost:hover { border-color: var(--accent); }
+
+/* فلاتر المبيعات + أصناف الفاتورة (28/9/2026). */
+.sales-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding: 0 18px 14px; }
+.sales-filters label { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--ink-2); min-width: 0; }
+.sales-filters input, .sales-filters select {
+  height: 33px; padding: 0 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface);
+  color: var(--ink); font: inherit; font-size: 12.5px;
+}
+.clear-filters { align-self: center; }
+.clickable-row { cursor: pointer; }
+tr.expanded td { background: var(--surface-2); }
+.details-row td { background: var(--surface-2); white-space: normal; }
+.items-table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 10px; overflow: hidden; }
+.items-table th { font-size: 11px; color: var(--ink-2); text-align: right; padding: 8px 12px; }
+.items-table td { padding: 8px 12px; border-top: 1px solid var(--line); font-size: 12.5px; }
+.muted { color: var(--ink-2); }
+@media (max-width: 560px) {
+  .sales-filters { padding: 0 12px 12px; }
+  .sales-filters label { flex: 1 1 140px; }
+}

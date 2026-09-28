@@ -25,6 +25,10 @@ interface SaleInvoiceListItemDto {
   isAtCostWithdrawal?: boolean;
 }
 
+interface SaleInvoiceDetailDto {
+  items: { saleInvoiceItemId: string; productName: string; quantity: number; quantityReturned: number; unitPriceSnapshot: number; lineTotal: number }[];
+}
+
 interface PaymentMethodDto {
   id: string;
   name: string;
@@ -83,6 +87,17 @@ export class SalesComponent implements OnInit {
   /** اختياري: الاختبارات بلا Router. "?search=SI-12" من كبسة تنبيه بتفتح الصفحة والبحث جاهز. */
   private readonly route = inject(ActivatedRoute, { optional: true });
 
+  /** فلاتر (28/9/2026): من/إلى (أيام محلية كاملة)، الكاشير، طريقة الدفع. */
+  fromDate = '';
+  toDate = '';
+  cashierUserId = '';
+  filterPaymentMethodId = '';
+  readonly cashiers = signal<{ id: string; name: string }[]>([]);
+
+  /** كبسة على فاتورة بتفتح أصنافها تحتها. */
+  readonly expandedId = signal<string | null>(null);
+  readonly expandedItems = signal<SaleInvoiceDetailDto['items'] | null>(null);
+
   constructor(private readonly apiClient: ApiClient) {}
 
   ngOnInit(): void {
@@ -91,6 +106,49 @@ export class SalesComponent implements OnInit {
     this.loadSummary();
     this.loadInvoices();
     this.loadPaymentMethods();
+    this.loadCashiers();
+  }
+
+  private async loadCashiers(): Promise<void> {
+    try {
+      const options = await firstValueFrom(this.apiClient.get<{ cashiers: { id: string; name: string }[] }>(
+        ApiController.Sales, SalesOperation.FilterOptions));
+      this.cashiers.set(options?.cashiers ?? []);
+    } catch {
+      /* بلا قائمة كاشيرية = بلا فلتر كاشير، الباقي شغّال. */
+    }
+  }
+
+  get hasFilters(): boolean {
+    return !!(this.fromDate || this.toDate || this.cashierUserId || this.filterPaymentMethodId);
+  }
+
+  onFiltersChanged(): void {
+    this.pageNumber.set(1);
+    void this.loadInvoices();
+  }
+
+  clearFilters(): void {
+    this.fromDate = '';
+    this.toDate = '';
+    this.cashierUserId = '';
+    this.filterPaymentMethodId = '';
+    this.onFiltersChanged();
+  }
+
+  async toggleDetails(row: SaleInvoiceListItemDto): Promise<void> {
+    if (this.expandedId() === row.id) {
+      this.expandedId.set(null);
+      return;
+    }
+    this.expandedId.set(row.id);
+    this.expandedItems.set(null);
+    try {
+      const detail = await firstValueFrom(this.apiClient.get<SaleInvoiceDetailDto>(ApiController.Sales, SalesOperation.GetById, { id: row.id }));
+      if (this.expandedId() === row.id) this.expandedItems.set(detail.items);
+    } catch {
+      if (this.expandedId() === row.id) this.expandedItems.set([]);
+    }
   }
 
   private async loadPaymentMethods(): Promise<void> {
@@ -132,7 +190,12 @@ export class SalesComponent implements OnInit {
         this.apiClient.get<PagedResult<SaleInvoiceListItemDto>>(ApiController.Sales, SalesOperation.List, undefined, {
           pageNumber: this.pageNumber(),
           pageSize: this.pageSize(),
-          search: this.searchQuery() || undefined
+          search: this.searchQuery() || undefined,
+          // أيام محلية كاملة (نفس إصلاح التقارير 24/9: "إلى" لآخر اليوم مش أوله).
+          fromUtc: this.fromDate ? new Date(`${this.fromDate}T00:00:00`).toISOString() : undefined,
+          toUtc: this.toDate ? new Date(`${this.toDate}T23:59:59.999`).toISOString() : undefined,
+          cashierUserId: this.cashierUserId || undefined,
+          paymentMethodId: this.filterPaymentMethodId || undefined
         })
       );
       this.invoices.set(result.items);

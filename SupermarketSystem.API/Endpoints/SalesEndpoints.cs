@@ -64,18 +64,26 @@ public static class SalesEndpoints
         group.MapGet("/", async (
             int? pageNumber, int? pageSize, string? search, string? sortBy, string? sortDirection,
             Guid? branchId, DateTime? fromUtc, DateTime? toUtc, string? productSearch,
+            Guid? cashierUserId, Guid? paymentMethodId,
             GetSaleInvoicesHandler handler,
             CancellationToken cancellationToken) =>
         {
             var paging = PagingBinder.Build(pageNumber, pageSize, search, sortBy, sortDirection);
             var result = await handler.HandleAsync(
-                new GetSaleInvoicesQuery(paging, branchId, ToUtc(fromUtc), ToUtc(toUtc), productSearch), cancellationToken);
+                new GetSaleInvoicesQuery(paging, branchId, ToUtc(fromUtc), ToUtc(toUtc), productSearch, cashierUserId, paymentMethodId), cancellationToken);
             return Results.Ok(result);
         })
         .WithName("GetSaleInvoices")
         .RequirePermission(PermissionCodes.SalesCreate)
         .WithSummary("قائمة/بحث فواتير البيع - أساس البحث عن فاتورة أصلية قبل أي عملية إرجاع.")
         .Produces<PagedResult<SaleInvoiceListItemDto>>(StatusCodes.Status200OK);
+
+        group.MapGet("/filter-options", async (Guid? branchId, GetSaleFilterOptionsHandler handler, CancellationToken cancellationToken) =>
+                Results.Ok(await handler.HandleAsync(branchId, cancellationToken)))
+            .WithName("GetSaleFilterOptions")
+            .RequirePermission(PermissionCodes.SalesCreate)
+            .WithSummary("خيارات فلاتر صفحة المبيعات: الكاشيرية اللي إلهم فواتير، وطرق الدفع.")
+            .Produces<SaleFilterOptionsDto>(StatusCodes.Status200OK);
 
         group.MapGet("/{saleInvoiceId:guid}", async (
             Guid saleInvoiceId,

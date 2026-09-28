@@ -264,6 +264,98 @@ public partial class SaleWindow : Window
         ConnectionStatusText.Text = _paymentMethods.Count > 0 ? "متصل" : "بلا اتصال وبلا طرق دفع محفوظة - لازم اتصال أول مرة";
     }
 
+    /// <summary>
+    /// اختصارات الكيبورد (مراجعة UI/UX 24/9، انبنت 28/9/2026) - الكاشير ما بيترك الكيبورد/الماسح:
+    /// F2 بحث عن صنف · F4 معرفة السعر · F8 تعليق · F9 المعلّقة · F12 إتمام البيع ·
+    /// Esc يمسح خانة الباركود، ولو فاضية بيسأل يفرّغ السلة · Delete (والباركود فاضي) يحذف آخر سطر ·
+    /// + و − بلوحة الأرقام بيعدّلوا كمية آخر سطر (برّا خانة الكمية نفسها - هناك بتنكتب عادي).
+    /// PreviewKeyDown عالنافذة: بيشتغل وين ما كان التركيز، قبل ما خانة نص تاكل المفتاح.
+    /// </summary>
+    private void SaleWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        var inQuantityBox = e.OriginalSource is TextBox box && !ReferenceEquals(box, BarcodeBox)
+                            && !ReferenceEquals(box, TenderedAmountBox) && !ReferenceEquals(box, CustomerPhoneBox);
+
+        switch (e.Key)
+        {
+            case Key.F2:
+                e.Handled = true;
+                OpenSearchWindow(initialTerm: BarcodeBox.Text.Trim(), priceCheckOnly: false);
+                BarcodeBox.Clear();
+                return;
+            case Key.F4:
+                e.Handled = true;
+                OpenSearchWindow(initialTerm: string.Empty, priceCheckOnly: true);
+                return;
+            case Key.F8:
+                e.Handled = true;
+                HoldButton_Click(HoldButton, new RoutedEventArgs());
+                return;
+            case Key.F9:
+                e.Handled = true;
+                HeldSalesButton_Click(HeldSalesButton, new RoutedEventArgs());
+                return;
+            case Key.F12:
+                e.Handled = true;
+                if (CompleteSaleButton.IsEnabled)
+                {
+                    CompleteSaleButton_Click(CompleteSaleButton, new RoutedEventArgs());
+                }
+                return;
+            case Key.Escape:
+                e.Handled = true;
+                if (BarcodeBox.Text.Length > 0)
+                {
+                    BarcodeBox.Clear();
+                }
+                else if (_cart.Count > 0
+                         && MessageBox.Show(this, "تفريغ السلة الحالية؟ (الأصناف بتنشال، ما في إشي بينسجّل)", "إلغاء الفاتورة الحالية",
+                             MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes)
+                {
+                    ClearCurrentCart();
+                    ShowSaleStatus("انفرّغت السلة.", isWarning: false);
+                }
+                BarcodeBox.Focus();
+                return;
+            case Key.Delete when !inQuantityBox && BarcodeBox.Text.Length == 0 && _cart.Count > 0:
+                e.Handled = true;
+                var removed = _cart[^1];
+                _cart.Remove(removed);
+                if (_cart.Count == 0)
+                {
+                    _preparedOrderId = null;
+                    _preparedTicketNumber = null;
+                }
+                UpdateTotal();
+                ShowSaleStatus($"انشال: {removed.ProductName}", isWarning: false);
+                BarcodeBox.Focus();
+                return;
+            case Key.Add or Key.Subtract when !inQuantityBox && !ReferenceEquals(e.OriginalSource, BarcodeBox)
+                                                && !ReferenceEquals(e.OriginalSource, TenderedAmountBox) && _cart.Count > 0:
+                // جوّا خانة الباركود بيتعالج بـBarcodeBox_KeyDown (والحقل فاضي)؛ هون لما التركيز على زر أو الجدول.
+                e.Handled = true;
+                var lastLine = _cart[^1];
+                var delta = e.Key == Key.Add ? 1m : -1m;
+                if (lastLine.Quantity + delta > 0)
+                {
+                    SetLineQuantity(lastLine, lastLine.Quantity + delta);
+                }
+                BarcodeBox.Focus();
+                return;
+        }
+    }
+
+    /// <summary>تفريغ السلة بلا تسجيل (Esc) - نفس تنظيف ما بعد البيع.</summary>
+    private void ClearCurrentCart()
+    {
+        _cart.Clear();
+        _preparedOrderId = null;
+        _preparedTicketNumber = null;
+        TenderedAmountBox.Clear();
+        CustomerPhoneBox.Clear();
+        UpdateTotal();
+    }
+
     /// <summary>Enter وTab معًا - قرّائات باركود مختلفة بتستخدم أحدهما كفاصل نهاية المسح، بلا إعداد موحَّد.</summary>
     private void BarcodeBox_KeyDown(object sender, KeyEventArgs e)
     {

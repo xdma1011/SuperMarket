@@ -31,6 +31,12 @@ interface ProductDto {
   expectedShelfLifeDays: number | null;
   isComplimentaryAllowed: boolean;
   createdAtUtc: string;
+  // 28/9/2026: بقائمة الكتالوج - أول باركود، وسعر الفرع الفعلي والرصيد للفرع المختار (null = مش مربوط بالفرع).
+  primaryBarcode?: string | null;
+  barcodeCount?: number;
+  branchSellingPrice?: number | null;
+  isAvailableAtBranch?: boolean | null;
+  stockOnHand?: number | null;
 }
 
 interface ProductUnitDto {
@@ -154,6 +160,11 @@ export class CatalogComponent implements OnInit {
   readonly addBranchError = signal<string | null>(null);
   readonly togglingBranchAvailabilityId = signal<string | null>(null);
   newBranchId = '';
+
+  /** قائمة المنتجات: بحث بالاسم/الباركود، والفرع اللي بينعرض سعره ورصيده. */
+  productSearch = '';
+  listBranchId = '';
+  private productSearchHandle: ReturnType<typeof setTimeout> | null = null;
   newBranchPrice: number | null = null;
 
   /** مرجع موحَّد لأسماء الوحدات - كانت الحقول (baseUnitName/newUnitName) نص حر بلا أي قائمة، راجع UnitOfMeasure.cs بالباك إند. */
@@ -186,7 +197,47 @@ export class CatalogComponent implements OnInit {
   onProductsPageChanged(event: { pageNumber: number; pageSize: number }): void {
     this.productsPageNumber.set(event.pageNumber);
     this.productsPageSize.set(event.pageSize);
-    this.loadAll();
+    void this.loadProducts();
+  }
+
+  /** بحث الكتالوج (بالاسم أو الباركود) - بعد ما يوقف كتابة 300ms، من أول صفحة. */
+  onProductSearchChanged(): void {
+    if (this.productSearchHandle) clearTimeout(this.productSearchHandle);
+    this.productSearchHandle = setTimeout(() => {
+      this.productsPageNumber.set(1);
+      void this.loadProducts();
+    }, 300);
+  }
+
+  onListBranchChanged(): void {
+    void this.loadProducts();
+  }
+
+  statusLabel(status: string): string {
+    switch (status) {
+      case 'Active': return 'فعّال';
+      case 'Inactive': return 'موقوف';
+      case 'Discontinued': return 'متوقف نهائيًا';
+      case 'PendingApproval': return 'بانتظار موافقة';
+      default: return status;
+    }
+  }
+
+  async loadProducts(): Promise<void> {
+    const params: Record<string, string | number> = {
+      pageNumber: this.productsPageNumber(),
+      pageSize: this.productsPageSize()
+    };
+    if (this.productSearch.trim()) params['search'] = this.productSearch.trim();
+    if (this.listBranchId) params['branchId'] = this.listBranchId;
+    try {
+      const result = await firstValueFrom(this.apiClient.get<PagedResult<ProductDto>>(
+        ApiController.Products, ProductsOperation.List, undefined, params));
+      this.products.set(result.items);
+      this.productsTotalCount.set(result.totalCount);
+    } catch {
+      this.errorMessage.set('تعذّر تحميل المنتجات.');
+    }
   }
 
   categoryNameOf(id: string): string {
@@ -198,18 +249,12 @@ export class CatalogComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const [productsResult, categoriesResult, branchesResult, unitsOfMeasureResult] = await Promise.all([
-        firstValueFrom(this.apiClient.get<PagedResult<ProductDto>>(ApiController.Products, ProductsOperation.List, undefined, {
-          pageNumber: this.productsPageNumber(),
-          pageSize: this.productsPageSize()
-        })),
+      const [categoriesResult, branchesResult, unitsOfMeasureResult] = await Promise.all([
         firstValueFrom(this.apiClient.get<PagedResult<CategoryDto>>(ApiController.ProductCategories, ProductCategoriesOperation.List)),
         firstValueFrom(this.apiClient.get<PagedResult<BranchDto>>(ApiController.Branches, BranchesOperation.List, undefined, { pageSize: 500 })),
         firstValueFrom(this.apiClient.get<UnitOfMeasureDto[]>(ApiController.UnitsOfMeasure, UnitsOfMeasureOperation.List, undefined, { activeOnly: true }))
       ]);
 
-      this.products.set(productsResult.items);
-      this.productsTotalCount.set(productsResult.totalCount);
       this.categories.set(categoriesResult.items);
       this.branches.set(branchesResult.items);
       this.unitsOfMeasure.set(unitsOfMeasureResult);
@@ -220,6 +265,10 @@ export class CatalogComponent implements OnInit {
       if (branchesResult.items.length > 0 && !this.newBranchId) {
         this.newBranchId = this.auth.defaultBranchId(branchesResult.items);
       }
+      if (branchesResult.items.length > 0 && !this.listBranchId) {
+        this.listBranchId = this.auth.defaultBranchId(branchesResult.items);
+      }
+      await this.loadProducts();
     } catch {
       this.errorMessage.set('تعذّر تحميل الكتالوج.');
     } finally {

@@ -47,12 +47,35 @@
     />
   </div>
 
+  <div class="filters sales-filters">
+    <label><span>من</span><input type="date" [(ngModel)]="fromDate" (ngModelChange)="onFiltersChanged()" /></label>
+    <label><span>إلى</span><input type="date" [(ngModel)]="toDate" (ngModelChange)="onFiltersChanged()" /></label>
+    <label>
+      <span>الكاشير</span>
+      <select [(ngModel)]="cashierUserId" (ngModelChange)="onFiltersChanged()">
+        <option value="">الكل</option>
+        @for (c of cashiers(); track c.id) { <option [value]="c.id">{{ c.name }}</option> }
+      </select>
+    </label>
+    <label>
+      <span>طريقة الدفع</span>
+      <select [(ngModel)]="filterPaymentMethodId" (ngModelChange)="onFiltersChanged()">
+        <option value="">الكل</option>
+        @for (m of paymentMethods(); track m.id) { <option [value]="m.id">{{ m.name }}</option> }
+      </select>
+    </label>
+    @if (hasFilters) {
+      <button type="button" class="link-btn clear-filters" (click)="clearFilters()">مسح الفلاتر</button>
+    }
+  </div>
+
   <div class="table-scroll">
     <table>
       <thead>
         <tr>
           <th>رقم الفاتورة</th>
           <th>الزبون</th>
+          <th>الكاشير</th>
           <th>الإجمالي</th>
           <th>المتبقي (الدين)</th>
           <th>المرتجَع</th>
@@ -63,7 +86,7 @@
       </thead>
       <tbody>
         @for (row of invoices(); track row.id) {
-          <tr>
+          <tr class="clickable-row" [class.expanded]="expandedId() === row.id" (click)="toggleDetails(row)" title="اكبس لعرض الأصناف">
             <td class="mono">
               {{ row.invoiceNumber }}
               @if (row.isAtCostWithdrawal) {
@@ -77,6 +100,7 @@
                 —
               }
             </td>
+            <td>{{ row.cashierName || '—' }}</td>
             <td class="mono">{{ row.totalAmount | number: '1.3-3' }}</td>
             <td class="mono">
               @if (row.statusCode === 2) {
@@ -84,7 +108,7 @@
               } @else if (remainingDebt(row) > 0) {
                 <span class="debt-chip">{{ remainingDebt(row) | number: '1.3-3' }}</span>
               } @else {
-                <span class="paid-chip">مسدَّدة</span>
+                <span class="muted" title="مسدَّدة بالكامل">—</span>
               }
             </td>
             <td class="mono">{{ row.totalReturnedAmount | number: '1.3-3' }}</td>
@@ -96,10 +120,36 @@
             <td class="mono">{{ row.createdAtUtc | date: 'yyyy-MM-dd HH:mm' }}</td>
             <td>
               @if (remainingDebt(row) > 0) {
-                <button type="button" class="link-btn" (click)="openPaymentModal(row)">تسديد دفعة</button>
+                <button type="button" class="link-btn" (click)="openPaymentModal(row); $event.stopPropagation()">تسديد دفعة</button>
               }
             </td>
           </tr>
+          @if (expandedId() === row.id) {
+            <tr class="details-row">
+              <td colspan="9">
+                @if (expandedItems() === null) {
+                  <span class="muted">جارٍ تحميل الأصناف…</span>
+                } @else if (expandedItems()!.length === 0) {
+                  <span class="muted">تعذّر تحميل الأصناف.</span>
+                } @else {
+                  <table class="items-table">
+                    <thead><tr><th>الصنف</th><th>الكمية</th><th>السعر</th><th>المجموع</th><th>المرتجَع</th></tr></thead>
+                    <tbody>
+                      @for (it of expandedItems()!; track it.saleInvoiceItemId) {
+                        <tr>
+                          <td>{{ it.productName }}</td>
+                          <td class="mono">{{ it.quantity | number: '1.0-3' }}</td>
+                          <td class="mono">{{ it.unitPriceSnapshot | number: '1.3-3' }}</td>
+                          <td class="mono">{{ it.lineTotal | number: '1.3-3' }}</td>
+                          <td class="mono">{{ it.quantityReturned > 0 ? (it.quantityReturned | number: '1.0-3') : '—' }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+              </td>
+            </tr>
+          }
         }
       </tbody>
     </table>

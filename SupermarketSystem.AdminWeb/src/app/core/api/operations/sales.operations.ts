@@ -5,5 +5,6 @@ export enum SalesOperation {
   List = '',
   GetById = '{id}',
   RecordPayment = '{id}/payments',
-  CustomerDebts = 'customer-debts'
+  CustomerDebts = 'customer-debts',
+  FilterOptions = 'filter-options'
 }

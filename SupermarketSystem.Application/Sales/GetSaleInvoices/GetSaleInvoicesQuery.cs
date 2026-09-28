@@ -7,8 +7,50 @@ namespace SupermarketSystem.Application.Sales.GetSaleInvoices;
 
 // FromUtc/ToUtc/ProductSearch (28/9/2026): بحث الكاشير بالتاريخ والساعة والدقيقة - صاحب المحل بيرجع
 // لتسجيل الكاميرا وبدو يتأكد هل صنف معيّن فات بفاتورة بهديك الدقيقة ولا ما انضرب أصلًا.
+// CashierUserId/PaymentMethodId (28/9/2026): فلاتر صفحة المبيعات (مراجعة UI/UX 24/9).
 public sealed record GetSaleInvoicesQuery(
-    PagedRequest Paging, Guid? BranchId, DateTime? FromUtc = null, DateTime? ToUtc = null, string? ProductSearch = null);
+    PagedRequest Paging, Guid? BranchId, DateTime? FromUtc = null, DateTime? ToUtc = null, string? ProductSearch = null,
+    Guid? CashierUserId = null, Guid? PaymentMethodId = null);
+
+public sealed record SaleFilterOptionDto(Guid Id, string Name);
+
+public sealed record SaleFilterOptionsDto(IReadOnlyList<SaleFilterOptionDto> Cashiers, IReadOnlyList<SaleFilterOptionDto> PaymentMethods);
+
+/// <summary>
+/// خيارات فلاتر صفحة المبيعات: الكاشيرية اللي إلهم فواتير (مش كل المستخدمين - وما بتحتاج صلاحية Users.Manage)،
+/// وطرق الدفع. بنفس صلاحية قائمة المبيعات.
+/// </summary>
+public sealed class GetSaleFilterOptionsHandler
+{
+    private readonly IApplicationDbContext _context;
+
+    public GetSaleFilterOptionsHandler(IApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<SaleFilterOptionsDto> HandleAsync(Guid? branchId, CancellationToken cancellationToken)
+    {
+        var creatorIds = await _context.SaleInvoices.AsNoTracking()
+            .Where(s => (branchId == null || s.BranchId == branchId) && s.CreatedByUserId != null)
+            .Select(s => s.CreatedByUserId!.Value)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        var cashiers = await _context.Users.IgnoreQueryFilters().AsNoTracking()
+            .Where(u => creatorIds.Contains(u.Id))
+            .OrderBy(u => u.FullName)
+            .Select(u => new SaleFilterOptionDto(u.Id, u.FullName))
+            .ToListAsync(cancellationToken);
+
+        var paymentMethods = await _context.PaymentMethods.AsNoTracking()
+            .OrderBy(m => m.SortOrder).ThenBy(m => m.Name)
+            .Select(m => new SaleFilterOptionDto(m.Id, m.Name))
+            .ToListAsync(cancellationToken);
+
+        return new SaleFilterOptionsDto(cashiers, paymentMethods);
+    }
+}
 
 public sealed record SaleInvoiceListItemDto(
     Guid Id,
@@ -71,6 +113,16 @@ public sealed class GetSaleInvoicesHandler
         if (query.ToUtc is { } toUtc)
         {
             invoices = invoices.Where(x => x.Invoice.CreatedAtUtc <= toUtc);
+        }
+
+        if (query.CashierUserId is { } cashierUserId)
+        {
+            invoices = invoices.Where(x => x.Invoice.CreatedByUserId == cashierUserId);
+        }
+
+        if (query.PaymentMethodId is { } paymentMethodId)
+        {
+            invoices = invoices.Where(x => x.Invoice.Payments.Any(p => p.PaymentMethodId == paymentMethodId));
         }
 
         // فواتير فيها صنف اسمه أو باركوده بيطابق - "هل الحليب فات بفاتورة بين 14:25 و14:40؟"

@@ -96,11 +96,12 @@ public static class CatalogEndpoints
             string? sortBy,
             string? sortDirection,
             Guid? categoryId,
+            Guid? branchId,
             GetProductsHandler handler,
             CancellationToken cancellationToken) =>
         {
             var paging = PagingBinder.Build(pageNumber, pageSize, search, sortBy, sortDirection);
-            var result = await handler.HandleAsync(new GetProductsQuery(paging, categoryId), cancellationToken);
+            var result = await handler.HandleAsync(new GetProductsQuery(paging, categoryId, branchId), cancellationToken);
             return Results.Ok(result);
         })
         .WithName("GetProducts")

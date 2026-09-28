@@ -21,6 +21,8 @@ interface NavSection {
 const COLLAPSED_GROUPS_STORAGE_KEY = 'nav.collapsedGroups';
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'nav.sidebarCollapsed';
 const NAV_ORDER_STORAGE_KEY = 'nav.order';
+/** آخر اسم محل معروف - صفحة الدخول بتقرأه (login.component.ts). */
+export const STORE_NAME_STORAGE_KEY = 'store.name';
 
 /** ترتيب شخصي للقائمة (لكل متصفح): ترتيب المجموعات، وترتيب الصفحات جوّا كل مجموعة. */
 interface NavOrder {
@@ -99,8 +101,9 @@ export class ShellComponent {
     if (!name) {
       return '؟';
     }
+    // من الاسم الفعلي للمستخدم (كانت "م.س" ثابتة): أول حرفين من أول كلمتين، أو أول حرف لكلمة وحدة.
     const parts = name.split(/\s+/).filter(Boolean);
-    return parts.length > 1 ? `${parts[0][0]}.${parts[1][0]}` : parts[0].slice(0, 2);
+    return parts.length > 1 ? `${parts[0][0]}.${parts[1][0]}` : parts[0][0].toLocaleUpperCase();
   });
 
   readonly drawerOpen = signal(false);
@@ -204,6 +207,12 @@ export class ShellComponent {
         this.apiClient.get<{ storeName: string | null }>(ApiController.CashierSync, CashierSyncOperation.StoreBranding)
       );
       this.storeName.set(branding?.storeName?.trim() || null);
+      // صفحة الدخول بتعرضه المرة الجاية (بلا endpoint عام بلا دخول).
+      try {
+        if (branding?.storeName?.trim()) localStorage.setItem(STORE_NAME_STORAGE_KEY, branding.storeName.trim());
+      } catch {
+        /* تخزين المتصفح ممنوع - صفحة الدخول بتعرض الاسم العام. */
+      }
     } catch {
       /* بلا صلاحية Sales.Create أو بلا اتصال - بيضل الاسم العام. */
     }

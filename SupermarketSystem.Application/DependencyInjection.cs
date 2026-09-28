@@ -282,6 +282,7 @@ public static class DependencyInjection
         services.AddScoped<LinkTelegramContactHandler>();
         services.AddScoped<VoidSaleHandler>();
         services.AddScoped<GetSaleInvoicesHandler>();
+        services.AddScoped<GetSaleFilterOptionsHandler>();
         services.AddScoped<GetSaleInvoiceByIdHandler>();
         services.AddScoped<ProcessReturnHandler>();
         services.AddScoped<MarkReturnReviewedHandler>();
