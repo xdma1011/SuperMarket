@@ -1,0 +1,323 @@
+<div class="page-head">
+  <div>
+    <h1>الشركاء</h1>
+    <p class="hint">أنصبة الشركاء من ربح كل شهر، وسحوباتهم، والمستحق لصاحب المحل. رأس مال الشريك بينسجّل من صفحة المالية.</p>
+  </div>
+  @if (branches().length > 1) {
+    <select class="branch-select" [(ngModel)]="branchId" (change)="onBranchChange()" aria-label="الفرع">
+      @for (b of branches(); track b.id) {
+        <option [value]="b.id">{{ b.name }}</option>
+      }
+    </select>
+  }
+</div>
+
+<div class="tabs" role="tablist">
+  <button type="button" [class.active]="tab() === 'partners'" (click)="setTab('partners')">الشركاء والأرصدة</button>
+  <button type="button" [class.active]="tab() === 'statements'" (click)="setTab('statements')">الكشوف الشهرية</button>
+  <button type="button" [class.active]="tab() === 'withdrawals'" (click)="setTab('withdrawals')">السحوبات</button>
+  <button type="button" [class.active]="tab() === 'owner'" (click)="setTab('owner')">مستحق لصاحب المحل</button>
+</div>
+
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+@if (successMessage()) {
+  <div class="alert-banner success">{{ successMessage() }}</div>
+}
+
+@switch (tab()) {
+  @case ('partners') {
+    <div class="data-panel">
+      <div class="panel-head">
+        <h2>الشركاء</h2>
+        <button type="button" class="btn-primary" (click)="openPartnerForm()">+ شريك جديد</button>
+      </div>
+      @if (partners().length === 0 && !loading()) {
+        <p class="empty">ما في شركاء بهالفرع لسه. ضيف صاحب المحل وشركاءه، وسجّل رأس مال كل واحد من صفحة المالية.</p>
+      } @else {
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>الشريك</th>
+                <th>النوع</th>
+                <th>رأس المال / النسبة</th>
+                <th>مجموع الأنصبة</th>
+                <th>السحوبات</th>
+                <th>بضاعة بالتكلفة</th>
+                <th>الرصيد</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (p of partners(); track p.id) {
+                <tr [class.inactive]="!p.isActive">
+                  <td>
+                    <strong>{{ p.fullName }}</strong>
+                    @if (p.username) { <small class="sub">حساب: {{ p.username }}</small> }
+                    @if (!p.isActive) { <span class="chip">موقوف</span> }
+                  </td>
+                  <td>{{ p.typeTitle }}</td>
+                  <td class="money">
+                    @if (p.typeCode === 2) { {{ p.speculativeProfitPercent | number: '1.0-2' }}% من الربح }
+                    @else { {{ p.capitalBalance | number: '1.3-3' }} }
+                  </td>
+                  <td class="money">{{ p.sharesTotal | number: '1.3-3' }}</td>
+                  <td class="money">{{ p.withdrawalsTotal | number: '1.3-3' }}</td>
+                  <td class="money">{{ p.atCostDeductedTotal | number: '1.3-3' }}</td>
+                  <td class="money-strong" [class.negative]="p.currentBalance < 0">{{ p.currentBalance | number: '1.3-3' }}</td>
+                  <td class="actions">
+                    <button type="button" class="btn-link" (click)="openLedger(p)">كشف حساب</button>
+                    <button type="button" class="btn-link" (click)="openPartnerForm(p)">تعديل</button>
+                    <button type="button" class="btn-link" (click)="toggleActive(p)">{{ p.isActive ? 'إيقاف' : 'تفعيل' }}</button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <p class="hint">الرصيد = مجموع الأنصبة − السحوبات − البضاعة المسحوبة بسعر التكلفة ("اخصمها مني"). سالب = سلفة بتنخصم من الشهور الجاية.</p>
+      }
+    </div>
+
+    @if (ledger(); as l) {
+      <div class="data-panel">
+        <div class="panel-head">
+          <h2>كشف حساب {{ l.partnerName }} <span class="money-strong">{{ l.currentBalance | number: '1.3-3' }}</span></h2>
+          <button type="button" class="btn-link" (click)="closeLedger()">إغلاق</button>
+        </div>
+        @if (l.entries.length === 0) {
+          <p class="empty">ما في حركات لسه.</p>
+        } @else {
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead><tr><th>التاريخ</th><th>الحركة</th><th>التفاصيل</th><th>المبلغ</th><th>الرصيد</th></tr></thead>
+              <tbody>
+                @for (e of l.entries; track $index) {
+                  <tr>
+                    <td class="mono">{{ e.occurredAtUtc | date: 'yyyy-MM-dd' }}</td>
+                    <td>{{ e.kindTitle }}</td>
+                    <td>{{ e.description }}</td>
+                    <td class="money" [class.negative]="e.amount < 0">{{ e.amount | number: '1.3-3' }}</td>
+                    <td class="money">{{ e.runningBalance | number: '1.3-3' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    }
+  }
+
+  @case ('statements') {
+    <div class="data-panel">
+      <div class="panel-head">
+        <h2>الكشوف الشهرية</h2>
+        <div class="inline-form">
+          <input type="month" [(ngModel)]="statementMonth" aria-label="الشهر" />
+          <button type="button" class="btn-primary" [disabled]="submitting()" (click)="generateStatement()">إصدار / إعادة إصدار</button>
+        </div>
+      </div>
+      <p class="hint">الكشف بينزل لحاله ببداية كل شهر عن الشهر الماضي. إعادة الإصدار بتحسب الربح من جديد (مثلًا بعد فاتورة شراء متأخرة).</p>
+      @if (statements().length === 0) {
+        <p class="empty">ما في كشوف لسه.</p>
+      } @else {
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead><tr><th>الشهر</th><th>صافي الربح</th><th>غير موزَّع</th><th>الشركاء</th><th>نزل</th><th></th></tr></thead>
+            <tbody>
+              @for (s of statements(); track s.id) {
+                <tr [class.selected]="selectedStatement()?.id === s.id">
+                  <td class="mono">{{ s.month }}/{{ s.year }}</td>
+                  <td class="money" [class.negative]="s.netProfit < 0">{{ s.netProfit | number: '1.3-3' }}</td>
+                  <td class="money">{{ s.unallocatedAmount | number: '1.3-3' }}</td>
+                  <td>{{ s.partnerCount }}</td>
+                  <td>{{ s.generatedAtUtc | date: 'yyyy-MM-dd HH:mm' }} <span class="chip">{{ s.isAutomatic ? 'تلقائي' : 'يدوي' }}</span></td>
+                  <td><button type="button" class="btn-link" (click)="openStatement(s)">عرض</button></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+
+    @if (selectedStatement(); as st) {
+      <div class="data-panel">
+        <div class="panel-head">
+          <h2>كشف {{ st.month }}/{{ st.year }} - صافي الربح <span class="money-strong" [class.negative]="st.netProfit < 0">{{ st.netProfit | number: '1.3-3' }}</span> د.أ</h2>
+        </div>
+        @if (st.unallocatedAmount !== 0) {
+          <div class="alert-banner warn">{{ st.unallocatedAmount | number: '1.3-3' }} د.أ ما انوزّعت - ما في شركاء رأس مال بالفرع.</div>
+        }
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead><tr><th>الشريك</th><th>النوع</th><th>رأس ماله آخر الشهر</th><th>النسبة من الربح</th><th>النصيب</th></tr></thead>
+            <tbody>
+              @for (line of st.lines; track line.partnerId) {
+                <tr>
+                  <td>{{ line.partnerName }}</td>
+                  <td>{{ line.typeTitle }}</td>
+                  <td class="money">{{ line.capitalBalance === null ? '—' : (line.capitalBalance | number: '1.3-3') }}</td>
+                  <td class="money">{{ line.sharePercent | number: '1.0-2' }}%</td>
+                  <td class="money-strong" [class.negative]="line.shareAmount < 0">{{ line.shareAmount | number: '1.3-3' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <p class="hint">المضارب بياخد نسبته بشهر الربح بس. الباقي (ربح أو خسارة) بين شركاء رأس المال بنسبة رأس مال كل واحد آخر الشهر.</p>
+      </div>
+    }
+  }
+
+  @case ('withdrawals') {
+    <div class="data-panel">
+      <div class="panel-head"><h2>تسجيل سحب</h2></div>
+      @if (activePartners().length === 0) {
+        <p class="empty">ضيف شركاء أول.</p>
+      } @else {
+        <div class="form-grid">
+          <label class="field">
+            <span>الشريك</span>
+            <select [(ngModel)]="withdrawalPartnerId">
+              @for (p of activePartners(); track p.id) {
+                <option [value]="p.id">{{ p.fullName }} (رصيده {{ p.currentBalance | number: '1.3-3' }})</option>
+              }
+            </select>
+          </label>
+          <label class="field">
+            <span>المبلغ</span>
+            <input type="number" min="0" step="0.001" inputmode="decimal" [(ngModel)]="withdrawalAmount" />
+          </label>
+          <label class="field">
+            <span>من وين؟</span>
+            <select [(ngModel)]="withdrawalSource">
+              <option value="Drawer">من الصندوق (بينقص المتوقع بالتقفيل)</option>
+              <option value="OwnerPocket">من جيبي (بينسجّلي مستحق على المحل)</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>ملاحظة (اختياري)</span>
+            <input type="text" maxlength="500" [(ngModel)]="withdrawalNotes" />
+          </label>
+        </div>
+        <button type="button" class="btn-primary" [disabled]="submitting()" (click)="recordWithdrawal()">تسجيل السحب</button>
+      }
+    </div>
+
+    <div class="data-panel">
+      <div class="panel-head"><h2>آخر السحوبات</h2></div>
+      @if (withdrawals().length === 0) {
+        <p class="empty">ما في سحوبات.</p>
+      } @else {
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead><tr><th>التاريخ</th><th>الشريك</th><th>المبلغ</th><th>من وين</th><th>سجّله</th><th>ملاحظة</th></tr></thead>
+            <tbody>
+              @for (w of withdrawals(); track w.id) {
+                <tr>
+                  <td class="mono">{{ w.occurredAtUtc | date: 'yyyy-MM-dd HH:mm' }}</td>
+                  <td>{{ w.partnerName }}</td>
+                  <td class="money">{{ w.amount | number: '1.3-3' }}</td>
+                  <td>{{ w.sourceTitle }} @if (w.recordedAtCashier) { <span class="chip">من الكاشير</span> }</td>
+                  <td>{{ w.recordedByName }}</td>
+                  <td>{{ w.notes || '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  }
+
+  @case ('owner') {
+    <div class="data-panel">
+      <div class="panel-head"><h2>مستحق لصاحب المحل</h2></div>
+      <p class="hint">كل سحب شريك "من جيبي" بيزيد المستحق تلقائيًا بنفس المبلغ - ما بيضيع حقك لو نسيت. الاسترجاع يدوي بس.</p>
+      @if (receivables().length === 0) {
+        <p class="empty">ما في مستحقات.</p>
+      }
+      @for (r of receivables(); track r.ownerUserId) {
+        <div class="receivable">
+          <div class="receivable-head">
+            <strong>{{ r.ownerName }}</strong>
+            <span>مستحق إله: <span class="money-strong">{{ r.balance | number: '1.3-3' }}</span> د.أ</span>
+          </div>
+          @if (r.balance > 0) {
+            <div class="inline-form">
+              <input type="number" min="0" step="0.001" inputmode="decimal" placeholder="المبلغ" [(ngModel)]="repayAmount[r.ownerUserId]" />
+              <select [ngModel]="repaySource[r.ownerUserId] ?? 'Drawer'" (ngModelChange)="repaySource[r.ownerUserId] = $event">
+                <option value="Drawer">من الصندوق</option>
+                <option value="Outside">برّا الصندوق</option>
+              </select>
+              <button type="button" class="btn-primary" [disabled]="submitting()" (click)="repay(r)">استرجاع</button>
+            </div>
+          }
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead><tr><th>التاريخ</th><th>الحركة</th><th>المبلغ</th><th>ملاحظة</th></tr></thead>
+              <tbody>
+                @for (e of r.entries; track e.id) {
+                  <tr>
+                    <td class="mono">{{ e.occurredAtUtc | date: 'yyyy-MM-dd' }}</td>
+                    <td>{{ e.typeTitle }}{{ e.sourceTitle ? ' (' + e.sourceTitle + ')' : '' }}</td>
+                    <td class="money" [class.negative]="e.typeCode === 2">{{ (e.typeCode === 2 ? -e.amount : e.amount) | number: '1.3-3' }}</td>
+                    <td>{{ e.notes || '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
+    </div>
+  }
+}
+
+@if (partnerFormOpen()) {
+  <div class="modal-backdrop" (click)="closePartnerForm()">
+    <div class="modal-card" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+      <h2>{{ editingPartnerId ? 'تعديل شريك' : 'شريك جديد' }}</h2>
+      <div class="form-grid">
+        <label class="field">
+          <span>الاسم</span>
+          <input type="text" maxlength="200" [(ngModel)]="formName" />
+        </label>
+        <label class="field">
+          <span>النوع</span>
+          <select [(ngModel)]="formType" [disabled]="!!editingPartnerId">
+            <option value="Capital">شريك رأس مال (نصيبه حسب رأس ماله)</option>
+            <option value="Speculative">شريك مضارب (نسبة ثابتة من الربح)</option>
+          </select>
+        </label>
+        @if (formType === 'Speculative') {
+          <label class="field">
+            <span>نسبته من صافي ربح الشهر %</span>
+            <input type="number" min="0" max="100" step="0.01" [(ngModel)]="formPercent" />
+          </label>
+        }
+        <label class="field">
+          <span>حسابه بالنظام (اختياري - للسحب من الكاشير و"اخصمها مني")</span>
+          <select [(ngModel)]="formUserId">
+            <option value="">— بلا حساب —</option>
+            @for (u of users(); track u.userId) {
+              <option [value]="u.userId">{{ u.fullName }} ({{ u.username }})</option>
+            }
+          </select>
+        </label>
+        <label class="field wide">
+          <span>ملاحظات (اختياري)</span>
+          <input type="text" maxlength="500" [(ngModel)]="formNotes" />
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-link" (click)="closePartnerForm()">إلغاء</button>
+        <button type="button" class="btn-primary" [disabled]="submitting()" (click)="savePartner()">حفظ</button>
+      </div>
+    </div>
+  </div>
+}

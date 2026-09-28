@@ -1,3 +1,4 @@
+using SupermarketSystem.Application.Partners;
 using SupermarketSystem.Application.Sales.AtCostWithdrawal;
 using SupermarketSystem.Application.Sales.PreparedOrders;
 using SupermarketSystem.Application.Inventory.GetComplimentaryLog;
@@ -295,6 +296,19 @@ public static class DependencyInjection
         services.AddScoped<ScanLookupHandler>();
         services.AddScoped<QuoteAtCostWithdrawalHandler>();
         services.AddScoped<CompleteAtCostWithdrawalHandler>();
+        services.AddScoped<GetPartnersHandler>();
+        services.AddScoped<CreatePartnerHandler>();
+        services.AddScoped<UpdatePartnerHandler>();
+        services.AddScoped<SetPartnerActiveHandler>();
+        services.AddScoped<GetPartnerLedgerHandler>();
+        services.AddScoped<GeneratePartnerStatementHandler>();
+        services.AddScoped<GetPartnerStatementsHandler>();
+        services.AddScoped<GetPartnerStatementByIdHandler>();
+        services.AddScoped<RecordPartnerWithdrawalHandler>();
+        services.AddScoped<RecordVerifiedPartnerWithdrawalHandler>();
+        services.AddScoped<GetPartnerWithdrawalsHandler>();
+        services.AddScoped<GetOwnerReceivablesHandler>();
+        services.AddScoped<RecordOwnerRepaymentHandler>();
         services.AddScoped<GetCashClosingsHandler>();
 
         services.AddScoped<CreateStocktakeHandler>();

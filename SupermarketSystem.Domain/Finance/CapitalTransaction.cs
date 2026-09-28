@@ -26,12 +26,19 @@ public class CapitalTransaction : Entity, IBranchOwned
     public string? Notes { get; private set; }
     public Guid RecordedByUserId { get; private set; }
 
+    /// <summary>
+    /// الشريك صاحب هالحركة (اختياري، 28/9/2026) - رأس مال الشريك المضخوخ فعليًا = إضافاته ناقص سحوباته،
+    /// وهو أساس نسبته من الربح بالكشف الشهري (PartnerMonthlyStatement). null = حركة رأس مال عامة للفرع.
+    /// </summary>
+    public Guid? PartnerId { get; private set; }
+
     private CapitalTransaction() { } // EF Core
 
     public CapitalTransaction(
         Guid branchId, CapitalTransactionType type, decimal amount, DateTime occurredAtUtc,
-        string? notes, Guid recordedByUserId)
+        string? notes, Guid recordedByUserId, Guid? partnerId = null)
     {
+        PartnerId = partnerId;
         if (amount <= 0)
         {
             throw new DomainException("Capital transaction amount must be positive; direction is expressed by Type, not sign.");

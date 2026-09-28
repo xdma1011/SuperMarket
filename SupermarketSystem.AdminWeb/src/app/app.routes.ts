@@ -101,6 +101,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/current-stock/current-stock.component').then(m => m.CurrentStockComponent)
       },
       {
+        path: 'partners',
+        canActivate: [requirePermissionGuard('Partners.Manage')],
+        loadComponent: () => import('./features/partners/partners.component').then(m => m.PartnersComponent)
+      },
+      {
         path: 'quick-scan',
         canActivate: [requirePermissionGuard('Sales.Create')],
         loadComponent: () => import('./features/quick-scan/quick-scan.component').then(m => m.QuickScanComponent)

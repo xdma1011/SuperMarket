@@ -41,8 +41,10 @@ public class CapitalTransactionConfiguration : IEntityTypeConfiguration<CapitalT
         builder.Property(c => c.Notes).HasMaxLength(1000);
 
         builder.HasIndex(c => new { c.BranchId, c.OccurredAtUtc });
+        builder.HasIndex(c => c.PartnerId);
 
         builder.HasOne<User>().WithMany().HasForeignKey(c => c.RecordedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Domain.Partners.Partner>().WithMany().HasForeignKey(c => c.PartnerId).OnDelete(DeleteBehavior.Restrict);
         // Branch FK (Restrict) configured on the Branches side.
         // No update path is exposed anywhere in the model for this entity —
         // append-only by construction (نفس فلسفة CashDrawerLog).

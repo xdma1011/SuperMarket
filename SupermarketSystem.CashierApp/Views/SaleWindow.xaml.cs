@@ -1138,6 +1138,24 @@ public partial class SaleWindow : Window
         BarcodeBox.Focus();
     }
 
+    /// <summary>سحب شريك من الصندوق - الشريك بيثبت هويته بيوزره وكلمة سره (راجع PartnerWithdrawalWindow).</summary>
+    private void PartnerWithdrawalButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_authSession.BranchId is null)
+        {
+            ShowError("لا يوجد فرع مرتبط بجلستك - راجع الإدارة.");
+            return;
+        }
+
+        var window = new PartnerWithdrawalWindow(_apiClient, _authSession.BranchId.Value) { Owner = this };
+        if (window.ShowDialog() == true && window.ResultMessage is { } message)
+        {
+            ShowSaleStatus(message, isWarning: false);
+        }
+
+        BarcodeBox.Focus();
+    }
+
     private void InvoiceSearchButton_Click(object sender, RoutedEventArgs e)
     {
         new InvoiceSearchWindow(_apiClient, _authSession) { Owner = this }.ShowDialog();

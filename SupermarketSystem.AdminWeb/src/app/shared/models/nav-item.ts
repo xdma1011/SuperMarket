@@ -54,6 +54,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'purchases-drafts', label: 'مسودات AI للمراجعة', route: '/purchases/drafts', group: 'purchasing', icon: 'sparkle', requiredPermission: 'Purchasing.Create' },
 
   { id: 'finance', label: 'المالية', route: '/finance', group: 'finance', icon: 'wallet', requiredPermission: 'Finance.Manage' },
+  { id: 'partners', label: 'الشركاء', route: '/partners', group: 'finance', icon: 'users', requiredPermission: 'Partners.Manage' },
   { id: 'reports', label: 'التقارير', route: '/reports', group: 'finance', icon: 'chart', requiredPermission: 'Reports.View' },
   { id: 'reviews', label: 'المراجعات', route: '/reviews', group: 'finance', icon: 'check', requiredPermission: 'Returns.Review' },
   { id: 'notifications', label: 'الإشعارات', route: '/notifications', group: 'finance', icon: 'bell', requiredPermission: 'Notifications.View' },

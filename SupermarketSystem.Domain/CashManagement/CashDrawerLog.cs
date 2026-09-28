@@ -63,7 +63,13 @@ public enum CashDrawerReferenceType
     /// الاستلام، مش بلحظة اعتماد المراجع للمسودة (اللي ممكن تصير بعد
     /// يوم أو أكتر).
     /// </summary>
-    PurchaseInvoiceDraft = 6
+    PurchaseInvoiceDraft = 6,
+
+    /// <summary>سحب شريك من كاش الصندوق (PartnerWithdrawal، Source=Drawer) - PayOut.</summary>
+    PartnerWithdrawal = 7,
+
+    /// <summary>صاحب المحل استرجع مستحقه من كاش الصندوق (OwnerReceivableEntry، Repayment) - PayOut.</summary>
+    OwnerReceivableRepayment = 8
 }
 
 /// <summary>

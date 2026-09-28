@@ -130,6 +130,7 @@
             <th>المبلغ</th>
             <th>تاريخ الدفع</th>
             <th>الفترة</th>
+            <th>الشريك</th>
             <th>ملاحظات</th>
             <th>سجّله</th>
           </tr>
@@ -206,6 +207,7 @@
               </td>
               <td class="mono">{{ c.amount | number: '1.3-3' }}</td>
               <td class="mono">{{ c.occurredAtUtc | date: 'yyyy-MM-dd' }}</td>
+              <td>{{ c.partnerName || '—' }}</td>
               <td>{{ c.notes || '—' }}</td>
               <td>{{ c.recordedByUsername }}</td>
             </tr>
@@ -322,7 +324,7 @@
       <div class="modal-fields">
         <label class="field">
           <span>الفرع</span>
-          <select [(ngModel)]="newCapitalBranchId">
+          <select [(ngModel)]="newCapitalBranchId" (change)="onCapitalBranchChange()">
             @for (b of branches(); track b.id) {
               <option [value]="b.id">{{ b.name }}</option>
             }
@@ -343,6 +345,17 @@
           <span>التاريخ</span>
           <input type="date" [(ngModel)]="newCapitalOccurredAt" />
         </label>
+        @if (capitalPartners().length > 0) {
+          <label class="field" style="grid-column: span 2">
+            <span>الشريك (اختياري - رأس ماله أساس نسبته من الربح)</span>
+            <select [(ngModel)]="newCapitalPartnerId">
+              <option value="">— حركة عامة للفرع —</option>
+              @for (p of capitalPartners(); track p.id) {
+                <option [value]="p.id">{{ p.fullName }}</option>
+              }
+            </select>
+          </label>
+        }
         <label class="field" style="grid-column: span 2">
           <span>ملاحظات (اختياري)</span>
           <input type="text" [(ngModel)]="newCapitalNotes" placeholder="—" />

@@ -61,7 +61,7 @@ public static class FinanceEndpoints
             CancellationToken cancellationToken) =>
         {
             var command = new CreateCapitalTransactionCommand(
-                request.BranchId, request.Type, request.Amount, request.OccurredAtUtc, request.Notes);
+                request.BranchId, request.Type, request.Amount, request.OccurredAtUtc, request.Notes, request.PartnerId);
 
             var result = await handler.HandleAsync(command, cancellationToken);
             return result.ToHttpResult(response => Results.Created($"/api/v1/finance/capital-transactions/{response.CapitalTransactionId}", response));
@@ -108,5 +108,5 @@ public static class FinanceEndpoints
         int PeriodYear, int PeriodMonth, string? Notes);
 
     public sealed record CreateCapitalTransactionRequest(
-        Guid BranchId, CapitalTransactionType Type, decimal Amount, DateTime OccurredAtUtc, string? Notes);
+        Guid BranchId, CapitalTransactionType Type, decimal Amount, DateTime OccurredAtUtc, string? Notes, Guid? PartnerId = null);
 }

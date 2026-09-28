@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
-import { BranchesOperation, FinanceOperation } from '../../core/api/operations';
+import { BranchesOperation, FinanceOperation, PartnersOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
 import { AuthService } from '../../core/services/auth.service';
 
@@ -44,6 +44,16 @@ interface CapitalTransactionListItemDto {
   occurredAtUtc: string;
   notes: string | null;
   recordedByUsername: string;
+  /** رأس مال شريك (وحدة الشركاء) - أساس نسبته من الربح. */
+  partnerId?: string | null;
+  partnerName?: string | null;
+}
+
+interface CapitalPartnerOption {
+  id: string;
+  fullName: string;
+  typeCode: number;
+  isActive: boolean;
 }
 
 interface ExpenseByCategoryDto {
@@ -153,6 +163,9 @@ export class FinanceComponent implements OnInit {
   newCapitalAmount: number | null = null;
   newCapitalOccurredAt = new Date().toISOString().slice(0, 10);
   newCapitalNotes = '';
+  /** شركاء رأس المال بفرع النموذج - اختياري (فاضي = حركة عامة للفرع). */
+  readonly capitalPartners = signal<CapitalPartnerOption[]>([]);
+  newCapitalPartnerId = '';
 
   readonly categoryLabels = EXPENSE_CATEGORY_LABELS;
   readonly typeLabels = CAPITAL_TYPE_LABELS;
@@ -342,6 +355,27 @@ export class FinanceComponent implements OnInit {
     this.newCapitalAmount = null;
     this.newCapitalOccurredAt = new Date().toISOString().slice(0, 10);
     this.newCapitalNotes = '';
+    this.newCapitalPartnerId = '';
+    void this.loadCapitalPartners();
+  }
+
+  /** شركاء رأس المال الفعّالين بالفرع المختار (Partners.Manage - لو ما في صلاحية، الخانة ما بتبين). */
+  async loadCapitalPartners(): Promise<void> {
+    this.capitalPartners.set([]);
+    if (!this.newCapitalBranchId) return;
+    try {
+      const partners = await firstValueFrom(
+        this.apiClient.get<CapitalPartnerOption[]>(ApiController.Partners, PartnersOperation.List, undefined, { branchId: this.newCapitalBranchId })
+      );
+      this.capitalPartners.set(partners.filter(p => p.typeCode === 1 && p.isActive));
+    } catch {
+      this.capitalPartners.set([]);
+    }
+  }
+
+  onCapitalBranchChange(): void {
+    this.newCapitalPartnerId = '';
+    void this.loadCapitalPartners();
   }
 
   closeCapitalForm(): void {
@@ -364,7 +398,8 @@ export class FinanceComponent implements OnInit {
           type: this.newCapitalType,
           amount: this.newCapitalAmount,
           occurredAtUtc: this.newCapitalOccurredAt,
-          notes: this.newCapitalNotes || null
+          notes: this.newCapitalNotes || null,
+          partnerId: this.newCapitalPartnerId || null
         })
       );
 

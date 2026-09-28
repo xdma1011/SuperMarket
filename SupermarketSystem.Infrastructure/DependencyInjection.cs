@@ -83,6 +83,7 @@ public static class DependencyInjection
         services.AddScoped<IBackupService, SqlServerBackupService>();
         services.AddHostedService<DailyBackupBackgroundService>();
         services.AddHostedService<PendingReviewEscalationBackgroundService>();
+        services.AddHostedService<PartnerStatementBackgroundService>();
         services.AddHostedService<WeeklyActivityDigestBackgroundService>();
 
         // مزوّدو قراءة فاتورة الشراء بالذكاء الاصطناعي — بترتيب الأولوية

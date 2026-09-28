@@ -13,6 +13,7 @@ using SupermarketSystem.Domain.Identity;
 using SupermarketSystem.Domain.Inventory;
 using SupermarketSystem.Domain.Notifications;
 using SupermarketSystem.Domain.Ordering;
+using SupermarketSystem.Domain.Partners;
 using SupermarketSystem.Domain.Payments;
 using SupermarketSystem.Domain.Purchasing;
 using SupermarketSystem.Domain.Sales;
@@ -108,6 +109,11 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<CashDrawerLog> CashDrawerLogs => Set<CashDrawerLog>();
     public DbSet<CashClosing> CashClosings => Set<CashClosing>();
     public DbSet<DrawerOpenEvent> DrawerOpenEvents => Set<DrawerOpenEvent>();
+    public DbSet<Partner> Partners => Set<Partner>();
+    public DbSet<PartnerWithdrawal> PartnerWithdrawals => Set<PartnerWithdrawal>();
+    public DbSet<PartnerMonthlyStatement> PartnerMonthlyStatements => Set<PartnerMonthlyStatement>();
+    public DbSet<PartnerStatementLine> PartnerStatementLines => Set<PartnerStatementLine>();
+    public DbSet<OwnerReceivableEntry> OwnerReceivableEntries => Set<OwnerReceivableEntry>();
 
     // Customers
     public DbSet<Customer> Customers => Set<Customer>();

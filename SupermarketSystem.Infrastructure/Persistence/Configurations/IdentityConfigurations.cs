@@ -357,6 +357,14 @@ public class PermissionConfiguration : IEntityTypeConfiguration<Permission>
             Description = "Take goods from the store at cost price - paid into the drawer, or deducted from the partner's share (recorded as an open balance until the partners module exists).",
             CreatedAtUtc = new DateTime(2026, 9, 28, 0, 0, 0, DateTimeKind.Utc)
         });
+        builder.HasData(new
+        {
+            Id = Guid.Parse("9d3e1b4c-7a5f-4c2d-8b6e-4f7a0c3d5e79"),
+            Code = "Partners.Manage",
+            Name = "Manage partners and profit distribution",
+            Description = "Partners per branch, monthly profit statements, partner withdrawals (drawer or owner's pocket) and the owner receivable.",
+            CreatedAtUtc = new DateTime(2026, 9, 28, 0, 0, 0, DateTimeKind.Utc)
+        });
     }
 }
 
@@ -505,6 +513,14 @@ public class RolePermissionConfiguration : IEntityTypeConfiguration<RolePermissi
             Id = Guid.Parse("8e2f0a3b-6c4d-4f9b-8e7d-3a5b9c2f4d68"),
             RoleId = Guid.Parse("50e6125a-cac0-4d82-a0b8-9f3c6fff59d7"),
             PermissionId = Guid.Parse("7c1d9e2a-5b3f-4e8a-9d6c-2f4a8b1e3c57")
+        });
+
+        // Master Admin حصرًا -> Partners.Manage (وحدة الشركاء، 28/9/2026).
+        builder.HasData(new
+        {
+            Id = Guid.Parse("a1f4c2d5-8b6e-4d3f-9c7a-5e8b1d4f6a80"),
+            RoleId = Guid.Parse("50e6125a-cac0-4d82-a0b8-9f3c6fff59d7"),
+            PermissionId = Guid.Parse("9d3e1b4c-7a5f-4c2d-8b6e-4f7a0c3d5e79")
         });
 
         // Master Admin -> الصلاحية الجديدة (System.SettingsManage)

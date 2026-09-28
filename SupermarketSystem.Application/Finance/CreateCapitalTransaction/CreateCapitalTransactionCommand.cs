@@ -15,7 +15,9 @@ public sealed record CreateCapitalTransactionCommand(
     CapitalTransactionType Type,
     decimal Amount,
     DateTime OccurredAtUtc,
-    string? Notes);
+    string? Notes,
+    // رأس مال شريك (اختياري، 28/9/2026) - أساس نسبته من الربح بالكشف الشهري. لازم شريك رأس مال بنفس الفرع.
+    Guid? PartnerId = null);
 
 public sealed record CreateCapitalTransactionResponse(Guid CapitalTransactionId);
 
@@ -64,13 +66,32 @@ public sealed class CreateCapitalTransactionHandler
                 Error.NotFound("CapitalTransaction.BranchNotFound", $"Branch '{command.BranchId}' was not found."));
         }
 
+        if (command.PartnerId is { } partnerId)
+        {
+            var partner = await _context.Partners.AsNoTracking()
+                .Where(p => p.Id == partnerId)
+                .Select(p => new { p.BranchId, p.Type })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (partner is null || partner.BranchId != command.BranchId)
+            {
+                return Result.Failure<CreateCapitalTransactionResponse>(
+                    Error.Validation("CapitalTransaction.PartnerInvalid", "الشريك مش موجود بهالفرع."));
+            }
+
+            if (partner.Type != Domain.Partners.PartnerType.Capital)
+            {
+                return Result.Failure<CreateCapitalTransactionResponse>(
+                    Error.Validation("CapitalTransaction.PartnerNotCapital", "الشريك المضارب ما إله رأس مال - نصيبه نسبة ثابتة."));
+            }
+        }
+
         var actorUserId = _currentUser.UserId ?? User.SystemUserId;
 
         CapitalTransaction transaction;
         try
         {
             transaction = new CapitalTransaction(
-                command.BranchId, command.Type, command.Amount, command.OccurredAtUtc, command.Notes, actorUserId);
+                command.BranchId, command.Type, command.Amount, command.OccurredAtUtc, command.Notes, actorUserId, command.PartnerId);
         }
         catch (Domain.Common.DomainException ex)
         {

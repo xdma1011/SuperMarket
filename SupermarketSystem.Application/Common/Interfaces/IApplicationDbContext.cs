@@ -11,6 +11,7 @@ using SupermarketSystem.Domain.Identity;
 using SupermarketSystem.Domain.Inventory;
 using SupermarketSystem.Domain.Notifications;
 using SupermarketSystem.Domain.Ordering;
+using SupermarketSystem.Domain.Partners;
 using SupermarketSystem.Domain.Payments;
 using SupermarketSystem.Domain.Purchasing;
 using SupermarketSystem.Domain.Sales;
@@ -96,6 +97,11 @@ public interface IApplicationDbContext
     DbSet<CashDrawerLog> CashDrawerLogs { get; }
     DbSet<CashClosing> CashClosings { get; }
     DbSet<DrawerOpenEvent> DrawerOpenEvents { get; }
+    DbSet<Partner> Partners { get; }
+    DbSet<PartnerWithdrawal> PartnerWithdrawals { get; }
+    DbSet<PartnerMonthlyStatement> PartnerMonthlyStatements { get; }
+    DbSet<PartnerStatementLine> PartnerStatementLines { get; }
+    DbSet<OwnerReceivableEntry> OwnerReceivableEntries { get; }
 
     // Customers
     DbSet<Customer> Customers { get; }

@@ -15,7 +15,10 @@ public sealed record CapitalTransactionListItemDto(
     DateTime OccurredAtUtc,
     string? Notes,
     Guid RecordedByUserId,
-    string RecordedByUsername);
+    string RecordedByUsername,
+    // الشريك صاحب الحركة (وحدة الشركاء، 28/9/2026) - null = حركة عامة للفرع.
+    Guid? PartnerId = null,
+    string? PartnerName = null);
 
 /// <summary>سجل تاريخي بحت (CapitalTransaction بلا أي مسار تعديل/حذف) - نفس فلسفة GetExpenses تمامًا.</summary>
 public sealed class GetCapitalTransactionsHandler
@@ -64,6 +67,21 @@ public sealed class GetCapitalTransactionsHandler
                     x.c.RecordedByUserId,
                     u != null ? u.Username : UnresolvedUserLabel))
             .ToListAsync(cancellationToken);
+
+        var withPartner = await transactions.Skip(paging.Skip).Take(paging.PageSize)
+            .Where(c => c.PartnerId != null)
+            .Select(c => new { c.Id, PartnerId = c.PartnerId!.Value })
+            .ToListAsync(cancellationToken);
+        if (withPartner.Count > 0)
+        {
+            var partnerIds = withPartner.Select(w => w.PartnerId).Distinct().ToList();
+            var names = await _context.Partners.IgnoreQueryFilters().AsNoTracking()
+                .Where(p => partnerIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.FullName, cancellationToken);
+            var byTransaction = withPartner.ToDictionary(w => w.Id, w => w.PartnerId);
+            items = items.Select(i => byTransaction.TryGetValue(i.Id, out var pid)
+                ? i with { PartnerId = pid, PartnerName = names.GetValueOrDefault(pid) }
+                : i).ToList();
+        }
 
         return new PagedResult<CapitalTransactionListItemDto>(items, totalCount, paging.PageNumber, paging.PageSize);
     }

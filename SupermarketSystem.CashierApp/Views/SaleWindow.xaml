@@ -74,7 +74,8 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <StackPanel Grid.Column="0" Orientation="Horizontal">
+            <!-- WrapPanel: الأزرار كترت - على شاشة أصغر بتنزل سطر تاني بدل ما تنقص -->
+            <WrapPanel Grid.Column="0" Orientation="Horizontal" MaxWidth="1100">
                 <Button x:Name="HomeButton" Height="34" Width="96" FontSize="12" Content="🏠 القائمة"
                         Style="{StaticResource SecondaryButton}" Click="HomeButton_Click" Margin="0,0,6,0" />
                 <Button x:Name="ReturnButton" Height="34" Width="96" FontSize="12" Content="↩ إرجاع"
@@ -90,9 +91,12 @@
                         Style="{StaticResource SecondaryButton}" Click="DrawerOpenButton_Click" Margin="0,0,6,0" />
                 <Button x:Name="CashClosingButton" Height="34" Width="120" FontSize="12" Content="🧮 إغلاق الصندوق"
                         Style="{StaticResource SecondaryButton}" Click="CashClosingButton_Click" Margin="0,0,6,0" />
+                <!-- سحب شريك من الصندوق بتحقق هويته (يوزره وكلمة سره) - 28/9/2026 -->
+                <Button x:Name="PartnerWithdrawalButton" Height="34" Width="110" FontSize="12" Content="💼 سحب شريك"
+                        Style="{StaticResource SecondaryButton}" Click="PartnerWithdrawalButton_Click" Margin="0,0,6,0" />
                 <Button x:Name="LogoutButton" Height="34" Width="110" FontSize="12" Content="🔒 تسجيل خروج"
                         Style="{StaticResource SecondaryButton}" Click="LogoutButton_Click" />
-            </StackPanel>
+            </WrapPanel>
 
             <Border x:Name="SaleStatusBanner" Grid.Column="2" CornerRadius="8" Padding="12,6"
                     HorizontalAlignment="Stretch" Visibility="Collapsed">

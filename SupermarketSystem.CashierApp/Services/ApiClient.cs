@@ -604,6 +604,33 @@ public sealed class ApiClient
         }
     }
 
+    /// <summary>
+    /// POST /partner-withdrawals/verified — سحب شريك من الصندوق بتحقق هويته (يوزره وكلمة سره) والكاشير داخل بحسابه.
+    /// أونلاين بس. بيرجّع اسم الشريك ورصيده بعد السحب.
+    /// </summary>
+    public async Task<(bool Success, string? PartnerName, decimal? NewBalance, string? ErrorMessage)> RecordVerifiedPartnerWithdrawalAsync(
+        Guid branchId, string username, string password, decimal amount, string? notes, Guid clientRequestId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await _http.PostAsJsonAsync("partner-withdrawals/verified",
+                new { branchId, username, password, amount, notes, clientRequestId }, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return (false, null, null, ServerError(body));
+            }
+
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+            return (true, root.GetProperty("partnerName").GetString(), root.GetProperty("newBalance").GetDecimal(), null);
+        }
+        catch (Exception ex)
+        {
+            return (false, null, null, $"تعذّر الاتصال بالسيرفر: {ex.Message}");
+        }
+    }
+
     /// <summary>GET /prepared-orders — الطلبات الجاهزة من مساعد الكاشير (أونلاين بس - بلا نت، الكاشير بيضرب الأصناف عادي).</summary>
     public async Task<PreparedOrdersResult> GetOpenPreparedOrdersAsync(Guid? branchId, CancellationToken cancellationToken)
     {

@@ -130,6 +130,7 @@ app.MapNotificationEndpoints();
 app.MapBackupEndpoints();
 app.MapReportingEndpoints();
 app.MapFinanceEndpoints();
+app.MapPartnersEndpoints();
 
 app.Run();
 
