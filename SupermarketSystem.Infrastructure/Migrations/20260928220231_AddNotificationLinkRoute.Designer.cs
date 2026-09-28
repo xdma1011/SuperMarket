@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SupermarketSystem.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using SupermarketSystem.Infrastructure.Persistence;
 namespace SupermarketSystem.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260928220231_AddNotificationLinkRoute")]
+    partial class AddNotificationLinkRoute
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1288,14 +1291,6 @@ namespace SupermarketSystem.Infrastructure.Migrations
                             CreatedAtUtc = new DateTime(2026, 9, 28, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Partners per branch, monthly profit statements, partner withdrawals (drawer or owner's pocket) and the owner receivable.",
                             Name = "Manage partners and profit distribution"
-                        },
-                        new
-                        {
-                            Id = new Guid("b2e5d3f6-9c7a-4e4b-8d1f-6a9c2e5b7d91"),
-                            Code = "Notifications.Manage",
-                            CreatedAtUtc = new DateTime(2026, 9, 28, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Mark alerts as read (read state is shared by all admins) - separate from Notifications.View so a cashier can't hide an alert about their own drawer.",
-                            Name = "Mark alerts as read"
                         });
                 });
 
@@ -1523,18 +1518,6 @@ namespace SupermarketSystem.Infrastructure.Migrations
                             Id = new Guid("a1f4c2d5-8b6e-4d3f-9c7a-5e8b1d4f6a80"),
                             PermissionId = new Guid("9d3e1b4c-7a5f-4c2d-8b6e-4f7a0c3d5e79"),
                             RoleId = new Guid("50e6125a-cac0-4d82-a0b8-9f3c6fff59d7")
-                        },
-                        new
-                        {
-                            Id = new Guid("c3f6e4a7-0d8b-4f5c-9e2a-7b0d3f6c8ea2"),
-                            PermissionId = new Guid("b2e5d3f6-9c7a-4e4b-8d1f-6a9c2e5b7d91"),
-                            RoleId = new Guid("50e6125a-cac0-4d82-a0b8-9f3c6fff59d7")
-                        },
-                        new
-                        {
-                            Id = new Guid("d4a7f5b8-1e9c-4a6d-8f3b-8c1e4a7d9fb3"),
-                            PermissionId = new Guid("b2e5d3f6-9c7a-4e4b-8d1f-6a9c2e5b7d91"),
-                            RoleId = new Guid("5d0b3578-417e-4706-ab9b-fc9a208b6642")
                         },
                         new
                         {

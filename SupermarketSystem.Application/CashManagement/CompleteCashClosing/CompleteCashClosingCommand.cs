@@ -332,7 +332,8 @@ public sealed class CompleteCashClosingHandler
                 $"المتوقع: {cashClosing.ExpectedCash:0.000} - المعدود: {cashClosing.CountedCash:0.000}" +
                 (isDeficit ? "" : "\nالزيادة ممكن تعني بيعات ما انسجّلت بفاتورة."),
                 cancellationToken,
-                isDeficit ? NotificationSeverity.Critical : NotificationSeverity.Warning);
+                isDeficit ? NotificationSeverity.Critical : NotificationSeverity.Warning,
+                link: "/cash-closings");
         }
 
         return Result.Success(new CompleteCashClosingResponse(

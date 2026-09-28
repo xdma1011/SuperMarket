@@ -94,7 +94,8 @@ public sealed class PendingReviewEscalationBackgroundService : BackgroundService
                 $"تصعيد: {overdue.Count} عملية بانتظار مراجعة منذ أكثر من {thresholdDays:0} يوم",
                 body,
                 cancellationToken,
-                NotificationSeverity.Critical);
+                NotificationSeverity.Critical,
+                link: "/reviews");
 
             _logger.LogWarning(
                 "تصعيد مراجعات معلَّقة: {Count} عنصر تجاوز {ThresholdDays} يوم بدون مراجعة.",

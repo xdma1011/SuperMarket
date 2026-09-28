@@ -8,7 +8,9 @@ namespace SupermarketSystem.Application.Notifications.GetNotifications;
 // MinSeverity: فلتر "الخطيرة بس" / "المهمة وفوق" بصفحة التنبيهات.
 // SinceUtc: عدّاد "تنبيهات خطيرة آخر 24 ساعة" بالرئيسية.
 public sealed record GetNotificationsQuery(
-    PagedRequest Paging, bool UnreadOnly, NotificationSeverity? MinSeverity = null, DateTime? SinceUtc = null);
+    PagedRequest Paging, bool UnreadOnly, NotificationSeverity? MinSeverity = null, DateTime? SinceUtc = null,
+    // درجة وحدة بالضبط - تبويبات لوحة التنبيهات (عالية/متوسطة/منخفضة).
+    NotificationSeverity? Severity = null);
 
 public sealed record NotificationItemDto(
     Guid Id,
@@ -18,7 +20,9 @@ public sealed record NotificationItemDto(
     NotificationStatus Status,
     DateTime CreatedAtUtc,
     DateTime? ReadAtUtc,
-    NotificationSeverity Severity);
+    NotificationSeverity Severity,
+    // الصفحة المعنية مع فلترها (لوحة التنبيهات الموحّدة) - null = بلا صفحة محدَّدة.
+    string? LinkRoute = null);
 
 /// <summary>
 /// آلية Polling — الواجهة بتستدعي هذا كل كم ثانية بدل اتصال فوري
@@ -55,6 +59,11 @@ public sealed class GetNotificationsHandler
             notifications = notifications.Where(n => n.CreatedAtUtc >= sinceUtc);
         }
 
+        if (query.Severity is { } exactSeverity)
+        {
+            notifications = notifications.Where(n => n.Severity == exactSeverity);
+        }
+
         if (query.MinSeverity is { } minSeverity)
         {
             notifications = notifications.Where(n => n.Severity >= minSeverity);
@@ -67,7 +76,7 @@ public sealed class GetNotificationsHandler
         var items = await notifications
             .Skip(paging.Skip)
             .Take(paging.PageSize)
-            .Select(n => new NotificationItemDto(n.Id, n.Title, n.Message, n.Channel, n.Status, n.CreatedAtUtc, n.ReadAtUtc, n.Severity))
+            .Select(n => new NotificationItemDto(n.Id, n.Title, n.Message, n.Channel, n.Status, n.CreatedAtUtc, n.ReadAtUtc, n.Severity, n.LinkRoute))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<NotificationItemDto>(items, totalCount, paging.PageNumber, paging.PageSize);

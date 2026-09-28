@@ -254,7 +254,8 @@ public sealed class CompleteAtCostWithdrawalHandler
                 $"المجموع بالتكلفة {sale.TotalAmount:0.000} د.أ (بسعر البيع {quote.SellingValue:0.000}).\n" +
                 (command.DeductFromShare ? "طريقة التسوية: تنخصم من نصيبه (مسجّلة عليه)." : "طريقة التسوية: دفع حقها."),
                 cancellationToken,
-                NotificationSeverity.Warning);
+                NotificationSeverity.Warning,
+                link: $"/sales?search={Uri.EscapeDataString(sale.InvoiceNumber)}");
         }
 
         return Result.Success(new CompleteAtCostWithdrawalResponse(

@@ -1,4 +1,7 @@
 /** ApiController.Notifications */
 export enum NotificationsOperation {
-  List = ''
+  List = '',
+  Summary = 'summary',
+  MarkRead = '{id}/read',
+  MarkAllRead = 'read-all'
 }

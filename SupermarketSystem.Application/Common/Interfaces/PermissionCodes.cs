@@ -49,6 +49,10 @@ public static class PermissionCodes
     /// <summary>وحدة الشركاء: الشركاء، الكشوف الشهرية، السحوبات، المستحق لصاحب المحل - Master Admin حصرًا (28/9/2026).</summary>
     public const string PartnersManage = "Partners.Manage";
 
+    /// <summary>تعليم التنبيهات كمقروءة (28/9/2026) - منفصلة عن NotificationsView عمدًا: الكاشير بيشوف التنبيهات، بس القراءة
+    /// مشتركة للكل، فلو قدر يعلّم كان رح يخفي تنبيه عجز صندوقه عن صاحب المحل. Master Admin + مساعد أدمن.</summary>
+    public const string NotificationsManage = "Notifications.Manage";
+
     /// <summary>كل الرموز دفعة وحدة — يخدم seed دور "Master Admin" (كل الصلاحيات مربوطة فيه) بلا سرد يدوي معرَّض للنسيان عند إضافة رمز جديد لاحقًا.</summary>
     public static readonly IReadOnlyList<string> All = new[]
     {
@@ -58,7 +62,7 @@ public static class PermissionCodes
         BackupsManage, SessionsManage, NotificationsView, UsersManage, ComplimentaryIssue,
         SystemSettingsManage, CustomersManage, OrdersDeliver, StockTransferManage,
         ChangeSellingPriceDirect, RequestSellingPriceChange, FinanceManage, WasteIssue,
-        SalesAtCostWithdrawal, PartnersManage
+        SalesAtCostWithdrawal, PartnersManage, NotificationsManage
     };
 
     /// <summary>
@@ -82,6 +86,6 @@ public static class PermissionCodes
         SalesCreate, SalesVoid, ReturnsProcess, ReturnsReview, PurchasingCreate, PurchasingCreateDraft,
         CatalogManage, SuppliersManage, StocktakeManage, StocktakeApprove,
         CashClosingManage, ReportsView, NotificationsView, CustomersManage, StockTransferManage,
-        ChangeSellingPriceDirect, RequestSellingPriceChange
+        ChangeSellingPriceDirect, RequestSellingPriceChange, NotificationsManage
     };
 }

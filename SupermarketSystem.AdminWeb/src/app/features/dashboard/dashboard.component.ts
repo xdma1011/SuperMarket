@@ -64,8 +64,12 @@ export class DashboardComponent implements OnInit {
   readonly negativeStockCount = signal(0);
   readonly reorderNeededCount = signal(0);
   readonly pendingReviewsCount = signal(0);
-  /** تنبيهات خطيرة آخر 24 ساعة (عجز صندوق، نقص جرد، فاتورة أوفلاين انحذفت، قفل حساب...). */
+  /** تنبيهات غير مقروءة عالية الأولوية (عجز صندوق، نقص جرد، فاتورة أوفلاين انحذفت، قفل حساب...). */
   readonly criticalAlertsCount = signal(0);
+  /** تنبيهات غير مقروءة متوسطة الأولوية (إرجاع، إلغاء، سحوبات...). */
+  readonly warningAlertsCount = signal(0);
+  /** فواتير شراء متجاوزة تاريخ استحقاقها وعليها دين (كانت ما بتنعد هون - مراجعة 24/9). */
+  readonly overdueSupplierPaymentsCount = signal(0);
   readonly loading = signal(true);
 
   /** null = لسه ما تحمّل / تعذّر الجلب (بلا تنبيه بهالحالة، تفاديًا لتنبيه كاذب). */
@@ -84,7 +88,8 @@ export class DashboardComponent implements OnInit {
   }
 
   get totalAlerts(): number {
-    return this.negativeStockCount() + this.reorderNeededCount() + this.pendingReviewsCount() + this.criticalAlertsCount();
+    return this.negativeStockCount() + this.reorderNeededCount() + this.pendingReviewsCount()
+      + this.criticalAlertsCount() + this.warningAlertsCount() + this.overdueSupplierPaymentsCount();
   }
 
   /** أقدم من 24 ساعة = تنبيه. null (لسه ما توفرت بيانات) = بلا تنبيه، ما نفترض الأسوأ بلا دليل. */
@@ -121,9 +126,11 @@ export class DashboardComponent implements OnInit {
       firstValueFrom(this.apiClient.get<GetBackupsResponse>(ApiController.Backups, BackupsOperation.List, undefined, {
         pageNumber: 1, pageSize: 5
       })),
-      firstValueFrom(this.apiClient.get<{ totalCount: number }>(ApiController.Notifications, NotificationsOperation.List, undefined, {
-        pageNumber: 1, pageSize: 1, minSeverity: 'Critical',
-        sinceUtc: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+      firstValueFrom(this.apiClient.get<{ unreadCritical: number; unreadWarning: number }>(
+        ApiController.Notifications, NotificationsOperation.Summary)),
+      // مرتّبة تصاعديًا حسب الأيام الباقية - المتجاوزة (سالب) أول.
+      firstValueFrom(this.apiClient.get<PagedResult<{ daysRemaining: number }>>(ApiController.Reports, ReportsOperation.SupplierPaymentDue, undefined, {
+        pageNumber: 1, pageSize: 200
       }))
     ]);
 
@@ -132,7 +139,13 @@ export class DashboardComponent implements OnInit {
     if (results[2].status === 'fulfilled') this.negativeStockCount.set(results[2].value.totalCount);
     if (results[3].status === 'fulfilled') this.reorderNeededCount.set(results[3].value.totalCount);
     if (results[4].status === 'fulfilled') this.pendingReviewsCount.set(results[4].value.totalCount);
-    if (results[6].status === 'fulfilled') this.criticalAlertsCount.set(results[6].value.totalCount);
+    if (results[6].status === 'fulfilled') {
+      this.criticalAlertsCount.set(results[6].value.unreadCritical ?? 0);
+      this.warningAlertsCount.set(results[6].value.unreadWarning ?? 0);
+    }
+    if (results[7].status === 'fulfilled') {
+      this.overdueSupplierPaymentsCount.set((results[7].value.items ?? []).filter(i => i.daysRemaining < 0).length);
+    }
     if (results[5].status === 'fulfilled') {
       // أول نسخة ناجحة ضمن آخر 5 محاولات - لا أحدث عنصر فقط، تفاديًا
       // لتنبيه كاذب لو آخر محاولة فشلت بس قبلها نجحت وحدة.

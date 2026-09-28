@@ -831,7 +831,8 @@ public sealed class CompleteSaleHandler
             await _notificationDispatcher.NotifyAsync(
                 $"مراجعة مطلوبة — فاتورة {result.Value.InvoiceNumber}",
                 $"- {flagsText}",
-                cancellationToken);
+                cancellationToken,
+                link: $"/sales?search={Uri.EscapeDataString(result.Value.InvoiceNumber)}");
         }
 
         return result;

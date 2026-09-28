@@ -111,7 +111,8 @@ internal sealed class PartnerWithdrawalRecorder
             $".\nرصيده بعد السحب: {balance:0.000} د.أ" + (notes is null ? "" : $"\nملاحظة: {notes}") +
             (source == PartnerWithdrawalSource.OwnerPocket ? $"\nانسجّل {amount:0.000} د.أ مستحق لـ{who}." : ""),
             cancellationToken,
-            NotificationSeverity.Warning);
+            NotificationSeverity.Warning,
+            link: "/partners?tab=withdrawals");
 
         return Result.Success(new PartnerWithdrawalResponse(
             withdrawal.Id, partner.Id, partner.FullName, amount, (int)source, PartnerTitles.Source(source), balance, WasReplay: false));
@@ -418,7 +419,8 @@ public sealed class RecordOwnerRepaymentHandler
             $"استرجاع مستحق — {owner} ({amount:0.000} د.أ)",
             $"{owner} استرجع {amount:0.000} د.أ من مستحقه ({(command.Source == OwnerRepaymentSource.Drawer ? "من الصندوق" : "برّا الصندوق")}). الباقي إله: {balance - amount:0.000} د.أ.",
             cancellationToken,
-            NotificationSeverity.Warning);
+            NotificationSeverity.Warning,
+            link: "/partners?tab=owner");
 
         return Result.Success(balance - amount);
     }

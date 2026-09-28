@@ -17,13 +17,17 @@ public sealed class TheftAlertsTests : IntegrationTestBase
 {
     public TheftAlertsTests(DatabaseFixture fixture) : base(fixture) { }
 
-    private sealed record Alert(string Title, string Message, string Severity);
+    private sealed record Alert(Guid Id, string Title, string Message, string Severity, string? LinkRoute, string Status);
 
     private static async Task<List<Alert>> GetAlertsAsync(HttpClient admin, string query = "")
     {
         var json = JsonDocument.Parse(await admin.GetStringAsync($"/api/v1/notifications?pageSize=100{query}")).RootElement;
         return json.GetProperty("items").EnumerateArray()
-            .Select(n => new Alert(n.GetProperty("title").GetString()!, n.GetProperty("message").GetString()!, n.GetProperty("severity").GetString()!))
+            .Select(n => new Alert(
+                n.GetProperty("id").GetGuid(), n.GetProperty("title").GetString()!, n.GetProperty("message").GetString()!,
+                n.GetProperty("severity").GetString()!,
+                n.TryGetProperty("linkRoute", out var link) && link.ValueKind == JsonValueKind.String ? link.GetString() : null,
+                n.GetProperty("status").GetString()!))
             .ToList();
     }
 
@@ -184,6 +188,54 @@ public sealed class TheftAlertsTests : IntegrationTestBase
         Assert.Equal(4, critical.Count);
         var future = await GetAlertsAsync(admin, $"&minSeverity=Critical&sinceUtc={Uri.EscapeDataString(DateTime.UtcNow.AddHours(1).ToString("o"))}");
         Assert.Empty(future);
+
+        // ================= لوحة التنبيهات الموحّدة (28/9/2026): كل تنبيه بيودّي على صفحته والفلتر جاهز =================
+        string? LinkOf(string titleStart) => alerts.First(a => a.Title.StartsWith(titleStart)).LinkRoute;
+        Assert.StartsWith("/sales?search=", LinkOf("إلغاء فاتورة"));
+        Assert.Equal($"/returns?search={Uri.EscapeDataString(saleInvoiceNumber)}", LinkOf("إرجاع"));
+        Assert.Equal("/reviews", LinkOf("ضيافة فوق الحد اليومي"));
+        Assert.Equal("/reviews", LinkOf("تلف فوق الحد اليومي"));
+        Assert.Equal("/purchases", LinkOf("سعر شراء أعلى من المعتاد"));
+        Assert.Equal("/price-change-requests", LinkOf("تنزيل سعر"));
+        Assert.Equal($"/stocktakes/{stocktakeId}", LinkOf("نقص بالجرد"));
+        Assert.Equal("/cash-closings", LinkOf("تقفيل صندوق — عجز"));
+        Assert.Equal("/sessions", LinkOf("قفل حساب"));
+
+        // تبويب درجة وحدة بالضبط (severity) - مش "لحد درجة" (minSeverity).
+        var warnings = await GetAlertsAsync(admin, "&severity=Warning");
+        Assert.NotEmpty(warnings);
+        Assert.All(warnings, a => Assert.Equal("Warning", a.Severity));
+
+        // عدّاد غير المقروء لكل درجة + تعليم كمقروء
+        async Task<(int Critical, int Warning, int Info)> SummaryAsync()
+        {
+            var json = await OkJsonAsync(await admin.GetAsync("/api/v1/notifications/summary"), "ملخّص");
+            return (json.GetProperty("unreadCritical").GetInt32(), json.GetProperty("unreadWarning").GetInt32(), json.GetProperty("unreadInfo").GetInt32());
+        }
+
+        var before = await SummaryAsync();
+        Assert.Equal(4, before.Critical);
+        Assert.Equal(alerts.Count(a => a.Severity == "Warning"), before.Warning);
+
+        var lockAlert = alerts.First(a => a.Title.StartsWith("قفل حساب"));
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsync($"/api/v1/notifications/{lockAlert.Id}/read", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsync($"/api/v1/notifications/{lockAlert.Id}/read", null)).StatusCode); // مرتين = عادي
+        Assert.Equal((3, before.Warning, before.Info), await SummaryAsync());
+        Assert.Equal("Read", (await GetAlertsAsync(admin)).First(a => a.Id == lockAlert.Id).Status);
+        Assert.DoesNotContain(await GetAlertsAsync(admin, "&unreadOnly=true"), a => a.Id == lockAlert.Id);
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.PostAsync($"/api/v1/notifications/{Guid.NewGuid()}/read", null)).StatusCode);
+
+        // "لحد درجة": المتوسطة وأقل بس - العالية بتضل
+        await OkJsonAsync(await admin.PostAsync("/api/v1/notifications/read-all?maxSeverity=Warning", null), "تعليم المتوسطة");
+        Assert.Equal((3, 0, 0), await SummaryAsync());
+        await OkJsonAsync(await admin.PostAsync("/api/v1/notifications/read-all", null), "تعليم الكل");
+        Assert.Equal((0, 0, 0), await SummaryAsync());
+
+        // الكاشير بيشوف (Notifications.View من CashierDefaults) بس ما بيعلّم - القراءة مشتركة، فكان رح يقدر يخفي
+        // تنبيه عجز صندوقه عن صاحب المحل (Notifications.Manage: Master Admin + مساعد أدمن بس).
+        Assert.Equal(HttpStatusCode.OK, (await cashier.GetAsync("/api/v1/notifications/summary")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await cashier.PostAsync($"/api/v1/notifications/{lockAlert.Id}/read", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await cashier.PostAsync("/api/v1/notifications/read-all", null)).StatusCode);
     }
 
     [Fact]

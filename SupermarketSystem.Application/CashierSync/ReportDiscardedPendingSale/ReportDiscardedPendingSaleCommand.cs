@@ -70,7 +70,8 @@ public sealed class ReportDiscardedPendingSaleHandler
             $"آخر خطأ: {lastErrorText}\n\n" +
             "هذه الفاتورة لم تصل السيرفر إطلاقًا ولن تصل بعد الآن - إذا كان في كاش أو بضاعة تحرّكوا فعليًا بالمحل، لازم مراجعة يدوية.",
             cancellationToken,
-            NotificationSeverity.Critical);
+            NotificationSeverity.Critical,
+            link: "/sales");
 
         return new ReportDiscardedPendingSaleResponse(true);
     }

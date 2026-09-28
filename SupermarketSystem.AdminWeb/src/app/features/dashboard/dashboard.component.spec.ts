@@ -10,9 +10,12 @@ describe('DashboardComponent', () => {
   let apiClientSpy: jasmine.SpyObj<ApiClient>;
 
   function mockAllSucceed() {
-    apiClientSpy.get.and.callFake(((controller: string) => {
+    apiClientSpy.get.and.callFake(((controller: string, operation: string) => {
       switch (controller) {
         case 'reports':
+          if (operation === 'suppliers/payment-due') {
+            return of({ items: [{ daysRemaining: -3 }, { daysRemaining: -1 }, { daysRemaining: 4 }], totalCount: 3 });
+          }
           return of({ period: { invoiceCount: 10, totalSales: 1000, netRevenue: 900 } });
         case 'sales':
           return of({ items: [{ id: 's1', invoiceNumber: 'INV-1', statusTitle: 'مكتملة', totalAmount: 100, createdAtUtc: '' }], totalCount: 1 });
@@ -21,7 +24,7 @@ describe('DashboardComponent', () => {
         case 'backups':
           return of({ items: { items: [{ createdAtUtc: new Date().toISOString(), statusCode: 1 }], totalCount: 1 } });
         case 'notifications':
-          return of({ items: [], totalCount: 3 });
+          return of({ unreadCritical: 3, unreadWarning: 7, unreadInfo: 1 });
         default:
           return of({ items: [], totalCount: 0 });
       }
@@ -55,6 +58,9 @@ describe('DashboardComponent', () => {
     expect(component.recentInvoices().length).toBe(1);
     expect(component.pendingReviewsCount()).toBe(2);
     expect(component.criticalAlertsCount()).toBe(3);
+    expect(component.warningAlertsCount()).toBe(7);
+    // المتجاوزة بس (أيام باقية سالبة)، مش كل الفواتير اللي إلها تاريخ استحقاق.
+    expect(component.overdueSupplierPaymentsCount()).toBe(2);
     expect(component.lastBackupAtUtc()).toBeTruthy();
     expect(component.loading()).toBeFalse();
   });

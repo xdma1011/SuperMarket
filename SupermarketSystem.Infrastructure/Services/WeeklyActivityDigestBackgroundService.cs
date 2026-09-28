@@ -68,7 +68,8 @@ public sealed class WeeklyActivityDigestBackgroundService : BackgroundService
                 "الملخّص الأسبوعي لأنشطة النظام",
                 body,
                 cancellationToken,
-                NotificationSeverity.Info);
+                NotificationSeverity.Info,
+                link: "/reports");
 
             _logger.LogInformation(
                 "ملخّص أسبوعي أُرسل: {VoidCount} إلغاء ({VoidAmount})، {ReturnCount} إرجاع ({ReturnAmount})، {ManualCount} حركة يدوية ({ManualQty}).",

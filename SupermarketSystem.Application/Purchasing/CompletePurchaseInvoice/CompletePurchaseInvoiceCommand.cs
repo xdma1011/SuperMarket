@@ -366,7 +366,8 @@ public sealed class CompletePurchaseInvoiceHandler
                 $"سعر شراء أعلى من المعتاد — {purchaseInvoice.InvoiceNumber}",
                 $"المورد: {supplierName}\n" + string.Join("\n", lines),
                 cancellationToken,
-                NotificationSeverity.Warning);
+                NotificationSeverity.Warning,
+                link: "/purchases");
         }
 
         return Result.Success(new CompletePurchaseInvoiceResponse(purchaseInvoice.Id, purchaseInvoice.InvoiceNumber, purchaseInvoice.TotalAmount));

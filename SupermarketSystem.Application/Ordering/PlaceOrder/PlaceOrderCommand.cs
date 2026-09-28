@@ -192,7 +192,8 @@ public sealed class PlaceOrderHandler
                 await _notificationDispatcher.NotifyAsync(
                     "تكرار طلبات مرتفع",
                     $"الزبون '{customer.FullName}' ({command.CustomerPhone}) قدّم {todaysOrderCount} طلب اليوم - راجع نشاطه.",
-                    cancellationToken);
+                    cancellationToken,
+                    link: "/orders");
             }
         }
 

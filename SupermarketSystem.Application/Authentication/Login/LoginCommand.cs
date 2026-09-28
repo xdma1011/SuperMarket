@@ -136,7 +136,8 @@ public sealed class LoginHandler
                     $"الحساب انقفل مؤقتًا بعد محاولات دخول فاشلة متتالية.\nالتطبيق: {(command.AppType == ClientAppType.Cashier ? "الكاشير" : "لوحة الإدارة")}\n" +
                     $"الجهاز: {command.DeviceInfo ?? "غير معروف"}\nIP: {command.IpAddress ?? "غير معروف"}",
                     cancellationToken,
-                    NotificationSeverity.Critical);
+                    NotificationSeverity.Critical,
+                    link: "/sessions");
             }
 
             return Result.Failure<LoginResponse>(InvalidCredentials());

@@ -29,5 +29,7 @@ public interface INotificationDispatcher
 {
     Task NotifyAsync(
         string title, string message, CancellationToken cancellationToken,
-        NotificationSeverity severity = NotificationSeverity.Warning);
+        NotificationSeverity severity = NotificationSeverity.Warning,
+        // الصفحة المعنية بلوحة الإدارة مع فلترها (مثلًا "/sales?search=SI-000012") - راجع Notification.LinkRoute.
+        string? link = null);
 }

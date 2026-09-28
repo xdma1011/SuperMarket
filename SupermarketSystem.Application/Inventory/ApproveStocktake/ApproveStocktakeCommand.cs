@@ -181,7 +181,8 @@ public sealed class ApproveStocktakeHandler
                 $"نقص بالجرد — {stocktake.StocktakeNumber}",
                 $"الفرع: {branchName}\n{string.Join("\n", lines)}\nالقيمة بتنحسب خسارة بكشف الربح الشهري.",
                 cancellationToken,
-                NotificationSeverity.Critical);
+                NotificationSeverity.Critical,
+                link: $"/stocktakes/{stocktake.Id}");
         }
 
         return result;

@@ -1,4 +1,5 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, inject } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -79,9 +80,14 @@ export class SalesComponent implements OnInit {
   paymentAmount: number | null = null;
   paymentMethodId = '';
 
+  /** اختياري: الاختبارات بلا Router. "?search=SI-12" من كبسة تنبيه بتفتح الصفحة والبحث جاهز. */
+  private readonly route = inject(ActivatedRoute, { optional: true });
+
   constructor(private readonly apiClient: ApiClient) {}
 
   ngOnInit(): void {
+    const search = this.route?.snapshot.queryParamMap.get('search');
+    if (search) this.searchQuery.set(search);
     this.loadSummary();
     this.loadInvoices();
     this.loadPaymentMethods();

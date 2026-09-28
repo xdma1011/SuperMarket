@@ -1,4 +1,5 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -102,6 +103,8 @@ interface UserOption {
 export class PartnersComponent implements OnInit {
   private readonly apiClient = inject(ApiClient);
   private readonly auth = inject(AuthService);
+  /** اختياري: "?tab=withdrawals" من كبسة تنبيه سحب شريك. */
+  private readonly route = inject(ActivatedRoute, { optional: true });
 
   readonly tab = signal<PartnersTab>('partners');
   readonly branches = signal<PublicBranchDto[]>([]);
@@ -150,6 +153,8 @@ export class PartnersComponent implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
+    const tab = this.route?.snapshot.queryParamMap.get('tab') as PartnersTab | null;
+    if (tab && ['partners', 'statements', 'withdrawals', 'owner'].includes(tab)) this.tab.set(tab);
     try {
       const branches = await this.auth.getPublicBranches();
       this.branches.set(branches);

@@ -365,6 +365,14 @@ public class PermissionConfiguration : IEntityTypeConfiguration<Permission>
             Description = "Partners per branch, monthly profit statements, partner withdrawals (drawer or owner's pocket) and the owner receivable.",
             CreatedAtUtc = new DateTime(2026, 9, 28, 0, 0, 0, DateTimeKind.Utc)
         });
+        builder.HasData(new
+        {
+            Id = Guid.Parse("b2e5d3f6-9c7a-4e4b-8d1f-6a9c2e5b7d91"),
+            Code = "Notifications.Manage",
+            Name = "Mark alerts as read",
+            Description = "Mark alerts as read (read state is shared by all admins) - separate from Notifications.View so a cashier can't hide an alert about their own drawer.",
+            CreatedAtUtc = new DateTime(2026, 9, 28, 0, 0, 0, DateTimeKind.Utc)
+        });
     }
 }
 
@@ -521,6 +529,20 @@ public class RolePermissionConfiguration : IEntityTypeConfiguration<RolePermissi
             Id = Guid.Parse("a1f4c2d5-8b6e-4d3f-9c7a-5e8b1d4f6a80"),
             RoleId = Guid.Parse("50e6125a-cac0-4d82-a0b8-9f3c6fff59d7"),
             PermissionId = Guid.Parse("9d3e1b4c-7a5f-4c2d-8b6e-4f7a0c3d5e79")
+        });
+
+        // Master Admin + مساعد أدمن -> Notifications.Manage (تعليم التنبيهات كمقروءة، 28/9/2026). الكاشير لا عمدًا.
+        builder.HasData(new
+        {
+            Id = Guid.Parse("c3f6e4a7-0d8b-4f5c-9e2a-7b0d3f6c8ea2"),
+            RoleId = Guid.Parse("50e6125a-cac0-4d82-a0b8-9f3c6fff59d7"),
+            PermissionId = Guid.Parse("b2e5d3f6-9c7a-4e4b-8d1f-6a9c2e5b7d91")
+        });
+        builder.HasData(new
+        {
+            Id = Guid.Parse("d4a7f5b8-1e9c-4a6d-8f3b-8c1e4a7d9fb3"),
+            RoleId = Guid.Parse("5d0b3578-417e-4706-ab9b-fc9a208b6642"),
+            PermissionId = Guid.Parse("b2e5d3f6-9c7a-4e4b-8d1f-6a9c2e5b7d91")
         });
 
         // Master Admin -> الصلاحية الجديدة (System.SettingsManage)

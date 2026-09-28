@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, ViewChild, computed, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, HostListener, ViewChild, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterOutlet, RouterLink, RouterLinkActive, NavigationEnd } from '@angular/router';
@@ -8,7 +8,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { PermissionsService } from '../../core/services/permissions.service';
 import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
-import { CashierSyncOperation, ProductsOperation, SuppliersOperation, PurchaseInvoicesOperation } from '../../core/api/operations';
+import { CashierSyncOperation, NotificationsOperation, ProductsOperation, SuppliersOperation, PurchaseInvoicesOperation } from '../../core/api/operations';
 import { NAV_GROUPS, NAV_ICONS, NAV_ITEMS, NavGroupId, NavItem } from '../../shared/models/nav-item';
 import { normalizeArabic } from '../../shared/components/select-filter/select-filter.component';
 
@@ -115,6 +115,10 @@ export class ShellComponent {
   readonly searching = signal(false);
   private searchDebounceHandle: ReturnType<typeof setTimeout> | null = null;
 
+  /** عدّاد الجرس: غير المقروء (عالية + متوسطة)؛ critical = في عالي الأولوية (الشارة بتصير حمرا). */
+  readonly unreadAlerts = signal<{ count: number; critical: boolean }>({ count: 0, critical: false });
+  private readonly destroyRef = inject(DestroyRef);
+
   constructor(
     readonly theme: ThemeService,
     readonly authService: AuthService,
@@ -130,9 +134,24 @@ export class ShellComponent {
       this.drawerOpen.set(false);
       this.searchOpen.set(false);
       this.expandGroupOfCurrentRoute();
+      void this.refreshUnreadAlerts();
     });
 
     this.loadStoreName();
+    void this.refreshUnreadAlerts();
+    const pollHandle = setInterval(() => void this.refreshUnreadAlerts(), 60_000);
+    this.destroyRef.onDestroy(() => clearInterval(pollHandle));
+  }
+
+  /** بلا صلاحية Notifications.View (403) أو خطأ شبكة = الجرس بلا عدّاد، بصمت. */
+  async refreshUnreadAlerts(): Promise<void> {
+    try {
+      const s = await firstValueFrom(this.apiClient.get<{ unreadCritical: number; unreadWarning: number; unreadInfo: number }>(
+        ApiController.Notifications, NotificationsOperation.Summary));
+      this.unreadAlerts.set({ count: (s?.unreadCritical ?? 0) + (s?.unreadWarning ?? 0), critical: (s?.unreadCritical ?? 0) > 0 });
+    } catch {
+      this.unreadAlerts.set({ count: 0, critical: false });
+    }
   }
 
   isGroupCollapsed(groupId: NavGroupId): boolean {

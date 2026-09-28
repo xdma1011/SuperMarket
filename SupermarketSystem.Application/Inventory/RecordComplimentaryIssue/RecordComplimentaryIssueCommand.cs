@@ -155,7 +155,8 @@ public sealed class RecordComplimentaryIssueHandler
                 $"الفرع: {branchName}\nسجّلها: {actor}\nالكمية: {result.Value.QuantityBase:0.###} (مجموع آخر 24 ساعة تجاوز الحد {threshold:0.###})" +
                 (string.IsNullOrWhiteSpace(command.Reason) ? "" : $"\nملاحظة: {command.Reason}"),
                 cancellationToken,
-                NotificationSeverity.Warning);
+                NotificationSeverity.Warning,
+                link: "/reviews");
         }
 
         return result;

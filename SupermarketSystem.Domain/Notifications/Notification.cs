@@ -63,6 +63,14 @@ public class Notification : AuditableEntity
     public NotificationSeverity Severity { get; private set; }
     public DateTime? ReadAtUtc { get; private set; }
 
+    /// <summary>
+    /// الصفحة المعنية بلوحة الإدارة، مع فلترها جاهز (مثلًا "/sales?search=SI-000012") - الكبس على التنبيه بيودّي
+    /// عليها (لوحة التنبيهات الموحّدة، 28/9/2026). null = تنبيه عام بلا صفحة محدَّدة.
+    /// </summary>
+    public string? LinkRoute { get; private set; }
+
+    public const int MaxLinkRouteLength = 300;
+
     private readonly List<NotificationLog> _deliveryAttempts = new();
     public IReadOnlyCollection<NotificationLog> DeliveryAttempts => _deliveryAttempts.AsReadOnly();
 
@@ -70,8 +78,9 @@ public class Notification : AuditableEntity
 
     public Notification(
         Guid? targetUserId, string title, string message, NotificationChannel channel,
-        NotificationSeverity severity = NotificationSeverity.Warning)
+        NotificationSeverity severity = NotificationSeverity.Warning, string? linkRoute = null)
     {
+        LinkRoute = string.IsNullOrWhiteSpace(linkRoute) || linkRoute.Length > MaxLinkRouteLength ? null : linkRoute;
         TargetUserId = targetUserId;
         Title = title;
         Message = message;

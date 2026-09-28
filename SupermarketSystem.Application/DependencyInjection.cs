@@ -1,3 +1,4 @@
+using SupermarketSystem.Application.Notifications.MarkNotificationsRead;
 using SupermarketSystem.Application.Partners;
 using SupermarketSystem.Application.Sales.AtCostWithdrawal;
 using SupermarketSystem.Application.Sales.PreparedOrders;
@@ -296,6 +297,9 @@ public static class DependencyInjection
         services.AddScoped<ScanLookupHandler>();
         services.AddScoped<QuoteAtCostWithdrawalHandler>();
         services.AddScoped<CompleteAtCostWithdrawalHandler>();
+        services.AddScoped<MarkNotificationReadHandler>();
+        services.AddScoped<MarkAllNotificationsReadHandler>();
+        services.AddScoped<GetNotificationSummaryHandler>();
         services.AddScoped<GetPartnersHandler>();
         services.AddScoped<CreatePartnerHandler>();
         services.AddScoped<UpdatePartnerHandler>();

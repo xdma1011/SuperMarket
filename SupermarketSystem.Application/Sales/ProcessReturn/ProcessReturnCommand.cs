@@ -446,7 +446,8 @@ public sealed class ProcessReturnHandler
                 $"السبب: {AlertText.ReturnReason(command.Reason)}{(string.IsNullOrWhiteSpace(command.Notes) ? "" : $" - {command.Notes}")}" +
                 flags,
                 cancellationToken,
-                result.Value.ReviewFlags.Count > 0 ? NotificationSeverity.Critical : NotificationSeverity.Warning);
+                result.Value.ReviewFlags.Count > 0 ? NotificationSeverity.Critical : NotificationSeverity.Warning,
+                link: $"/returns?search={Uri.EscapeDataString(originalInvoice.InvoiceNumber)}");
         }
 
         return result;

@@ -63,40 +63,58 @@
 
     <div class="alert-list">
       @if (criticalAlertsCount() > 0) {
-        <a class="alert-row" routerLink="/notifications">
+        <a class="alert-row" routerLink="/notifications" [queryParams]="{ tab: 'Critical' }">
           <span class="alert-dot" style="background: var(--red)"></span>
           <div class="alert-text">
-            <span class="alert-title">{{ criticalAlertsCount() }} تنبيه خطير آخر 24 ساعة</span>
-            <span class="alert-detail">عجز صندوق، نقص جرد، فاتورة أوفلاين انحذفت، قفل حساب… افتح الإشعارات.</span>
+            <span class="alert-title">{{ criticalAlertsCount() }} تنبيه عالي الأولوية ما انقرا</span>
+            <span class="alert-detail">عجز صندوق، نقص جرد، فاتورة أوفلاين انحذفت، قفل حساب… افتح لوحة التنبيهات.</span>
           </div>
         </a>
       }
       @if (negativeStockCount() > 0) {
-        <div class="alert-row">
+        <a class="alert-row" routerLink="/reports" [queryParams]="{ report: 'negative-stock' }">
           <span class="alert-dot" style="background: var(--red)"></span>
           <div class="alert-text">
             <span class="alert-title">{{ negativeStockCount() }} صنف بمخزون سالب</span>
-            <span class="alert-detail">راجع تقرير "المخزون السالب" بصفحة التقارير.</span>
+            <span class="alert-detail">افتح تقرير "المخزون السالب".</span>
           </div>
-        </div>
+        </a>
+      }
+      @if (overdueSupplierPaymentsCount() > 0) {
+        <a class="alert-row" routerLink="/reports" [queryParams]="{ report: 'supplier-payment-due' }">
+          <span class="alert-dot" style="background: var(--red)"></span>
+          <div class="alert-text">
+            <span class="alert-title">{{ overdueSupplierPaymentsCount() }} فاتورة مورد متجاوزة تاريخ الاستحقاق</span>
+            <span class="alert-detail">عليها دين ما انسدّ - افتح تقرير "استحقاق دفعة مورد".</span>
+          </div>
+        </a>
+      }
+      @if (warningAlertsCount() > 0) {
+        <a class="alert-row" routerLink="/notifications" [queryParams]="{ tab: 'Warning' }">
+          <span class="alert-dot" style="background: var(--accent)"></span>
+          <div class="alert-text">
+            <span class="alert-title">{{ warningAlertsCount() }} تنبيه متوسط الأولوية ما انقرا</span>
+            <span class="alert-detail">إرجاعات، إلغاءات، سحوبات شركاء، تنزيل أسعار…</span>
+          </div>
+        </a>
       }
       @if (reorderNeededCount() > 0) {
-        <div class="alert-row">
+        <a class="alert-row" routerLink="/reports" [queryParams]="{ report: 'reorder-needed' }">
           <span class="alert-dot" style="background: var(--accent)"></span>
           <div class="alert-text">
             <span class="alert-title">{{ reorderNeededCount() }} صنف يحتاج إعادة طلب</span>
             <span class="alert-detail">وصل الحد الأدنى المسموح به.</span>
           </div>
-        </div>
+        </a>
       }
       @if (pendingReviewsCount() > 0) {
-        <div class="alert-row">
+        <a class="alert-row" routerLink="/reviews">
           <span class="alert-dot" style="background: var(--accent)"></span>
           <div class="alert-text">
             <span class="alert-title">{{ pendingReviewsCount() }} مراجعة بانتظارك</span>
-            <span class="alert-detail">إرجاعات وضيافة تحتاج تأكيدك.</span>
+            <span class="alert-detail">إرجاعات وضيافة وتلف تحتاج تأكيدك.</span>
           </div>
-        </div>
+        </a>
       }
       @if (totalAlerts === 0 && !loading()) {
         <div class="empty-hint">لا يوجد شي يحتاج انتباهك حاليًا 🎉</div>

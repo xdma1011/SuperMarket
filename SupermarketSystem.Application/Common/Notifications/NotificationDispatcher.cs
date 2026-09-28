@@ -25,6 +25,9 @@ namespace SupermarketSystem.Application.Common.Notifications;
 /// </summary>
 public sealed class NotificationDispatcher : INotificationDispatcher
 {
+    private const int MaxTitleLength = 200;
+    private const int MaxMessageLength = 2000;
+
     private readonly IApplicationDbContext _context;
     private readonly IEnumerable<INotificationSender> _senders;
     private readonly IDateTimeProvider _dateTimeProvider;
@@ -44,13 +47,26 @@ public sealed class NotificationDispatcher : INotificationDispatcher
 
     public async Task NotifyAsync(
         string title, string message, CancellationToken cancellationToken,
-        NotificationSeverity severity = NotificationSeverity.Warning)
+        NotificationSeverity severity = NotificationSeverity.Warning,
+        string? link = null)
     {
         try
         {
+            // العمودين محدودين (عنوان 200، رسالة 2000) - نص أطول (فاتورة فيها أصناف كتير مثلًا) كان رح يفشّل
+            // الحفظ ويضيع التنبيه كله بصمت.
+            if (title.Length > MaxTitleLength)
+            {
+                title = title[..(MaxTitleLength - 1)] + "…";
+            }
+
+            if (message.Length > MaxMessageLength)
+            {
+                message = message[..(MaxMessageLength - 1)] + "…";
+            }
+
             // سجل "داخل النظام" — دايمًا يُنشأ، بغض النظر عن نجاح أي قناة
             // خارجية. هذا هو اللي endpoint الـpolling بيقرأ منه.
-            _context.Notifications.Add(new Notification(targetUserId: null, title, message, NotificationChannel.InApp, severity));
+            _context.Notifications.Add(new Notification(targetUserId: null, title, message, NotificationChannel.InApp, severity, link));
 
             // بالقنوات الخارجية (تلغرام) الخطورة بتنكتب بأول العنوان - هناك ما في لون ولا فلتر.
             var externalTitle = severity switch

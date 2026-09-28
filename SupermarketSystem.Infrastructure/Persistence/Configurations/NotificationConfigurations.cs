@@ -14,6 +14,7 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
 
         builder.Property(n => n.Title).IsRequired().HasMaxLength(200);
         builder.Property(n => n.Message).IsRequired().HasMaxLength(2000);
+        builder.Property(n => n.LinkRoute).HasMaxLength(Notification.MaxLinkRouteLength);
         builder.Property(n => n.Channel).HasConversion<int>().IsRequired();
         builder.Property(n => n.Status).HasConversion<int>().IsRequired();
         // التنبيهات القديمة قبل هالعمود = "مهمة" (Warning).

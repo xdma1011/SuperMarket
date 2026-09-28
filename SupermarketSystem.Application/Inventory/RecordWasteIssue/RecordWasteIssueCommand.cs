@@ -152,7 +152,8 @@ public sealed class RecordWasteIssueHandler
                 $"الفرع: {branchName}\nسجّلها: {actor}\nالكمية: {result.Value.QuantityBase:0.###} (مجموع آخر 24 ساعة تجاوز الحد {threshold:0.###})" + $"\nالسبب: {AlertText.WasteReason(command.Reason)}" +
                 (string.IsNullOrWhiteSpace(command.Notes) ? "" : $"\nملاحظة: {command.Notes}"),
                 cancellationToken,
-                NotificationSeverity.Warning);
+                NotificationSeverity.Warning,
+                link: "/reviews");
         }
 
         return result;

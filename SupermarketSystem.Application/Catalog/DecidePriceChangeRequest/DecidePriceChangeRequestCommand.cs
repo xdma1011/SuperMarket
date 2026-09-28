@@ -99,7 +99,8 @@ public sealed class ApprovePriceChangeRequestHandler
             $"تنزيل سعر — {productName}",
             $"الفرع: {branchName}\nمن {oldPrice:0.000} إلى {newPrice:0.000} (-{percent:0.#}%)\nغيّره: {actor}",
             cancellationToken,
-            NotificationSeverity.Warning);
+            NotificationSeverity.Warning,
+            link: "/price-change-requests");
     }
 }
 

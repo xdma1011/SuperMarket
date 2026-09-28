@@ -1,4 +1,5 @@
 import { Component, OnInit, signal, computed, inject } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -138,7 +139,13 @@ export class ReportsComponent implements OnInit {
 
   constructor(private readonly apiClient: ApiClient) {}
 
+  /** اختياري: الاختبارات بلا Router. "?report=negative-stock" (من الرئيسية/التنبيهات) بيفتح التقرير مباشرة. */
+  private readonly route = inject(ActivatedRoute, { optional: true });
+
   ngOnInit(): void {
+    const report = this.route?.snapshot.queryParamMap.get('report');
+    const special = ['sales-summary', 'capital-value', 'supplier-debts', 'product-margin', 'customer-debts'];
+    if (report && (special.includes(report) || REPORT_CONFIGS.some(r => r.id === report))) this.activeReportId.set(report);
     this.loadBranches();
     this.loadActiveReport();
   }

@@ -1,4 +1,5 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, inject } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -120,9 +121,17 @@ export class ReturnsComponent {
     return Math.max(1, Math.ceil(this.returnsTotal() / RETURNS_PAGE_SIZE));
   }
 
+  /** اختياري: الاختبارات بلا Router. "?search=SI-12" من كبسة تنبيه إرجاع بتدوّر عالفاتورة الأصلية فورًا. */
+  private readonly route = inject(ActivatedRoute, { optional: true });
+
   constructor(private readonly apiClient: ApiClient) {
     this.loadPaymentMethods();
     this.loadReturnInvoices(1);
+    const search = this.route?.snapshot.queryParamMap.get('search');
+    if (search) {
+      this.searchQuery.set(search);
+      void this.search();
+    }
   }
 
   reasonLabel(reason: string): string {

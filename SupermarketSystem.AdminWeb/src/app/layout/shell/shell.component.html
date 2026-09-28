@@ -183,7 +183,10 @@
           <path d="M4 6.6a4 4 0 0 1 8 0v3l1.2 2H2.8L4 9.6z"></path>
           <path d="M6.4 12.2a1.7 1.7 0 0 0 3.2 0"></path>
         </svg>
-        <span class="notif-dot"></span>
+        @if (unreadAlerts().count > 0) {
+          <span class="notif-badge" [class.critical]="unreadAlerts().critical"
+                [attr.title]="unreadAlerts().count + ' تنبيه غير مقروء'">{{ unreadAlerts().count > 99 ? '99+' : unreadAlerts().count }}</span>
+        }
       </button>
 
       <div class="user-chip">

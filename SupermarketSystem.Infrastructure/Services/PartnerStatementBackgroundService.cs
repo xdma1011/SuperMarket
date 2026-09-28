@@ -76,7 +76,7 @@ public sealed class PartnerStatementBackgroundService : BackgroundService
                     .AnyAsync(n => n.Title == title && n.CreatedAtUtc > now.AddDays(-1), cancellationToken);
                 if (!alreadyNotified)
                 {
-                    await notificationDispatcher.NotifyAsync(title, result.Error!.Message, cancellationToken, NotificationSeverity.Warning);
+                    await notificationDispatcher.NotifyAsync(title, result.Error!.Message, cancellationToken, NotificationSeverity.Warning, link: "/partners?tab=statements");
                 }
 
                 _logger.LogWarning("كشف الشركاء التلقائي فشل لفرع {BranchId}: {Reason}", branchId, result.Error!.Message);

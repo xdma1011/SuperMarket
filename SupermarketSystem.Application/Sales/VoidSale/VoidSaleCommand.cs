@@ -209,7 +209,8 @@ public sealed class VoidSaleHandler
                 $"السبب: {AlertText.VoidReason(command.Reason)}{(string.IsNullOrWhiteSpace(command.Notes) ? "" : $" - {command.Notes}")}\n" +
                 $"كاش رجع للدرج: {result.Value.CashReturnedToDrawer:0.000}",
                 cancellationToken,
-                NotificationSeverity.Warning);
+                NotificationSeverity.Warning,
+                link: $"/sales?search={Uri.EscapeDataString(result.Value.InvoiceNumber)}");
         }
 
         return result;
