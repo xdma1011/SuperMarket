@@ -1,0 +1,117 @@
+<Window x:Class="SupermarketSystem.CashierApp.Views.InvoiceSearchWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="بحث الفواتير بالوقت"
+        Width="980" Height="720"
+        WindowStartupLocation="CenterOwner"
+        FlowDirection="RightToLeft"
+        Background="{StaticResource Surface2Brush}"
+        PreviewKeyDown="Window_KeyDown">
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="220" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="بحث الفواتير بالتاريخ والوقت" FontSize="20" FontWeight="Bold" Foreground="{StaticResource InkBrush}" />
+                <TextBlock Text="مثلًا من تسجيل الكاميرا: الزبون طلع 14:32 - دوّر بين 14:25 و14:40، واكتب اسم الصنف لو بدك تتأكد إنه فات بالفاتورة."
+                           FontSize="12" Margin="0,4,0,0" Foreground="{StaticResource Ink2Brush}" TextWrapping="Wrap" />
+            </StackPanel>
+            <Button x:Name="CloseWindowButton" Grid.Column="1" Width="42" Height="42" Content="×" FontSize="18"
+                    Style="{StaticResource SecondaryButton}" Click="CloseWindowButton_Click" />
+        </Grid>
+
+        <!-- فلاتر: اليوم، من ساعة، لساعة، الصنف (اختياري) -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="اليوم" FontSize="12" Foreground="{StaticResource Ink2Brush}" />
+                <DatePicker x:Name="DayPicker" Width="150" Height="38" Margin="0,4,0,0" FontSize="14" />
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+                <TextBlock Text="من (ساعة:دقيقة)" FontSize="12" Foreground="{StaticResource Ink2Brush}" />
+                <TextBox x:Name="FromTimeBox" Width="100" Height="38" Margin="0,4,0,0" FontSize="16" Text="00:00"
+                         HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FlowDirection="LeftToRight" />
+            </StackPanel>
+            <StackPanel Grid.Column="4">
+                <TextBlock Text="لـ (ساعة:دقيقة)" FontSize="12" Foreground="{StaticResource Ink2Brush}" />
+                <TextBox x:Name="ToTimeBox" Width="100" Height="38" Margin="0,4,0,0" FontSize="16" Text="23:59"
+                         HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FlowDirection="LeftToRight" />
+            </StackPanel>
+            <StackPanel Grid.Column="6">
+                <TextBlock Text="الصنف (اختياري - اسم أو باركود)" FontSize="12" Foreground="{StaticResource Ink2Brush}" />
+                <TextBox x:Name="ProductBox" Height="38" Margin="0,4,0,0" FontSize="14" Padding="10,0" VerticalContentAlignment="Center" />
+            </StackPanel>
+            <Button x:Name="SearchButton" Grid.Column="8" Width="120" Height="38" VerticalAlignment="Bottom" Content="🔍 بحث"
+                    Click="SearchButton_Click" />
+        </Grid>
+
+        <TextBlock x:Name="StatusText" Grid.Row="3" FontSize="12.5" Margin="0,8,0,8" TextWrapping="Wrap"
+                   Foreground="{StaticResource Ink2Brush}" />
+
+        <Border Grid.Row="4" Background="White" CornerRadius="10" BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1">
+            <DataGrid x:Name="ResultsGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                      SelectionMode="Single" SelectionUnit="FullRow"
+                      HeadersVisibility="Column" GridLinesVisibility="Horizontal" BorderThickness="0"
+                      Background="Transparent" RowBackground="White" AlternatingRowBackground="#FAF9F7"
+                      FontSize="14" MinRowHeight="38" Typography.NumeralAlignment="Tabular"
+                      SelectionChanged="ResultsGrid_SelectionChanged">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="الوقت" Binding="{Binding CreatedAtLocal, StringFormat={}{0:HH:mm:ss}}" Width="90" FontWeight="Bold" />
+                    <DataGridTextColumn Header="رقم الفاتورة" Binding="{Binding InvoiceNumber}" Width="140" />
+                    <DataGridTextColumn Header="الكاشير" Binding="{Binding CashierName}" Width="*" />
+                    <DataGridTextColumn Header="الزبون" Binding="{Binding CustomerName}" Width="140" />
+                    <DataGridTextColumn Header="الحالة" Binding="{Binding StatusTitle}" Width="100" />
+                    <DataGridTextColumn Header="الإجمالي" Binding="{Binding TotalAmount, StringFormat={}{0:0.000}}" Width="100" FontWeight="Bold" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+        <!-- أصناف الفاتورة المحدَّدة -->
+        <Border Grid.Row="6" Background="White" CornerRadius="10" BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1" Padding="10">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="6" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <TextBlock x:Name="DetailHeaderText" Grid.Row="0" FontSize="14" FontWeight="Bold" Foreground="{StaticResource InkBrush}"
+                           Text="اختار فاتورة من فوق لتشوف أصنافها." />
+                <DataGrid x:Name="ItemsGrid" Grid.Row="2" AutoGenerateColumns="False" IsReadOnly="True" Focusable="False"
+                          HeadersVisibility="Column" GridLinesVisibility="Horizontal" BorderThickness="0"
+                          Background="Transparent" RowBackground="White" FontSize="14" Typography.NumeralAlignment="Tabular">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="الصنف" Binding="{Binding ProductName}" Width="*" />
+                        <DataGridTextColumn Header="الكمية" Binding="{Binding Quantity, StringFormat={}{0:0.###}}" Width="80" />
+                        <DataGridTextColumn Header="مرتجع" Binding="{Binding QuantityReturned, StringFormat={}{0:0.###}}" Width="70" />
+                        <DataGridTextColumn Header="السعر" Binding="{Binding UnitPriceSnapshot, StringFormat={}{0:0.000}}" Width="90" />
+                        <DataGridTextColumn Header="الإجمالي" Binding="{Binding LineTotal, StringFormat={}{0:0.000}}" Width="100" FontWeight="Bold" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

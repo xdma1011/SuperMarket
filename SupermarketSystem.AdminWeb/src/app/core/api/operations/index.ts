@@ -14,6 +14,7 @@ export * from './payment-methods.operations';
 export * from './purchase-invoices.operations';
 export * from './reports.operations';
 export * from './returns.operations';
+export * from './sale-assist.operations';
 export * from './reviews.operations';
 export * from './sales.operations';
 export * from './stock-transfers.operations';

@@ -349,6 +349,14 @@ public class PermissionConfiguration : IEntityTypeConfiguration<Permission>
             Description = "Issue stock as waste/damage (expired, broken, storage damage...), with an explicit reason - separate from complimentary issues.",
             CreatedAtUtc = new DateTime(2026, 9, 22, 0, 0, 0, DateTimeKind.Utc)
         });
+        builder.HasData(new
+        {
+            Id = Guid.Parse("7c1d9e2a-5b3f-4e8a-9d6c-2f4a8b1e3c57"),
+            Code = "Sales.AtCostWithdrawal",
+            Name = "Withdraw goods at cost (owner/partner)",
+            Description = "Take goods from the store at cost price - paid into the drawer, or deducted from the partner's share (recorded as an open balance until the partners module exists).",
+            CreatedAtUtc = new DateTime(2026, 9, 28, 0, 0, 0, DateTimeKind.Utc)
+        });
     }
 }
 
@@ -488,6 +496,15 @@ public class RolePermissionConfiguration : IEntityTypeConfiguration<RolePermissi
             Id = Guid.Parse("2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e"),
             RoleId = Guid.Parse("50e6125a-cac0-4d82-a0b8-9f3c6fff59d7"),
             PermissionId = Guid.Parse("1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d")
+        });
+
+        // Master Admin حصرًا -> Sales.AtCostWithdrawal (سحب بسعر التكلفة، 28/9/2026). شريك بدور تاني
+        // بتنضافله من صفحة الأدوار.
+        builder.HasData(new
+        {
+            Id = Guid.Parse("8e2f0a3b-6c4d-4f9b-8e7d-3a5b9c2f4d68"),
+            RoleId = Guid.Parse("50e6125a-cac0-4d82-a0b8-9f3c6fff59d7"),
+            PermissionId = Guid.Parse("7c1d9e2a-5b3f-4e8a-9d6c-2f4a8b1e3c57")
         });
 
         // Master Admin -> الصلاحية الجديدة (System.SettingsManage)

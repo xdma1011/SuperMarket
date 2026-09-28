@@ -89,6 +89,18 @@ public class SaleInvoice : AuditableEntity, IBranchOwned, IHasRowVersion
     public DateTime? ReviewedAtUtc { get; private set; }
     public Guid? ReviewedByUserId { get; private set; }
 
+    /// <summary>
+    /// سحب بضاعة لصاحب المحل/شريك بسعر التكلفة (28/9/2026) - كل سطر سعره = UnitCostSnapshot،
+    /// فربح هالفاتورة صفر بالكشف تلقائيًا. الشخص = CreatedByUserId (هو اللي سجّلها من حسابه).
+    /// </summary>
+    public bool IsAtCostWithdrawal { get; private set; }
+
+    /// <summary>
+    /// "اخصمها مني": بلا دفع، المبلغ المتبقي (TotalAmount - TotalPaidAmount) دين على الشريك لحد ما
+    /// تنبني وحدة الشركاء وينخصم من نصيبه. false = دفع حقها (كاش/طريقة دفع عادية).
+    /// </summary>
+    public bool IsDeductedFromShare { get; private set; }
+
     public byte[]? RowVersion { get; private set; }
 
     private readonly List<SaleInvoiceItem> _items = new();
@@ -128,6 +140,12 @@ public class SaleInvoice : AuditableEntity, IBranchOwned, IHasRowVersion
         _items.Add(item);
         TotalAmount += item.LineTotal;
         return item;
+    }
+
+    public void MarkAsAtCostWithdrawal(bool deductFromShare)
+    {
+        IsAtCostWithdrawal = true;
+        IsDeductedFromShare = deductFromShare;
     }
 
     public void ApplyInvoiceLevelDiscount(Guid? discountId, decimal discountAmountSnapshot)

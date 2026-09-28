@@ -31,6 +31,16 @@ public partial class SaleWindow : Window
     /// <summary>آخر سطر انضاف للسلة - يُفحص بـCartGrid_LoadingRow لتمييزه بصريًا (وميض خلفية) لحظة توليد صفّه فعليًا بالـDataGrid.</summary>
     private CartLine? _lastAddedLine;
 
+    /// <summary>
+    /// السلة الحالية نازلة من طلب جاهز (مساعد الكاشير) - بينبعت مع البيع عشان الطلب يتسكّر بالسيرفر.
+    /// بيتصفّر بعد كل بيعة، وبينتقل مع السلة لو انعلّقت.
+    /// </summary>
+    private Guid? _preparedOrderId;
+    private int? _preparedTicketNumber;
+
+    /// <summary>مجلد local.db - فيه ملف الفواتير المعلّقة (HeldCartStore).</summary>
+    private string LocalDirectory => Path.GetDirectoryName(_dbPath) ?? "";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -96,6 +106,7 @@ public partial class SaleWindow : Window
 
     private async void SaleWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        RefreshHeldCount();
         await LoadPaymentMethodsAsync();
         BarcodeBox.Focus();
 
@@ -592,7 +603,9 @@ public partial class SaleWindow : Window
                     externalReference = (string?)null,
                     clientRequestId = Guid.NewGuid()
                 }
-            }
+            },
+            // طلب جاهز من مساعد الكاشير (لو السلة نزلت منه) - بيتسكّر بالسيرفر بنفس معاملة البيع.
+            preparedOrderId = _preparedOrderId
         };
 
         var payloadJson = JsonSerializer.Serialize(payload, JsonOptions);
@@ -668,6 +681,8 @@ public partial class SaleWindow : Window
         var printResult = await _receiptPrinter.PrintAsync(receiptData, CancellationToken.None);
 
         _cart.Clear();
+        _preparedOrderId = null;
+        _preparedTicketNumber = null;
         TenderedAmountBox.Clear();
         UpdateTotal();
         CompleteSaleButton.IsEnabled = true;
@@ -880,6 +895,13 @@ public partial class SaleWindow : Window
         if (LineOf(sender) is { } line)
         {
             _cart.Remove(line);
+            if (_cart.Count == 0)
+            {
+                // السلة فضيت - الطلب الجاهز ما عاد إله علاقة بالبيعة الجاية.
+                _preparedOrderId = null;
+                _preparedTicketNumber = null;
+            }
+
             UpdateTotal();
         }
 
@@ -947,6 +969,161 @@ public partial class SaleWindow : Window
     private void VoidSaleButton_Click(object sender, RoutedEventArgs e)
     {
         new VoidSaleWindow(_apiClient, _authSession) { Owner = this }.ShowDialog();
+        BarcodeBox.Focus();
+    }
+
+    // === تعليق فاتورة (28/9/2026): زبون بدو يبدّل صنف والطابور واقف ===
+
+    private void RefreshHeldCount()
+    {
+        var count = HeldCartStore.Count(LocalDirectory);
+        HeldSalesButton.Content = $"📋 المعلّقة ({count})";
+        HeldSalesButton.FontWeight = count > 0 ? FontWeights.Bold : FontWeights.Normal;
+    }
+
+    /// <summary>بيحط السلة الحالية بملف المعلّقة وبيفضّي الشاشة للزبون اللي بعده - false لو السلة فاضية.</summary>
+    private bool HoldCurrentCart()
+    {
+        if (_cart.Count == 0)
+        {
+            return false;
+        }
+
+        var held = new HeldCart
+        {
+            HeldAtLocal = DateTime.Now,
+            CashierName = _authSession.FullName,
+            Lines = _cart.ToList(),
+            PreparedOrderId = _preparedOrderId,
+            PreparedTicketNumber = _preparedTicketNumber
+        };
+
+        try
+        {
+            HeldCartStore.Add(LocalDirectory, held);
+        }
+        catch (Exception ex)
+        {
+            ShowError($"ما قدرت أعلّق الفاتورة: {ex.Message}");
+            return false;
+        }
+
+        _cart.Clear();
+        _preparedOrderId = null;
+        _preparedTicketNumber = null;
+        TenderedAmountBox.Clear();
+        UpdateTotal();
+        RefreshHeldCount();
+        ShowSaleStatus($"⏸ انعلّقت الفاتورة ({held.ItemCount} صنف، {held.Total:0.000} د.أ) - بترجعها من \"المعلّقة\"", isWarning: false);
+        return true;
+    }
+
+    /// <summary>
+    /// قبل ما تنزل سلة تانية (معلّقة أو طلب جاهز): لو في أصناف بالشاشة، بنسأل نعلّقها - ما في طريقة تضيع سلة
+    /// بالغلط. false = الكاشير لغى.
+    /// </summary>
+    private bool MakeRoomForAnotherCart()
+    {
+        if (_cart.Count == 0)
+        {
+            return true;
+        }
+
+        var answer = MessageBox.Show(
+            "في أصناف بالشاشة هلق - بدك تعلّقها وتفتح التانية؟",
+            "السلة الحالية", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.Yes);
+        return answer == MessageBoxResult.Yes && HoldCurrentCart();
+    }
+
+    private void HoldButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!HoldCurrentCart() && _cart.Count == 0)
+        {
+            ShowError("السلة فاضية - ما في إشي يتعلّق.");
+        }
+
+        BarcodeBox.Focus();
+    }
+
+    private void HeldSalesButton_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new HeldSalesWindow(LocalDirectory) { Owner = this };
+        if (window.ShowDialog() == true && window.ResumedCart is { } resumed)
+        {
+            if (!MakeRoomForAnotherCart())
+            {
+                // رجّعها للملف - الكاشير لغى، ما لازم تضيع.
+                HeldCartStore.Add(LocalDirectory, resumed);
+            }
+            else
+            {
+                foreach (var line in resumed.Lines)
+                {
+                    _cart.Add(line);
+                }
+
+                _preparedOrderId = resumed.PreparedOrderId;
+                _preparedTicketNumber = resumed.PreparedTicketNumber;
+                HideError();
+                UpdateTotal();
+                ShowSaleStatus($"↩ رجعت الفاتورة المعلّقة ({resumed.ItemCount} صنف، {resumed.Total:0.000} د.أ)", isWarning: false);
+            }
+        }
+
+        RefreshHeldCount();
+        BarcodeBox.Focus();
+    }
+
+    // === طلبات مساعد الكاشير (28/9/2026): المساعد ضرب الأغراض من تلفونه، الكاشير بيحاسب ===
+
+    private void PreparedOrdersButton_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new PreparedOrdersWindow(_apiClient, _authSession.BranchId) { Owner = this };
+        if (window.ShowDialog() != true || window.SelectedOrder is not { } order || !MakeRoomForAnotherCart())
+        {
+            BarcodeBox.Focus();
+            return;
+        }
+
+        // الأصناف من الكتالوج المحلي (سعر الفرع الحالي ورقم نسخته - نفس أي ضربة باركود)، مش سعر لحظة التجهيز.
+        var missing = new List<string>();
+        using (var db = new LocalDbContext(_dbPath))
+        {
+            foreach (var item in order.Items)
+            {
+                var product = db.Products.FirstOrDefault(p => p.ProductId == item.ProductId);
+                var unit = db.ProductUnits.FirstOrDefault(u => u.UnitId == item.ProductUnitId);
+                if (product is null || unit is null || !product.IsAvailableForSale)
+                {
+                    missing.Add(item.ProductName);
+                    continue;
+                }
+
+                AddResolvedItem(db, product, unit, item.Quantity);
+            }
+        }
+
+        if (_cart.Count > 0)
+        {
+            _preparedOrderId = order.Id;
+            _preparedTicketNumber = order.TicketNumber;
+        }
+
+        if (missing.Count > 0)
+        {
+            ShowError($"أصناف مش موجودة على الجهاز (اعمل مزامنة واضربها يدويًا): {string.Join("، ", missing)}");
+        }
+
+        ShowSaleStatus(
+            $"🛍 طلب {order.TicketNumber} نزل بالسلة (جهّزه {order.PreparedByName})" +
+            (string.IsNullOrWhiteSpace(order.Note) ? "" : $" · {order.Note}"),
+            isWarning: missing.Count > 0);
+        BarcodeBox.Focus();
+    }
+
+    private void InvoiceSearchButton_Click(object sender, RoutedEventArgs e)
+    {
+        new InvoiceSearchWindow(_apiClient, _authSession) { Owner = this }.ShowDialog();
         BarcodeBox.Focus();
     }
 

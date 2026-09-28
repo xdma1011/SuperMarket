@@ -18,6 +18,10 @@ interface SaleInvoiceListItemDto {
   createdAtUtc: string;
   customerName: string | null;
   customerPhone: string | null;
+  /** مين عمل الفاتورة (الكاشير). */
+  cashierName?: string | null;
+  /** سحب شريك/صاحب المحل بسعر التكلفة (صفحة التلفون). */
+  isAtCostWithdrawal?: boolean;
 }
 
 interface PaymentMethodDto {

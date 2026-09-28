@@ -64,7 +64,12 @@
       <tbody>
         @for (row of invoices(); track row.id) {
           <tr>
-            <td class="mono">{{ row.invoiceNumber }}</td>
+            <td class="mono">
+              {{ row.invoiceNumber }}
+              @if (row.isAtCostWithdrawal) {
+                <span class="chip" title="سحب بضاعة لصاحب المحل/شريك بسعر التكلفة">بسعر التكلفة</span>
+              }
+            </td>
             <td>
               @if (row.customerName) {
                 {{ row.customerName }} <span class="mono">{{ row.customerPhone }}</span>

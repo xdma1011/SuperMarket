@@ -1,3 +1,5 @@
+using SupermarketSystem.Application.Sales.AtCostWithdrawal;
+using SupermarketSystem.Application.Sales.PreparedOrders;
 using SupermarketSystem.Application.Inventory.GetComplimentaryLog;
 using SupermarketSystem.Application.CashManagement.RecordDrawerOpen;
 using SupermarketSystem.Application.Reporting.GetDrawerOpenCounts;
@@ -287,6 +289,12 @@ public static class DependencyInjection
         services.AddScoped<CompleteCashClosingHandler>();
         services.AddScoped<RecordDrawerOpenHandler>();
         services.AddScoped<GetComplimentaryLogHandler>();
+        services.AddScoped<CreatePreparedOrderHandler>();
+        services.AddScoped<GetOpenPreparedOrdersHandler>();
+        services.AddScoped<CancelPreparedOrderHandler>();
+        services.AddScoped<ScanLookupHandler>();
+        services.AddScoped<QuoteAtCostWithdrawalHandler>();
+        services.AddScoped<CompleteAtCostWithdrawalHandler>();
         services.AddScoped<GetCashClosingsHandler>();
 
         services.AddScoped<CreateStocktakeHandler>();

@@ -43,6 +43,9 @@ public static class PermissionCodes
     /// <summary>مصاريف تشغيلية، حركات رأس مال، وكشف الربح الشهري (Finance/Expense/CapitalTransaction) - Master Admin حصرًا بطلب صاحب المشروع الصريح، عمدًا غير موجودة بـCashierDefaults ولا AssistantAdminDefaults.</summary>
     public const string FinanceManage = "Finance.Manage";
 
+    /// <summary>سحب بضاعة لصاحب المحل/شريك بسعر التكلفة (دفع حقها أو "اخصمها مني") - Master Admin حصرًا افتراضيًا (28/9/2026).</summary>
+    public const string SalesAtCostWithdrawal = "Sales.AtCostWithdrawal";
+
     /// <summary>كل الرموز دفعة وحدة — يخدم seed دور "Master Admin" (كل الصلاحيات مربوطة فيه) بلا سرد يدوي معرَّض للنسيان عند إضافة رمز جديد لاحقًا.</summary>
     public static readonly IReadOnlyList<string> All = new[]
     {
@@ -51,7 +54,8 @@ public static class PermissionCodes
         StocktakeManage, StocktakeApprove, CashClosingManage, ReportsView,
         BackupsManage, SessionsManage, NotificationsView, UsersManage, ComplimentaryIssue,
         SystemSettingsManage, CustomersManage, OrdersDeliver, StockTransferManage,
-        ChangeSellingPriceDirect, RequestSellingPriceChange, FinanceManage, WasteIssue
+        ChangeSellingPriceDirect, RequestSellingPriceChange, FinanceManage, WasteIssue,
+        SalesAtCostWithdrawal
     };
 
     /// <summary>

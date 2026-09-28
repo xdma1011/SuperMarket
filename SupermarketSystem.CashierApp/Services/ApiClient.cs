@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -102,7 +103,27 @@ public enum VoidReasonDto
 public sealed record SaleInvoiceListItemDto(
     Guid Id, string InvoiceNumber, int StatusCode, string StatusTitle,
     decimal TotalAmount, decimal TotalReturnedAmount, DateTime CreatedAtUtc,
-    string? CustomerName, string? CustomerPhone);
+    string? CustomerName, string? CustomerPhone, string? CashierName = null)
+{
+    /// <summary>وقت الفاتورة بتوقيت الجهاز - لشاشة بحث الفواتير بالوقت (مقارنة مع تسجيل الكاميرا).</summary>
+    public DateTime CreatedAtLocal => DateTime.SpecifyKind(CreatedAtUtc, DateTimeKind.Utc).ToLocalTime();
+}
+
+/// <summary>مطابق لـPreparedOrderItemDto بالباك إند (طلبات مساعد الكاشير).</summary>
+public sealed record PreparedOrderItemDto(
+    Guid ProductId, Guid ProductUnitId, string ProductName, string UnitName, decimal Quantity, decimal UnitPriceSnapshot);
+
+/// <summary>مطابق لـPreparedOrderDto بالباك إند - طلب جاهز جهّزه المساعد من تلفونه، الكاشير بيحاسب عليه.</summary>
+public sealed record PreparedOrderDto(
+    Guid Id, int TicketNumber, string? Note, string PreparedByName, DateTime CreatedAtUtc,
+    decimal EstimatedTotal, List<PreparedOrderItemDto> Items)
+{
+    public DateTime CreatedAtLocal => DateTime.SpecifyKind(CreatedAtUtc, DateTimeKind.Utc).ToLocalTime();
+    public int ItemCount => Items.Count;
+    public string Summary => string.Join("، ", Items.Select(i => $"{i.ProductName} × {i.Quantity:0.###}"));
+}
+
+public sealed record PreparedOrdersResult(bool Success, List<PreparedOrderDto> Orders, string? ErrorMessage);
 
 /// <summary>مطابق حرفيًا لـSaleInvoiceItemDetailDto (GetSaleInvoiceByIdQuery) - Quantity - QuantityReturned هي الكمية القابلة للإرجاع.</summary>
 public sealed record SaleInvoiceItemDetailDto(
@@ -540,6 +561,88 @@ public sealed class ApiClient
         catch (Exception ex)
         {
             return new SaleInvoiceSearchResult(false, null, $"تعذّر الاتصال بالسيرفر: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// GET /sales?fromUtc&amp;toUtc&amp;productSearch — بحث الفواتير بالتاريخ والساعة والدقيقة (28/9/2026): صاحب
+    /// المحل بيرجع لتسجيل الكاميرا وبدو يتأكد هل صنف فات بالفاتورة. productSearch اختياري (اسم أو باركود).
+    /// </summary>
+    public async Task<SaleInvoiceSearchResult> SearchSaleInvoicesByTimeAsync(
+        Guid? branchId, DateTime fromUtc, DateTime toUtc, string? productSearch, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var url = $"sales?pageNumber=1&pageSize=100" +
+                      $"&fromUtc={Uri.EscapeDataString(fromUtc.ToString("o", CultureInfo.InvariantCulture))}" +
+                      $"&toUtc={Uri.EscapeDataString(toUtc.ToString("o", CultureInfo.InvariantCulture))}";
+            if (branchId is { } b)
+            {
+                url += $"&branchId={b}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(productSearch))
+            {
+                url += $"&productSearch={Uri.EscapeDataString(productSearch.Trim())}";
+            }
+
+            var response = await _http.GetAsync(url, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadFromJsonAsync<PagedResultDto<SaleInvoiceListItemDto>>(cancellationToken: cancellationToken);
+                return body is null
+                    ? new SaleInvoiceSearchResult(false, null, "رد غير متوقَّع من السيرفر.")
+                    : new SaleInvoiceSearchResult(true, body, null);
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            return new SaleInvoiceSearchResult(false, null, ServerError(errorBody));
+        }
+        catch (Exception ex)
+        {
+            return new SaleInvoiceSearchResult(false, null, $"تعذّر الاتصال بالسيرفر: {ex.Message}");
+        }
+    }
+
+    /// <summary>GET /prepared-orders — الطلبات الجاهزة من مساعد الكاشير (أونلاين بس - بلا نت، الكاشير بيضرب الأصناف عادي).</summary>
+    public async Task<PreparedOrdersResult> GetOpenPreparedOrdersAsync(Guid? branchId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var url = branchId is { } b ? $"prepared-orders?branchId={b}" : "prepared-orders";
+            var response = await _http.GetAsync(url, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadFromJsonAsync<List<PreparedOrderDto>>(cancellationToken: cancellationToken);
+                return new PreparedOrdersResult(true, body ?? new List<PreparedOrderDto>(), null);
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            return new PreparedOrdersResult(false, new List<PreparedOrderDto>(), ServerError(errorBody));
+        }
+        catch (Exception ex)
+        {
+            return new PreparedOrdersResult(false, new List<PreparedOrderDto>(), $"تعذّر الاتصال بالسيرفر: {ex.Message}");
+        }
+    }
+
+    /// <summary>POST /prepared-orders/{id}/cancel — الزبون فلّ أو الطلب انضرب بالغلط.</summary>
+    public async Task<(bool Success, string? ErrorMessage)> CancelPreparedOrderAsync(Guid preparedOrderId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await _http.PostAsync($"prepared-orders/{preparedOrderId}/cancel", content: null, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                return (true, null);
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            return (false, ServerError(errorBody));
+        }
+        catch (Exception ex)
+        {
+            return (false, $"تعذّر الاتصال بالسيرفر: {ex.Message}");
         }
     }
 

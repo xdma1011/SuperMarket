@@ -3,11 +3,11 @@ using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Policies;
 using SupermarketSystem.Application.Common.Promotions;
 using SupermarketSystem.Application.Common.Results;
+using SupermarketSystem.Application.Sales.Common;
 using SupermarketSystem.Domain.CashManagement;
 using SupermarketSystem.Domain.Common;
 using SupermarketSystem.Domain.Identity;
 using SupermarketSystem.Domain.Inventory;
-using SupermarketSystem.Domain.Purchasing;
 using SupermarketSystem.Domain.Sales;
 
 namespace SupermarketSystem.Application.Sales.CompleteSale;
@@ -56,7 +56,11 @@ public sealed record CompleteSaleCommand(
     // CompleteOrderHandler (طلبات تطبيق الزبائن/التوصيل) دايمًا بيبعت
     // CustomerId، فلو كان الاستنتاج تلقائي، أي مبلغ ناقص بالغلط من السائق
     // كان رح يصير دين صامت بدل ما يفشل زي قبل.
-    bool AllowCreditSale = false);
+    bool AllowCreditSale = false,
+    // طلب جاهز من مساعد الكاشير (SuspendedSale، 28/9/2026) - بعد البيع بيتعلّم "انحاسب" بنفس المعاملة.
+    // طلب مش موجود أو مسكّر ما بيوقف البيع (الكاشير ممكن يكون عدّل السلة، أو البيعة وصلت متأخرة من
+    // الطابور الأوفلاين) - الفلوس الحقيقية أهم من حالة الطلب.
+    Guid? PreparedOrderId = null);
 
 public sealed record CompleteSaleResponse(
     Guid SaleInvoiceId,
@@ -219,8 +223,28 @@ public sealed class CompleteSaleHandler
         _notificationDispatcher = notificationDispatcher;
     }
 
-    public async Task<Result<CompleteSaleResponse>> HandleAsync(
+    public Task<Result<CompleteSaleResponse>> HandleAsync(
         CompleteSaleCommand command,
+        CancellationToken cancellationToken) =>
+        HandleCoreAsync(command, atCost: null, cancellationToken);
+
+    /// <summary>
+    /// سحب بضاعة لصاحب المحل/شريك بسعر التكلفة (28/9/2026) - نفس مسار البيع بالكامل (مخزون ذري، رقم
+    /// فاتورة، حركات، صندوق)، بس سعر كل سطر = تكلفته، بلا عروض ولا خصومات. منتج بلا تكلفة معروفة
+    /// مرفوض (قرار صاحب المشروع). مش جزء من CompleteSaleCommand عمدًا - ما في طريقة لكاشير يبعت علم
+    /// "بسعر التكلفة" بطلب بيع عادي؛ بيوصل بس من CompleteAtCostWithdrawalHandler بصلاحيته الخاصة.
+    /// </summary>
+    public Task<Result<CompleteSaleResponse>> HandleAtCostWithdrawalAsync(
+        CompleteSaleCommand command,
+        bool deductFromShare,
+        CancellationToken cancellationToken) =>
+        HandleCoreAsync(command, new AtCostMode(deductFromShare), cancellationToken);
+
+    private sealed record AtCostMode(bool DeductFromShare);
+
+    private async Task<Result<CompleteSaleResponse>> HandleCoreAsync(
+        CompleteSaleCommand command,
+        AtCostMode? atCost,
         CancellationToken cancellationToken)
     {
         var validationError = CompleteSaleValidator.Validate(command);
@@ -235,6 +259,21 @@ public sealed class CompleteSaleHandler
             .Where(s => s.ClientRequestId == command.ClientRequestId)
             .Select(s => new { s.Id, s.InvoiceNumber, s.TotalAmount, s.TotalPaidAmount })
             .FirstOrDefaultAsync(cancellationToken);
+
+        if (atCost is not null)
+        {
+            if (command.InvoiceLevelDiscountAmount != 0 || command.Items.Any(i => i.ManualDiscountAmount != 0))
+            {
+                return Result.Failure<CompleteSaleResponse>(
+                    Error.Validation("Sale.AtCostNoDiscounts", "السحب بسعر التكلفة ما بياخد خصومات."));
+            }
+
+            if (atCost.DeductFromShare && command.Payments.Count > 0)
+            {
+                return Result.Failure<CompleteSaleResponse>(
+                    Error.Validation("Sale.AtCostDeductHasPayments", "\"اخصمها مني\" بلا دفع - المبلغ بينسجّل على الشريك."));
+            }
+        }
 
         if (replay is not null)
         {
@@ -298,7 +337,7 @@ public sealed class CompleteSaleHandler
         // مش سعر من العميل (§3.6): السيرفر بيختار من أسعار كانت فعلًا معتمدة للمنتج بهالفرع،
         // وأي فرق عن السعر الحالي بيتعلّم للمراجعة (§1.6) - نسخة مزوّرة قديمة بتنكشف هيك.
         var appliedPriceChanges = new List<AppliedPriceChange>();
-        if (command.Items.Any(i => i.CatalogVersion is not null) && productBranches.Count > 0)
+        if (atCost is null && command.Items.Any(i => i.CatalogVersion is not null) && productBranches.Count > 0)
         {
             var productBranchIds = productBranches.Values.Select(pb => pb.Id).ToList();
             appliedPriceChanges = await _context.PriceChangeRequests.AsNoTracking()
@@ -322,29 +361,11 @@ public sealed class CompleteSaleHandler
         var nowUtc = _dateTimeProvider.UtcNow;
 
         // --- تكلفة الوحدة وقت البيع (UnitCostSnapshot) - راجع تعليق PROFIT ASSUMPTION فوق ---
-        var batchIds = command.Items.Where(i => i.ProductBatchId is not null)
-            .Select(i => i.ProductBatchId!.Value).Distinct().ToList();
-        var batchUnitCosts = batchIds.Count == 0
-            ? new Dictionary<Guid, decimal>()
-            : await _context.ProductBatches.AsNoTracking()
-                .Where(b => batchIds.Contains(b.Id))
-                .Select(b => new { b.Id, b.UnitCost })
-                .ToDictionaryAsync(b => b.Id, b => b.UnitCost, cancellationToken);
-
-        var nonBatchProductIds = command.Items.Where(i => i.ProductBatchId is null)
-            .Select(i => i.ProductId).Distinct().ToList();
-        var weightedAverageCosts = nonBatchProductIds.Count == 0
-            ? new Dictionary<Guid, decimal>()
-            : await _context.PurchaseInvoiceItems.AsNoTracking()
-                .Where(i => nonBatchProductIds.Contains(i.ProductId))
-                .Join(
-                    _context.PurchaseInvoices.AsNoTracking()
-                        .Where(pi => pi.Status == PurchaseInvoiceStatus.Received && pi.CreatedAtUtc <= nowUtc),
-                    i => i.PurchaseInvoiceId, pi => pi.Id,
-                    (i, pi) => new { i.ProductId, i.Quantity, i.UnitCost })
-                .GroupBy(x => x.ProductId)
-                .Select(g => new { ProductId = g.Key, TotalQuantity = g.Sum(x => x.Quantity), TotalCost = g.Sum(x => x.Quantity * x.UnitCost) })
-                .ToDictionaryAsync(x => x.ProductId, x => x.TotalCost / x.TotalQuantity, cancellationToken);
+        var (batchUnitCosts, weightedAverageCosts) = await SaleUnitCosts.LoadAsync(
+            _context,
+            command.Items.Select(i => (i.ProductId, i.ProductBatchId)).ToList(),
+            nowUtc,
+            cancellationToken);
 
         var activePromotionsByProduct = await _context.Promotions.AsNoTracking()
             .Where(p => productIds.Contains(p.ProductId) && p.StartAtUtc <= nowUtc && p.EndAtUtc >= nowUtc)
@@ -416,7 +437,7 @@ public sealed class CompleteSaleHandler
 
             // Price derived server-side. See the PRICING ASSUMPTION and OFFLINE PRICE notes.
             var baseSellingPrice = productBranch.SellingPrice;
-            if (item.CatalogVersion is { } itemCatalogVersion
+            if (atCost is null && item.CatalogVersion is { } itemCatalogVersion
                 && PriceAtCatalogVersion(appliedPriceChanges, productBranch.Id, itemCatalogVersion) is { } offlinePrice
                 && offlinePrice != productBranch.SellingPrice)
             {
@@ -430,7 +451,6 @@ public sealed class CompleteSaleHandler
             }
 
             var unitPrice = baseSellingPrice * unit.ConversionFactorToBase;
-            var grossLineTotal = unitPrice * item.Quantity;
 
             // تكلفة الوحدة وقت البيع - راجع تعليق PROFIT ASSUMPTION فوق.
             decimal? unitCostSnapshotBaseUnit = item.ProductBatchId is { } batchId
@@ -441,6 +461,23 @@ public sealed class CompleteSaleHandler
                 ? costBaseUnit * unit.ConversionFactorToBase
                 : null;
 
+            if (atCost is not null)
+            {
+                // السعر = التكلفة، والتكلفة المسجّلة = نفس الرقم بالضبط - ربح هالسطر صفر بالكشف.
+                if (unitCostSnapshotBaseUnit is not { } atCostBase)
+                {
+                    return Result.Failure<CompleteSaleResponse>(
+                        Error.BusinessRule(
+                            "Sale.AtCostNoCostHistory",
+                            $"المنتج '{product.Name}' ما إله تكلفة معروفة (ما في فاتورة شراء مستلمة إله) - ما بينفع ينسحب بسعر التكلفة."));
+                }
+
+                unitPrice = SaleUnitCosts.AtCostUnitPrice(atCostBase, unit.ConversionFactorToBase);
+                unitCostSnapshot = unitPrice;
+            }
+
+            var grossLineTotal = unitPrice * item.Quantity;
+
             // عرض الكمية (Promotion) - راجع تعليق PROMOTION ASSUMPTION فوق.
             // هذا حساب سعر تلقائي (زي سعر ProductBranch نفسه)، مش خصم يدوي
             // من الكاشير - ما يمر على PosPolicy إطلاقًا (معتمَد مسبقًا من
@@ -449,7 +486,7 @@ public sealed class CompleteSaleHandler
             Guid? promotionId = null;
             string? promotionTitleSnapshot = null;
 
-            if (unit.IsBaseUnit && promotionByProduct.TryGetValue(item.ProductId, out var promo))
+            if (atCost is null && unit.IsBaseUnit && promotionByProduct.TryGetValue(item.ProductId, out var promo))
             {
                 var outcome = PromotionPricingCalculator.Calculate(
                     item.Quantity, unitPrice, promo.BundleQuantity, promo.BundlePrice, promo.MaxQuantityPerInvoice);
@@ -551,7 +588,16 @@ public sealed class CompleteSaleHandler
         // (CustomerId) - ما في طريقة نلاحق دين بلا هوية زبون. الباقي دين
         // متابَع ديناميكيًا عبر GetCustomerDebtsQuery، ويُسدَّد لاحقًا عبر
         // RecordSaleInvoicePaymentCommand. غير هيك: تسوية كاملة إلزامية زي قبل.
-        if (paymentsTotal < invoiceTotal)
+        if (paymentsTotal < invoiceTotal && atCost is { DeductFromShare: false })
+        {
+            return Result.Failure<CompleteSaleResponse>(
+                Error.BusinessRule(
+                    "Sale.PaymentsDoNotSettleTotal",
+                    $"المدفوع {paymentsTotal:0.000} أقل من قيمة السحب بسعر التكلفة {invoiceTotal:0.000}."));
+        }
+
+        // "اخصمها مني": بلا أي دفع، المبلغ كله بيضل مفتوح على الفاتورة (دين على الشريك).
+        if (paymentsTotal < invoiceTotal && atCost is null)
         {
             if (command.AllowCreditSale && command.CustomerId is null)
             {
@@ -660,6 +706,11 @@ public sealed class CompleteSaleHandler
                 command.BranchId, invoiceNumber, command.ClientRequestId,
                 command.CustomerId, customerName, customerPhone);
 
+            if (atCost is not null)
+            {
+                invoice.MarkAsAtCostWithdrawal(atCost.DeductFromShare);
+            }
+
             var movements = new List<StockMovement>();
 
             foreach (var line in resolvedLines)
@@ -733,6 +784,13 @@ public sealed class CompleteSaleHandler
             _context.SaleInvoices.Add(invoice);
             _context.StockMovements.AddRange(movements);
             _context.CashDrawerLogs.AddRange(cashMovements);
+
+            if (command.PreparedOrderId is { } preparedOrderId)
+            {
+                var preparedOrder = await _context.SuspendedSales
+                    .FirstOrDefaultAsync(o => o.Id == preparedOrderId && o.Status == SuspendedSaleStatus.Open, ct);
+                preparedOrder?.Complete(invoice.Id, occurredAtUtc);
+            }
 
             await _context.SaveChangesAsync(ct);
 

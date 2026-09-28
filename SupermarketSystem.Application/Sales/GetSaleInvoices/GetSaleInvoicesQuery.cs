@@ -5,7 +5,10 @@ using SupermarketSystem.Domain.Sales;
 
 namespace SupermarketSystem.Application.Sales.GetSaleInvoices;
 
-public sealed record GetSaleInvoicesQuery(PagedRequest Paging, Guid? BranchId);
+// FromUtc/ToUtc/ProductSearch (28/9/2026): بحث الكاشير بالتاريخ والساعة والدقيقة - صاحب المحل بيرجع
+// لتسجيل الكاميرا وبدو يتأكد هل صنف معيّن فات بفاتورة بهديك الدقيقة ولا ما انضرب أصلًا.
+public sealed record GetSaleInvoicesQuery(
+    PagedRequest Paging, Guid? BranchId, DateTime? FromUtc = null, DateTime? ToUtc = null, string? ProductSearch = null);
 
 public sealed record SaleInvoiceListItemDto(
     Guid Id,
@@ -17,7 +20,11 @@ public sealed record SaleInvoiceListItemDto(
     decimal TotalReturnedAmount,
     DateTime CreatedAtUtc,
     string? CustomerName,
-    string? CustomerPhone);
+    string? CustomerPhone,
+    // مين عمل الفاتورة (الكاشير) - إضافة بلا كسر، تطبيق الكاشير القديم بيتجاهلها.
+    string? CashierName = null,
+    // سحب شريك بسعر التكلفة (28/9/2026) - بيبين كعلامة بقائمة المبيعات.
+    bool IsAtCostWithdrawal = false);
 
 /// <summary>
 /// كانت ناقصة بالكامل — SalesEndpoints قبل هذا كانت POST فقط (إتمام
@@ -56,6 +63,29 @@ public sealed class GetSaleInvoicesHandler
             invoices = invoices.Where(x => x.Invoice.BranchId == branchId);
         }
 
+        if (query.FromUtc is { } fromUtc)
+        {
+            invoices = invoices.Where(x => x.Invoice.CreatedAtUtc >= fromUtc);
+        }
+
+        if (query.ToUtc is { } toUtc)
+        {
+            invoices = invoices.Where(x => x.Invoice.CreatedAtUtc <= toUtc);
+        }
+
+        // فواتير فيها صنف اسمه أو باركوده بيطابق - "هل الحليب فات بفاتورة بين 14:25 و14:40؟"
+        if (!string.IsNullOrWhiteSpace(query.ProductSearch))
+        {
+            var productPattern = $"%{query.ProductSearch.Trim()}%";
+            var matchingProductIds = _context.Products.IgnoreQueryFilters().AsNoTracking()
+                .Where(p => EF.Functions.Like(p.Name, productPattern))
+                .Select(p => p.Id)
+                .Union(_context.ProductBarcodes.AsNoTracking()
+                    .Where(b => EF.Functions.Like(b.BarcodeValue, productPattern))
+                    .Select(b => b.ProductId));
+            invoices = invoices.Where(x => x.Invoice.Items.Any(i => matchingProductIds.Contains(i.ProductId)));
+        }
+
         if (!string.IsNullOrWhiteSpace(paging.Search))
         {
             var pattern = $"%{paging.Search.Trim()}%";
@@ -76,13 +106,22 @@ public sealed class GetSaleInvoicesHandler
             {
                 x.Invoice.Id, x.Invoice.InvoiceNumber, x.Invoice.Status,
                 x.Invoice.TotalAmount, x.Invoice.TotalPaidAmount, x.Invoice.TotalReturnedAmount, x.Invoice.CreatedAtUtc,
-                x.CustomerName, x.CustomerPhone
+                x.CustomerName, x.CustomerPhone, x.Invoice.CreatedByUserId, x.Invoice.IsAtCostWithdrawal
             })
             .ToListAsync(cancellationToken);
 
+        var creatorIds = rawItems.Where(s => s.CreatedByUserId != null).Select(s => s.CreatedByUserId!.Value).Distinct().ToList();
+        var cashierNames = creatorIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await _context.Users.IgnoreQueryFilters().AsNoTracking()
+                .Where(u => creatorIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => u.FullName, cancellationToken);
+
         var items = rawItems.Select(s => new SaleInvoiceListItemDto(
             s.Id, s.InvoiceNumber, (int)s.Status, StatusTitle(s.Status),
-            s.TotalAmount, s.TotalPaidAmount, s.TotalReturnedAmount, s.CreatedAtUtc, s.CustomerName, s.CustomerPhone))
+            s.TotalAmount, s.TotalPaidAmount, s.TotalReturnedAmount, s.CreatedAtUtc, s.CustomerName, s.CustomerPhone,
+            s.CreatedByUserId is { } creatorId && cashierNames.TryGetValue(creatorId, out var cashierName) ? cashierName : null,
+            s.IsAtCostWithdrawal))
             .ToList();
 
         return new PagedResult<SaleInvoiceListItemDto>(items, totalCount, paging.PageNumber, paging.PageSize);

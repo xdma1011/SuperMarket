@@ -300,3 +300,15 @@
 }
 @media (max-width: 860px) { .search-kbd { display: none; } }
 .search-result-row.page-result .search-result-type { background: var(--green-soft); color: var(--green); }
+
+/* === شريط الأعلى على التلفون (28/9/2026) ===
+   كان أعرض من الشاشة (زر "الوضع الليلي" بنصّه + صورة المستخدم + البحث) فكل الصفحة بتنزاح لجنب بـ~175px -
+   صفحة "تجهيز طلب" بتنفتح من تلفون المساعد. على الشاشات الصغيرة: زر الوضع أيقونة بس، وصورة المستخدم بتختفي
+   (اسمه أصلًا بالقائمة الجانبية)، والبحث بياخد الباقي. */
+.search-wrap { min-width: 0; }
+@media (max-width: 560px) {
+  .topbar { gap: 8px; }
+  .theme-btn { padding: 0 13px; }
+  .theme-btn span:not(.theme-dot) { display: none; }
+  .user-chip { display: none; }
+}

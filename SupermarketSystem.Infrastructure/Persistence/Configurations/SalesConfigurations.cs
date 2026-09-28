@@ -171,6 +171,14 @@ public class SuspendedSaleConfiguration : IEntityTypeConfiguration<SuspendedSale
 
         builder.HasIndex(s => new { s.BranchId, s.UserId });
 
+        // طلبات المساعد (28/9/2026): رقم الطلب فريد لكل فرع بكل يوم - ضمان حقيقي بالقاعدة، مش بس MAX+1
+        // (طلبين بنفس اللحظة: واحد بينجح والتاني بيعيد المحاولة برقم جديد - راجع CreatePreparedOrderHandler).
+        builder.Property(s => s.Note).HasMaxLength(SuspendedSale.MaxNoteLength);
+        builder.Property(s => s.Status).HasConversion<int>().IsRequired();
+        builder.Property(s => s.ClosedAtUtc).HasColumnType("datetime2");
+        builder.HasIndex(s => new { s.BranchId, s.TicketDateUtc, s.TicketNumber }).IsUnique();
+        builder.HasIndex(s => new { s.BranchId, s.Status });
+
         builder.HasOne<User>().WithMany().HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Restrict);
         // Branch FK (Restrict) configured on the Branches side. Pre-
         // transactional data (Architecture Review §"SuspendedSale") — not

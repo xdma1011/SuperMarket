@@ -81,6 +81,11 @@
                         Style="{StaticResource SecondaryButton}" Click="ReturnButton_Click" Margin="0,0,6,0" />
                 <Button x:Name="VoidSaleButton" Height="34" Width="112" FontSize="12" Content="✕ إلغاء فاتورة"
                         Style="{StaticResource SecondaryButton}" Click="VoidSaleButton_Click" Margin="0,0,6,0" />
+                <!-- طلبات مساعد الكاشير (ضربها من تلفونه) وبحث الفواتير بالوقت (مراجعة الكاميرا) - 28/9/2026 -->
+                <Button x:Name="PreparedOrdersButton" Height="34" Width="118" FontSize="12" Content="🛍 طلبات جاهزة"
+                        Style="{StaticResource SecondaryButton}" Click="PreparedOrdersButton_Click" Margin="0,0,6,0" />
+                <Button x:Name="InvoiceSearchButton" Height="34" Width="118" FontSize="12" Content="🔎 بحث الفواتير"
+                        Style="{StaticResource SecondaryButton}" Click="InvoiceSearchButton_Click" Margin="0,0,6,0" />
                 <Button x:Name="DrawerOpenButton" Height="34" Width="112" FontSize="12" Content="🗄 فتح الصندوق"
                         Style="{StaticResource SecondaryButton}" Click="DrawerOpenButton_Click" Margin="0,0,6,0" />
                 <Button x:Name="CashClosingButton" Height="34" Width="120" FontSize="12" Content="🧮 إغلاق الصندوق"
@@ -211,6 +216,10 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="10" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <!-- الإجمالي أكبر وبلون الهوية الدافي - أهم رقم بالشاشة قدام الكاشير والزبون -->
@@ -222,9 +231,16 @@
                       DisplayMemberPath="Name" VerticalContentAlignment="Center" />
 
             <TextBlock x:Name="ErrorText" Grid.Column="4" Foreground="#DC2626" FontSize="12"
-                       VerticalAlignment="Center" Visibility="Collapsed" />
+                       VerticalAlignment="Center" Visibility="Collapsed" TextWrapping="Wrap" MaxWidth="260" />
 
-            <Button x:Name="CompleteSaleButton" Grid.Column="6" Height="42" Width="140"
+            <!-- تعليق فاتورة: زبون بدو يبدّل صنف والطابور واقف - السلة بتنحط على جنب وبترجع بدبل كليك (28/9/2026) -->
+            <Button x:Name="HoldButton" Grid.Column="6" Height="42" Width="110" FontSize="13" Content="⏸ تعليق"
+                    Style="{StaticResource SecondaryButton}" Click="HoldButton_Click"
+                    ToolTip="حط الفاتورة الحالية على جنب وخدّم الزبون اللي بعده" />
+            <Button x:Name="HeldSalesButton" Grid.Column="8" Height="42" Width="130" FontSize="13" Content="📋 المعلّقة (0)"
+                    Style="{StaticResource SecondaryButton}" Click="HeldSalesButton_Click" />
+
+            <Button x:Name="CompleteSaleButton" Grid.Column="10" Height="42" Width="140"
                     Content="إتمام البيع" FontSize="14" Click="CompleteSaleButton_Click" />
         </Grid>
     </Grid>

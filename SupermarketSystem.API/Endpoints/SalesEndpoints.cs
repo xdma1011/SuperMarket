@@ -63,12 +63,13 @@ public static class SalesEndpoints
 
         group.MapGet("/", async (
             int? pageNumber, int? pageSize, string? search, string? sortBy, string? sortDirection,
-            Guid? branchId,
+            Guid? branchId, DateTime? fromUtc, DateTime? toUtc, string? productSearch,
             GetSaleInvoicesHandler handler,
             CancellationToken cancellationToken) =>
         {
             var paging = PagingBinder.Build(pageNumber, pageSize, search, sortBy, sortDirection);
-            var result = await handler.HandleAsync(new GetSaleInvoicesQuery(paging, branchId), cancellationToken);
+            var result = await handler.HandleAsync(
+                new GetSaleInvoicesQuery(paging, branchId, ToUtc(fromUtc), ToUtc(toUtc), productSearch), cancellationToken);
             return Results.Ok(result);
         })
         .WithName("GetSaleInvoices")
@@ -125,6 +126,18 @@ public static class SalesEndpoints
 
         return app;
     }
+
+    /// <summary>
+    /// "2026-09-28T11:30:00Z" بيوصل Kind=Utc، بس بلا Z بيوصل Unspecified - بنعتبره UTC صراحة
+    /// (التطبيقات بتبعت UTC دايمًا)، عشان المقارنة مع CreatedAtUtc ما تنزاح بفرق التوقيت.
+    /// </summary>
+    private static DateTime? ToUtc(DateTime? value) => value switch
+    {
+        null => null,
+        { Kind: DateTimeKind.Local } v => v.ToUniversalTime(),
+        { Kind: DateTimeKind.Unspecified } v => DateTime.SpecifyKind(v, DateTimeKind.Utc),
+        { } v => v
+    };
 
     /// <summary>SaleInvoiceId يجي من المسار لا من الجسم.</summary>
     public sealed record VoidSaleRequest(VoidReason Reason, string? Notes);

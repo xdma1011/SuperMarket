@@ -32,6 +32,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'home', label: 'الرئيسية', route: '/', group: 'main', icon: 'home', requiredPermission: null },
 
   { id: 'sales', label: 'المبيعات', route: '/sales', group: 'sales', icon: 'receipt', requiredPermission: 'Sales.Create' },
+  { id: 'quick-scan', label: 'تجهيز طلب (تلفون)', route: '/quick-scan', group: 'sales', icon: 'bag', requiredPermission: 'Sales.Create' },
   { id: 'orders', label: 'طلبات الزبائن', route: '/orders', group: 'sales', icon: 'bag', requiredPermission: 'Sales.Create' },
   { id: 'returns', label: 'الإرجاعات', route: '/returns', group: 'sales', icon: 'undo', requiredPermission: 'Returns.Process' },
   { id: 'cash-closings', label: 'تقفيل الصندوق', route: '/cash-closings', group: 'sales', icon: 'cash', requiredPermission: 'CashClosing.Manage' },

@@ -22,6 +22,7 @@ export enum ApiController {
   Notifications = 'notifications',
   Orders = 'orders',
   PaymentMethods = 'payment-methods',
+  PreparedOrders = 'prepared-orders',
   Reports = 'reports',
   Returns = 'returns',
   Reviews = 'reviews',

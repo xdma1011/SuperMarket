@@ -1,0 +1,91 @@
+<Window x:Class="SupermarketSystem.CashierApp.Views.PreparedOrdersWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="طلبات جاهزة"
+        Width="860" Height="560"
+        WindowStartupLocation="CenterOwner"
+        FlowDirection="RightToLeft"
+        Background="{StaticResource Surface2Brush}"
+        PreviewKeyDown="Window_KeyDown">
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="10" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="10" />
+            <RowDefinition Height="150" />
+            <RowDefinition Height="10" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="طلبات جاهزة من المساعد" FontSize="20" FontWeight="Bold" Foreground="{StaticResource InkBrush}" />
+                <TextBlock Text="المساعد ضرب الأغراض من تلفونه - نزّل الطلب بالسلة وحاسب الزبون. دبل كليك أو Enter." FontSize="12"
+                           Margin="0,4,0,0" Foreground="{StaticResource Ink2Brush}" TextWrapping="Wrap" />
+            </StackPanel>
+            <Button x:Name="RefreshButton" Grid.Column="1" Width="100" Height="42" Content="🔄 تحديث"
+                    Style="{StaticResource SecondaryButton}" Click="RefreshButton_Click" />
+            <Button x:Name="CloseWindowButton" Grid.Column="3" Width="42" Height="42" Content="×" FontSize="18"
+                    Style="{StaticResource SecondaryButton}" Click="CloseWindowButton_Click" />
+        </Grid>
+
+        <Border Grid.Row="2" Background="White" CornerRadius="10" BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1">
+            <Grid>
+                <DataGrid x:Name="OrdersGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                          SelectionMode="Single" SelectionUnit="FullRow"
+                          HeadersVisibility="Column" GridLinesVisibility="Horizontal" BorderThickness="0"
+                          Background="Transparent" RowBackground="White" AlternatingRowBackground="#FAF9F7"
+                          FontSize="14" MinRowHeight="40" Typography.NumeralAlignment="Tabular"
+                          MouseDoubleClick="OrdersGrid_MouseDoubleClick" SelectionChanged="OrdersGrid_SelectionChanged">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="رقم الطلب" Binding="{Binding TicketNumber}" Width="80" FontSize="18" FontWeight="Bold" />
+                        <DataGridTextColumn Header="الوقت" Binding="{Binding CreatedAtLocal, StringFormat={}{0:HH:mm}}" Width="70" />
+                        <DataGridTextColumn Header="جهّزه" Binding="{Binding PreparedByName}" Width="140" />
+                        <DataGridTextColumn Header="ملاحظة" Binding="{Binding Note}" Width="*" />
+                        <DataGridTextColumn Header="أصناف" Binding="{Binding ItemCount}" Width="60" />
+                        <DataGridTextColumn Header="تقريبًا" Binding="{Binding EstimatedTotal, StringFormat={}{0:0.000}}" Width="90" FontWeight="Bold" />
+                    </DataGrid.Columns>
+                </DataGrid>
+                <TextBlock x:Name="EmptyText" Text="ما في طلبات جاهزة هلق." FontSize="14" Foreground="{StaticResource Ink2Brush}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
+            </Grid>
+        </Border>
+
+        <!-- أصناف الطلب المحدَّد -->
+        <Border Grid.Row="4" Background="White" CornerRadius="10" BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1">
+            <DataGrid x:Name="ItemsGrid" AutoGenerateColumns="False" IsReadOnly="True" Focusable="False"
+                      HeadersVisibility="Column" GridLinesVisibility="Horizontal" BorderThickness="0"
+                      Background="Transparent" RowBackground="White" FontSize="13" Typography.NumeralAlignment="Tabular">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="الصنف" Binding="{Binding ProductName}" Width="*" />
+                    <DataGridTextColumn Header="الوحدة" Binding="{Binding UnitName}" Width="100" />
+                    <DataGridTextColumn Header="الكمية" Binding="{Binding Quantity, StringFormat={}{0:0.###}}" Width="80" />
+                    <DataGridTextColumn Header="السعر وقت التجهيز" Binding="{Binding UnitPriceSnapshot, StringFormat={}{0:0.000}}" Width="130" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+        <Grid Grid.Row="6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Button x:Name="CancelOrderButton" Grid.Column="0" Width="140" Height="42" Content="✕ إلغاء الطلب"
+                    Style="{StaticResource SecondaryButton}" Click="CancelOrderButton_Click" />
+            <TextBlock x:Name="StatusText" Grid.Column="2" VerticalAlignment="Center" FontSize="12" TextWrapping="Wrap"
+                       Foreground="{StaticResource RedBrush}" />
+            <Button x:Name="LoadButton" Grid.Column="3" Width="190" Height="42" FontSize="14" Content="🛒 نزّله بالسلة"
+                    Click="LoadButton_Click" />
+        </Grid>
+    </Grid>
+</Window>
