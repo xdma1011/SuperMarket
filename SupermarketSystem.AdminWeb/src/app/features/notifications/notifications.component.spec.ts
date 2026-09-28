@@ -48,7 +48,16 @@ describe('NotificationsComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('يحمّل التنبيهات والعدّادات تلقائيًا عند ngOnInit - التبويب الافتراضي عالية الأولوية', async () => {
+  it('بلا تبويب محدد: بيفتح أعلى أولوية فيها غير مقروء', async () => {
+    summary = { unreadCritical: 0, unreadWarning: 3, unreadInfo: 1 };
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(component.tab()).toBe('Warning');
+  });
+
+  it('يحمّل التنبيهات والعدّادات تلقائيًا عند ngOnInit - عالية الأولوية أول لو فيها غير مقروء', async () => {
     listItems = [item()];
 
     fixture.detectChanges();

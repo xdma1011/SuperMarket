@@ -78,8 +78,26 @@ export class NotificationsComponent implements OnInit {
 
   ngOnInit(): void {
     const tab = this.route?.snapshot.queryParamMap.get('tab');
-    if (tab === 'Critical' || tab === 'Warning' || tab === 'Info' || tab === 'all') this.tab.set(tab);
-    void this.load();
+    if (tab === 'Critical' || tab === 'Warning' || tab === 'Info' || tab === 'all') {
+      this.tab.set(tab);
+      void this.load();
+    } else {
+      void this.openFirstTabWithUnread();
+    }
+  }
+
+  /** بلا تبويب محدد: أعلى أولوية فيها غير مقروء (ما نفتح على تبويب فاضي والمتوسطة فيها تنبيهات). */
+  private async openFirstTabWithUnread(): Promise<void> {
+    try {
+      const s = await firstValueFrom(this.apiClient.get<NotificationSummaryDto>(ApiController.Notifications, NotificationsOperation.Summary));
+      if (s) {
+        this.summary.set(s);
+        this.tab.set(s.unreadCritical > 0 ? 'Critical' : s.unreadWarning > 0 ? 'Warning' : s.unreadInfo > 0 ? 'Info' : 'all');
+      }
+    } catch {
+      /* بنكمل عالتبويب الافتراضي - load بتعرض الخطأ لو السيرفر واقع. */
+    }
+    await this.load();
   }
 
   async load(): Promise<void> {

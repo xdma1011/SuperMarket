@@ -185,3 +185,61 @@ td.mono { letter-spacing: .01em; }
 .pager { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-2); }
 .pager button { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 4px 10px; color: var(--ink); }
 .pager button:disabled { opacity: .4; cursor: default; }
+
+/* =====================================================================================
+   جداول عامة (28/9/2026): كل صفحة كانت تكرر نفس تنسيق .table-panel/.table-scroll بـCSS تبعها، وصفحتين (الطلبات،
+   مسودات الفواتير) كانوا ناسيينه فالجدول بيطلع بلا تنسيق وبيدفش الصفحة على التلفون. هون الأساس لكل الصفحات -
+   تنسيق الصفحة نفسها (أعلى خصوصية) بيضل يغلب.
+   ===================================================================================== */
+:where(.table-panel) {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: var(--shadow); overflow: hidden;
+}
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+:where(.table-scroll > table) { width: 100%; border-collapse: collapse; }
+:where(.table-scroll > table thead tr) { background: var(--surface-2); }
+:where(.table-scroll > table th) {
+  text-align: right; white-space: nowrap; padding: 12px 18px;
+  font-size: 11.5px; font-weight: 600; color: var(--ink-2);
+}
+:where(.table-scroll > table td) {
+  padding: 14px 18px; border-top: 1px solid var(--line);
+  white-space: nowrap; font-size: 12.5px; color: var(--ink);
+}
+:where(.table-scroll > table tbody tr:hover) { background: var(--surface-2); }
+:where(.status-chip) {
+  display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 8px;
+  font-size: 11.5px; font-weight: 600; background: var(--green-soft); color: var(--green);
+}
+:where(.status-chip.inactive) { background: var(--red-soft); color: var(--red); }
+:where(.link-btn) {
+  border: 0; background: transparent; color: var(--accent);
+  font-size: 12px; font-weight: 600; padding: 0; margin-inline-end: 12px; cursor: pointer;
+}
+:where(.link-btn:hover) { text-decoration: underline; }
+:where(.link-btn.danger) { color: var(--red); }
+:where(.no-results) { padding: 52px 20px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+:where(.no-results-title) { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+:where(.no-results-sub) { font-size: 12px; color: var(--ink-2); }
+
+/* =====================================================================================
+   التلفون (≤560px، 28/9/2026): الجداول بتنسحب أفقيًا جوّا إطارها (ما بتدفش الصفحة)، والنماذج بعمود واحد، وصفوف
+   الفلاتر/التبويبات/الأزرار بتنلف بدل ما تطلع برّا الشاشة. خلايا أضيق عشان يبين أكتر من عمودين.
+   ===================================================================================== */
+@media (max-width: 560px) {
+  .table-scroll table th { padding: 10px 12px; }
+  .table-scroll table td { padding: 11px 12px; }
+  .data-table th, .data-table td { padding: 9px 11px; }
+
+  .form-fields, .modal-fields, .form-grid, .fields-grid { grid-template-columns: 1fr !important; }
+  .form-fields > *, .modal-fields > *, .form-grid > *, .fields-grid > * { grid-column: auto !important; min-width: 0; }
+
+  .filter-row, .filters, .toolbar, .list-toolbar, .head-actions, .modal-actions, .form-actions { flex-wrap: wrap; }
+  .filter-row > *, .filters > * { min-width: 0; }
+  .tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .tabs > * { flex: 0 0 auto; }
+
+  .page-head { flex-wrap: wrap; gap: 12px; }
+  .modal-card { width: calc(100vw - 24px) !important; max-width: calc(100vw - 24px) !important; max-height: calc(100vh - 24px); overflow-y: auto; }
+  input, select, textarea { max-width: 100%; }
+}
