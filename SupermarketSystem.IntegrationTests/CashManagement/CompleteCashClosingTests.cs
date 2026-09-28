@@ -54,8 +54,10 @@ public sealed class CompleteCashClosingTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task تقفيل_نفس_الفرع_ونفس_اليوم_مرتين_يفشل_بتعارض()
+    public async Task تقفيل_مرتين_بنفس_اليوم_بلا_رقم_وردية_بياخد_الوردية_الجاية_تلقائيًا()
     {
+        // هيك بيقفّل تطبيق الكاشير (ما بيبعت رقم وردية): ظرف طارئ أو تسليم وردية بنفس اليوم لازم
+        // ينقبل - كان التقفيل التاني يرجع "يوجد تقفيل مسبق" (طلب صاحب المشروع 28/9/2026).
         using var scope = CreateScope();
         await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
         var handler = scope.ServiceProvider.GetRequiredService<CompleteCashClosingHandler>();
@@ -64,15 +66,14 @@ public sealed class CompleteCashClosingTests : IntegrationTestBase
         var first = await handler.HandleAsync(
             new CompleteCashClosingCommand(Fixture.TestBranchId, businessDate, 0m, Array.Empty<CompleteCashClosingCountDto>()),
             CancellationToken.None);
-        Assert.True(first.IsSuccess);
+        Assert.True(first.IsSuccess, first.Error?.Message);
+        Assert.Equal(1, first.Value.ShiftNumber);
 
         var second = await handler.HandleAsync(
             new CompleteCashClosingCommand(Fixture.TestBranchId, businessDate, 0m, Array.Empty<CompleteCashClosingCountDto>()),
             CancellationToken.None);
-
-        Assert.True(second.IsFailure);
-        Assert.Equal(ErrorType.Conflict, second.Error!.Type);
-        Assert.Equal("CashClosing.AlreadyClosed", second.Error.Code);
+        Assert.True(second.IsSuccess, second.Error?.Message);
+        Assert.Equal(2, second.Value.ShiftNumber);
     }
 
     [Fact]

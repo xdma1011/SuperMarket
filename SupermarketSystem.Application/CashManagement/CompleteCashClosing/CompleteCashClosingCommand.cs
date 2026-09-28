@@ -25,10 +25,11 @@ public sealed record CompleteCashClosingCommand(
     decimal CountedCash,
     // عدّ اختياري لأي طريقة دفع تانية (فارغة = ما تم عدّها، طبيعي لفيزا/CliQ).
     IReadOnlyList<CompleteCashClosingCountDto> CountedDetails,
-    // رقم الوردية ضمن نفس اليوم التجاري - افتراضي 1 (يوم بوردية وحدة).
-    // راجع تعليق CashClosing.ShiftNumber بالـDomain - القيد الفريد الفعلي
+    // رقم الوردية ضمن نفس اليوم التجاري. null = الوردية الجاية تلقائيًا (أول تقفيل باليوم 1، بعده 2...) -
+    // هيك بيبعت تطبيق الكاشير، فالكاشير بيقدر يقفّل أكتر من مرة باليوم (ظرف طارئ، تسليم وردية).
+    // لوحة الإدارة بتبعت رقم صريح. راجع تعليق CashClosing.ShiftNumber بالـDomain - القيد الفريد الفعلي
     // (BranchId, BusinessDate, ShiftNumber)، لا (BranchId, BusinessDate) وحدها.
-    int ShiftNumber = 1);
+    int? ShiftNumber = null);
 
 public sealed record CompleteCashClosingDetailResponseDto(
     Guid PaymentMethodId,
@@ -84,7 +85,7 @@ public static class CompleteCashClosingValidator
             return Error.Validation("CashClosing.CountedCashNegative", "المبلغ المعدود لا يمكن أن يكون سالبًا.");
         }
 
-        if (command.ShiftNumber < 1)
+        if (command.ShiftNumber is < 1)
         {
             return Error.Validation("CashClosing.ShiftNumberInvalid", "رقم الوردية يجب أن يكون 1 على الأقل.");
         }
@@ -187,16 +188,21 @@ public sealed class CompleteCashClosingHandler
                 Error.NotFound("CashClosing.BranchNotFound", $"الفرع '{command.BranchId}' غير موجود."));
         }
 
+        var shiftNumber = command.ShiftNumber
+            ?? (await _context.CashClosings.AsNoTracking()
+                .Where(c => c.BranchId == command.BranchId && c.BusinessDate == command.BusinessDate)
+                .MaxAsync(c => (int?)c.ShiftNumber, cancellationToken) ?? 0) + 1;
+
         // فحص أوّلي ودّي — الحارس الحقيقي هو الـunique index على
         // (BranchId, BusinessDate, ShiftNumber) بقاعدة البيانات؛ هذا الفحص
         // بس لإرجاع خطأ واضح بدل استثناء SQL خام لو صار سباق تزامن نادر.
         var alreadyClosed = await _context.CashClosings.AsNoTracking()
             .AnyAsync(c => c.BranchId == command.BranchId && c.BusinessDate == command.BusinessDate
-                           && c.ShiftNumber == command.ShiftNumber, cancellationToken);
+                           && c.ShiftNumber == shiftNumber, cancellationToken);
         if (alreadyClosed)
         {
             return Result.Failure<CompleteCashClosingResponse>(
-                Error.Conflict("CashClosing.AlreadyClosed", $"يوجد تقفيل مسبق لهذا الفرع بتاريخ {command.BusinessDate} للوردية {command.ShiftNumber}."));
+                Error.Conflict("CashClosing.AlreadyClosed", $"يوجد تقفيل مسبق لهذا الفرع بتاريخ {command.BusinessDate} للوردية {shiftNumber}."));
         }
 
         // === تحديد بداية الفترة: نهاية آخر تقفيل لنفس الفرع (لو وُجد) ===
@@ -259,7 +265,7 @@ public sealed class CompleteCashClosingHandler
 
         var cashClosing = new CashClosing(
             command.BranchId, actorUserId, command.BusinessDate, closedAtUtc, expectedCash, command.CountedCash,
-            command.ShiftNumber);
+            shiftNumber);
 
         var responseDetails = new List<CompleteCashClosingDetailResponseDto>();
 

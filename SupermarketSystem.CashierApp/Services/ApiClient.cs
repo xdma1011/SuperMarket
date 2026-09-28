@@ -152,6 +152,30 @@ public sealed record VoidSaleResult(bool Success, VoidSaleResponseDto? Response,
 /// </summary>
 public sealed class ApiClient
 {
+    /// <summary>
+    /// رسالة الخطأ العربية من رد السيرفر (حقل "detail") بدل JSON خام - كانت الشاشة تعرض
+    /// {"type":...,"title":...,"detail":...} كامل للكاشير.
+    /// </summary>
+    private static string ServerError(string body)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            if (document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("detail", out var detail)
+                && detail.ValueKind == JsonValueKind.String
+                && !string.IsNullOrWhiteSpace(detail.GetString()))
+            {
+                return detail.GetString()!;
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        return string.IsNullOrWhiteSpace(body) ? "رفض السيرفر الطلب بلا تفاصيل." : body;
+    }
+
     private readonly HttpClient _http;
 
     /// <summary>
@@ -255,7 +279,7 @@ public sealed class ApiClient
             }
 
             var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            return new CashClosingResult(false, null, $"{(int)response.StatusCode}: {errorBody}");
+            return new CashClosingResult(false, null, ServerError(errorBody));
         }
         catch (Exception ex)
         {
@@ -362,7 +386,7 @@ public sealed class ApiClient
             }
 
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
-            return new PendingSaleSendResult(Success: false, ErrorMessage: $"{(int)response.StatusCode}: {body}", IsConnectivityFailure: false);
+            return new PendingSaleSendResult(Success: false, ErrorMessage: ServerError(body), IsConnectivityFailure: false);
         }
         catch (Exception ex)
         {
@@ -454,7 +478,7 @@ public sealed class ApiClient
             }
 
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
-            return new UploadInvoiceDraftResult(false, $"{(int)response.StatusCode}: {body}");
+            return new UploadInvoiceDraftResult(false, ServerError(body));
         }
         catch (Exception ex)
         {
@@ -489,7 +513,7 @@ public sealed class ApiClient
             }
 
             var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            return new SaleInvoiceSearchResult(false, null, $"{(int)response.StatusCode}: {errorBody}");
+            return new SaleInvoiceSearchResult(false, null, ServerError(errorBody));
         }
         catch (Exception ex)
         {
@@ -513,7 +537,7 @@ public sealed class ApiClient
             }
 
             var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            return new SaleInvoiceDetailResult(false, null, $"{(int)response.StatusCode}: {errorBody}");
+            return new SaleInvoiceDetailResult(false, null, ServerError(errorBody));
         }
         catch (Exception ex)
         {
@@ -541,7 +565,7 @@ public sealed class ApiClient
             }
 
             var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            return new ProcessReturnResult(false, null, $"{(int)response.StatusCode}: {errorBody}");
+            return new ProcessReturnResult(false, null, ServerError(errorBody));
         }
         catch (Exception ex)
         {
@@ -569,7 +593,7 @@ public sealed class ApiClient
             }
 
             var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            return new VoidSaleResult(false, null, $"{(int)response.StatusCode}: {errorBody}");
+            return new VoidSaleResult(false, null, ServerError(errorBody));
         }
         catch (Exception ex)
         {
