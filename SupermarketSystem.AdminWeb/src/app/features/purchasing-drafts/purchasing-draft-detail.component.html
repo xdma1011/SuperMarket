@@ -32,7 +32,7 @@
 }
 @if (draft()?.paidNowAmount) {
   <div class="alert-banner info">
-    ⚠ دُفع للمورد {{ draft()!.paidNowAmount | number: '1.2-2' }} ({{ paymentMethodNameOf(draft()!.paidNowPaymentMethodId) }}) وقت الرفع - مسجَّل أصلًا بدرج الكاش.
+    ⚠ دُفع للمورد {{ draft()!.paidNowAmount | number: '1.3-3' }} ({{ paymentMethodNameOf(draft()!.paidNowPaymentMethodId) }}) وقت الرفع - مسجَّل أصلًا بدرج الكاش.
     عند الاعتماد، هذا المبلغ يُسجَّل تلقائيًا كدفعة على الفاتورة - لا داعي لتسجيله يدويًا مرة ثانية.
   </div>
 }

@@ -26,7 +26,7 @@
 
     <label class="field">
       <span>الفرع</span>
-      <select [(ngModel)]="selectedBranchId">
+      <select [(ngModel)]="selectedBranchId" (ngModelChange)="onBranchChange()">
         @for (b of branches(); track b.id) {
           <option [value]="b.id">{{ b.name }}</option>
         }
@@ -56,4 +56,59 @@
   <button type="button" class="btn-primary" [disabled]="submitting() || loading()" (click)="submit()">
     {{ submitting() ? 'جارٍ التسجيل…' : 'تسجيل الضيافة' }}
   </button>
+</section>
+
+<section class="data-panel">
+  <div class="data-panel-head">
+    <h2>سجل الضيافة</h2>
+    <span class="hint">الأحدث أولًا - "للمراجعة" يعني فوق الحد اليومي المسموح</span>
+  </div>
+
+  @if (logError()) {
+    <div class="data-empty">{{ logError() }}</div>
+  } @else if (loadingLog() && log().length === 0) {
+    <div class="data-empty">جارٍ التحميل…</div>
+  } @else if (log().length === 0) {
+    <div class="data-empty">لا يوجد ضيافة مسجّلة بهالفرع بعد.</div>
+  } @else {
+    <div class="data-scroll">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>التاريخ</th>
+            <th>المنتج</th>
+            <th>الكمية (بالوحدة الأساسية)</th>
+            <th>السبب / لمين</th>
+            <th>سجّلها</th>
+            <th>الحالة</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of log(); track row.stockMovementId) {
+            <tr>
+              <td class="mono">{{ row.occurredAtUtc | date: 'yyyy-MM-dd HH:mm' }}</td>
+              <td>{{ row.productName }}</td>
+              <td class="mono">{{ row.quantityBase | number: '1.0-3' }}</td>
+              <td>{{ row.notes || '—' }}</td>
+              <td>{{ row.username }}</td>
+              <td>
+                @if (row.needsReview) {
+                  <span class="chip warn">للمراجعة</span>
+                } @else {
+                  <span class="chip ok">عادي</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    @if (logPageCount > 1) {
+      <div class="pager">
+        <button type="button" (click)="loadLog(logPage() - 1)" [disabled]="logPage() <= 1 || loadingLog()">السابق</button>
+        <span>صفحة {{ logPage() }} من {{ logPageCount }}</span>
+        <button type="button" (click)="loadLog(logPage() + 1)" [disabled]="logPage() >= logPageCount || loadingLog()">التالي</button>
+      </div>
+    }
+  }
 </section>

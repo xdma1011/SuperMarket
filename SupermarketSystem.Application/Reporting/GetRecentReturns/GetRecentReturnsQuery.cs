@@ -26,7 +26,9 @@ public sealed record RecentReturnItemDto(
     ReturnReason Reason,
     decimal TotalAmount,
     decimal TotalRefundedAmount,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    // رقم فاتورة البيع الأصلية (للعرض بقائمة الإرجاعات) - null لو ما انحلّ (نادر).
+    string? OriginalInvoiceNumber = null);
 
 /// <summary>
 /// Architecture Review §14: "Recently returned invoices" — a pure read-model
@@ -96,6 +98,16 @@ public sealed class GetRecentReturnsHandler
                     x.r.TotalRefundedAmount,
                     x.r.CreatedAtUtc))
             .ToListAsync(cancellationToken);
+
+        // أرقام الفواتير الأصلية بطلب تاني للصفحة بس (بدل join تالت بنفس الاستعلام).
+        var originalIds = items.Select(i => i.OriginalSaleInvoiceId).Distinct().ToList();
+        var originalNumbers = await _context.SaleInvoices.AsNoTracking()
+            .Where(s => originalIds.Contains(s.Id))
+            .Select(s => new { s.Id, s.InvoiceNumber })
+            .ToDictionaryAsync(s => s.Id, s => s.InvoiceNumber, cancellationToken);
+        items = items
+            .Select(i => i with { OriginalInvoiceNumber = originalNumbers.GetValueOrDefault(i.OriginalSaleInvoiceId) })
+            .ToList();
 
         return new PagedResult<RecentReturnItemDto>(items, totalCount, paging.PageNumber, paging.PageSize);
     }

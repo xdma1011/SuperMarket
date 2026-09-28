@@ -16,7 +16,7 @@
 <div class="kpi-grid">
   <div class="kpi-card">
     <span class="kpi-label">مبيعات آخر 30 يوم</span>
-    <span class="kpi-value">{{ (summary()?.totalSales ?? 0) | number: '1.2-2' }}</span>
+    <span class="kpi-value">{{ (summary()?.totalSales ?? 0) | number: '1.3-3' }} <small>د.أ</small></span>
   </div>
   <div class="kpi-card">
     <span class="kpi-label">عدد الفواتير</span>
@@ -24,11 +24,11 @@
   </div>
   <div class="kpi-card">
     <span class="kpi-label">متوسط الفاتورة</span>
-    <span class="kpi-value">{{ averageInvoice | number: '1.2-2' }}</span>
+    <span class="kpi-value">{{ averageInvoice | number: '1.3-3' }} <small>د.أ</small></span>
   </div>
   <div class="kpi-card">
     <span class="kpi-label">صافي الإيراد</span>
-    <span class="kpi-value">{{ (summary()?.netRevenue ?? 0) | number: '1.2-2' }}</span>
+    <span class="kpi-value">{{ (summary()?.netRevenue ?? 0) | number: '1.3-3' }} <small>د.أ</small></span>
   </div>
 </div>
 
@@ -45,7 +45,7 @@
           <div class="invoice-row">
             <span class="invoice-number mono">{{ inv.invoiceNumber }}</span>
             <span class="invoice-status">{{ inv.statusTitle }}</span>
-            <span class="invoice-total mono">{{ inv.totalAmount | number: '1.2-2' }}</span>
+            <span class="invoice-total mono">{{ inv.totalAmount | number: '1.3-3' }}</span>
             <span class="invoice-date mono">{{ inv.createdAtUtc | date: 'MM-dd HH:mm' }}</span>
           </div>
         }

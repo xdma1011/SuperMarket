@@ -28,10 +28,21 @@ interface PagedResult<T> {
   totalCount: number;
 }
 
+interface ComplimentaryLogItem {
+  stockMovementId: string;
+  productName: string;
+  quantityBase: number;
+  notes: string | null;
+  needsReview: boolean;
+  occurredAtUtc: string;
+  username: string;
+}
+
+const LOG_PAGE_SIZE = 20;
+
 /**
- * صفحة بسيطة عمدًا — بلا جدول سجل سابق (StockMovement هو السجل نفسه،
- * لو احتجنا عرضه لاحقًا فهو استعلام تقرير منفصل). الهدف الوحيد هون:
- * تسجيل خروج بضاعة بسرعة، بلا أي قيد مالي.
+ * تسجيل خروج بضاعة كضيافة بسرعة (بلا أي قيد مالي)، وتحته جدول بكل الضيافات المسجّلة بالفرع (شو، قديش،
+ * مين، إمتى، وهل انعلّمت للمراجعة لأنها فوق الحد اليومي) - طلب صاحب المشروع 28/9/2026.
  */
 @Component({
   selector: 'app-complimentary',
@@ -59,6 +70,17 @@ export class ComplimentaryComponent implements OnInit {
   quantity: number | null = null;
   reason = '';
 
+  readonly log = signal<ComplimentaryLogItem[]>([]);
+  readonly logTotal = signal(0);
+  readonly logPage = signal(1);
+  readonly loadingLog = signal(false);
+  readonly logError = signal<string | null>(null);
+  readonly logPageSize = LOG_PAGE_SIZE;
+
+  get logPageCount(): number {
+    return Math.max(1, Math.ceil(this.logTotal() / LOG_PAGE_SIZE));
+  }
+
   constructor(private readonly apiClient: ApiClient) {}
 
   ngOnInit(): void {
@@ -83,6 +105,7 @@ export class ComplimentaryComponent implements OnInit {
         this.selectedProductId = productsResult.items[0].id;
         await this.onProductChange();
       }
+      await this.loadLog(1);
     } catch {
       this.errorMessage.set('تعذّر تحميل البيانات الأساسية.');
     } finally {
@@ -138,6 +161,7 @@ export class ComplimentaryComponent implements OnInit {
       this.successMessage.set('تم تسجيل الضيافة بنجاح، ونقص المخزون فورًا.');
       this.quantity = null;
       this.reason = '';
+      await this.loadLog(1);
     } catch (err: unknown) {
       const message =
         err && typeof err === 'object' && 'error' in err
@@ -146,6 +170,33 @@ export class ComplimentaryComponent implements OnInit {
       this.errorMessage.set(message ?? 'تعذّر تسجيل الضيافة.');
     } finally {
       this.submitting.set(false);
+    }
+  }
+
+  async onBranchChange(): Promise<void> {
+    await this.loadLog(1);
+  }
+
+  async loadLog(page: number): Promise<void> {
+    if (!this.selectedBranchId) {
+      return;
+    }
+
+    this.loadingLog.set(true);
+    this.logError.set(null);
+    try {
+      const result = await firstValueFrom(
+        this.apiClient.get<PagedResult<ComplimentaryLogItem>>(ApiController.Inventory, InventoryOperation.ComplimentaryLog, undefined, {
+          branchId: this.selectedBranchId, pageNumber: page, pageSize: LOG_PAGE_SIZE
+        })
+      );
+      this.log.set(result.items);
+      this.logTotal.set(result.totalCount);
+      this.logPage.set(page);
+    } catch {
+      this.logError.set('تعذّر تحميل سجل الضيافة.');
+    } finally {
+      this.loadingLog.set(false);
     }
   }
 }

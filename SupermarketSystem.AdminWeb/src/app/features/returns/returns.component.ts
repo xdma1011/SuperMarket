@@ -48,6 +48,28 @@ interface PagedResult<T> {
   totalCount: number;
 }
 
+/** فاتورة إرجاع بالقائمة - نفس RecentReturnItemDto بالباك إند (Reason اسم enum نصي). */
+interface ReturnInvoiceListItem {
+  returnInvoiceId: string;
+  invoiceNumber: string;
+  originalInvoiceNumber: string | null;
+  cashierUsername: string;
+  reason: string;
+  totalAmount: number;
+  totalRefundedAmount: number;
+  createdAtUtc: string;
+}
+
+const RETURN_REASON_LABELS: Record<string, string> = {
+  Defective: 'تالف/معيب',
+  CustomerChangedMind: 'غيّر رأيه',
+  WrongItem: 'صنف غلط',
+  Expired: 'منتهي الصلاحية',
+  Other: 'أخرى'
+};
+
+const RETURNS_PAGE_SIZE = 20;
+
 interface ReturnLine {
   saleInvoiceItemId: string;
   productName: string;
@@ -87,8 +109,43 @@ export class ReturnsComponent {
   readonly submitError = signal<string | null>(null);
   readonly successMessage = signal<string | null>(null);
 
+  /** قائمة فواتير الإرجاع (تحت نموذج الإرجاع) - الأحدث أولًا. */
+  readonly returnInvoices = signal<ReturnInvoiceListItem[]>([]);
+  readonly returnsTotal = signal(0);
+  readonly returnsPage = signal(1);
+  readonly loadingReturns = signal(false);
+  readonly returnsError = signal<string | null>(null);
+
+  get returnsPageCount(): number {
+    return Math.max(1, Math.ceil(this.returnsTotal() / RETURNS_PAGE_SIZE));
+  }
+
   constructor(private readonly apiClient: ApiClient) {
     this.loadPaymentMethods();
+    this.loadReturnInvoices(1);
+  }
+
+  reasonLabel(reason: string): string {
+    return RETURN_REASON_LABELS[reason] ?? reason;
+  }
+
+  async loadReturnInvoices(page: number): Promise<void> {
+    this.loadingReturns.set(true);
+    this.returnsError.set(null);
+    try {
+      const result = await firstValueFrom(
+        this.apiClient.get<PagedResult<ReturnInvoiceListItem>>(ApiController.Returns, ReturnsOperation.List, undefined, {
+          pageNumber: page, pageSize: RETURNS_PAGE_SIZE
+        })
+      );
+      this.returnInvoices.set(result.items);
+      this.returnsTotal.set(result.totalCount);
+      this.returnsPage.set(page);
+    } catch {
+      this.returnsError.set('تعذّر تحميل فواتير الإرجاع.');
+    } finally {
+      this.loadingReturns.set(false);
+    }
   }
 
   private async loadPaymentMethods(): Promise<void> {
@@ -217,6 +274,7 @@ export class ReturnsComponent {
       this.successMessage.set('تم تسجيل الإرجاع بنجاح.');
       this.clearSelection();
       this.notes = '';
+      this.loadReturnInvoices(1);
     } catch (err: unknown) {
       const message =
         err && typeof err === 'object' && 'error' in err

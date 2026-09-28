@@ -1,4 +1,4 @@
-import { Component, signal, computed, HostListener } from '@angular/core';
+import { Component, ElementRef, HostListener, ViewChild, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterOutlet, RouterLink, RouterLinkActive, NavigationEnd } from '@angular/router';
@@ -10,6 +10,7 @@ import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { CashierSyncOperation, ProductsOperation, SuppliersOperation, PurchaseInvoicesOperation } from '../../core/api/operations';
 import { NAV_GROUPS, NAV_ICONS, NAV_ITEMS, NavGroupId, NavItem } from '../../shared/models/nav-item';
+import { normalizeArabic } from '../../shared/components/select-filter/select-filter.component';
 
 interface NavSection {
   id: NavGroupId;
@@ -18,9 +19,29 @@ interface NavSection {
 }
 
 const COLLAPSED_GROUPS_STORAGE_KEY = 'nav.collapsedGroups';
+const SIDEBAR_COLLAPSED_STORAGE_KEY = 'nav.sidebarCollapsed';
+const NAV_ORDER_STORAGE_KEY = 'nav.order';
+
+/** ترتيب شخصي للقائمة (لكل متصفح): ترتيب المجموعات، وترتيب الصفحات جوّا كل مجموعة. */
+interface NavOrder {
+  groups: NavGroupId[];
+  items: Partial<Record<NavGroupId, string[]>>;
+}
+
+/** بترتّب حسب قائمة مفضّلة؛ اللي مش بالقائمة (صفحة جديدة مثلًا) بيضل بترتيبه الافتراضي بالآخر. */
+function orderBy<T>(list: T[], key: (item: T) => string, preferred: string[] | undefined): T[] {
+  if (!preferred?.length) {
+    return list;
+  }
+  const rank = (item: T) => {
+    const index = preferred.indexOf(key(item));
+    return index < 0 ? preferred.length + list.indexOf(item) : index;
+  };
+  return [...list].sort((a, b) => rank(a) - rank(b));
+}
 
 interface SearchResultItem {
-  type: 'product' | 'supplier' | 'invoice';
+  type: 'page' | 'product' | 'supplier' | 'invoice';
   typeLabel: string;
   id: string;
   label: string;
@@ -40,13 +61,30 @@ export class ShellComponent {
     NAV_ITEMS.filter(item => !item.requiredPermission || this.permissionsService.has(item.requiredPermission))
   );
 
-  /** المجموعات الظاهرة بس (مجموعة كل عناصرها مخفية بالصلاحيات ما بتطلع عنوانها فاضي). */
+  /** ترتيب شخصي من المستخدم (زر "ترتيب القائمة")؛ null = الترتيب الافتراضي. */
+  readonly navOrder = signal<NavOrder | null>(this.readNavOrder());
+
+  /** المجموعات الظاهرة بس (مجموعة كل عناصرها مخفية بالصلاحيات ما بتطلع عنوانها فاضي)، بالترتيب الشخصي لو في. */
   readonly navSections = computed<NavSection[]>(() => {
     const visible = this.navItems();
-    return NAV_GROUPS
-      .map(g => ({ id: g.id, label: g.label, items: visible.filter(i => i.group === g.id) }))
+    const order = this.navOrder();
+    const groups = orderBy(NAV_GROUPS, g => g.id, order?.groups);
+    return groups
+      .map(g => ({
+        id: g.id,
+        label: g.label,
+        items: orderBy(visible.filter(i => i.group === g.id), i => i.id, order?.items[g.id])
+      }))
       .filter(section => section.items.length > 0);
   });
+
+  /** وضع ترتيب القائمة: أسهم ↑↓ بدل الروابط، وزر إعادة الترتيب الافتراضي. */
+  readonly arrangeMode = signal(false);
+
+  /** القائمة الجانبية مطويّة لأيقونات بس (كمبيوتر) - تفضيل لكل متصفح. */
+  readonly sidebarCollapsed = signal<boolean>(this.readFlag(SIDEBAR_COLLAPSED_STORAGE_KEY));
+
+  @ViewChild('searchInput') private searchInput?: ElementRef<HTMLInputElement>;
 
   readonly icons = NAV_ICONS;
 
@@ -70,6 +108,9 @@ export class ShellComponent {
   readonly hasQuery = computed(() => this.searchQuery().length > 0);
 
   readonly searchResults = signal<SearchResultItem[]>([]);
+  /** صفحات مطابقة للبحث - محلية وفورية (من أول حرف)، بتطلع قبل نتائج المنتجات والفواتير. */
+  readonly pageResults = signal<SearchResultItem[]>([]);
+  readonly allResults = computed(() => [...this.pageResults(), ...this.searchResults()]);
   readonly searchOpen = signal(false);
   readonly searching = signal(false);
   private searchDebounceHandle: ReturnType<typeof setTimeout> | null = null;
@@ -160,7 +201,131 @@ export class ShellComponent {
   clearQuery(): void {
     this.searchQuery.set('');
     this.searchResults.set([]);
+    this.pageResults.set([]);
     this.searchOpen.set(false);
+  }
+
+  /** بحث بأسماء الصفحات المسموحة للمستخدم (بلا حساسية همزة/تاء مربوطة) + اسم مجموعتها. */
+  private matchPages(query: string): SearchResultItem[] {
+    const q = normalizeArabic(query);
+    if (!q) {
+      return [];
+    }
+    return this.navItems()
+      .filter(item => normalizeArabic(item.label).includes(q))
+      .slice(0, 6)
+      .map(item => ({
+        type: 'page' as const,
+        typeLabel: 'صفحة',
+        id: item.id,
+        label: item.label,
+        sublabel: NAV_GROUPS.find(g => g.id === item.group)?.label ?? '',
+        route: item.route
+      }));
+  }
+
+  /** Enter بخانة البحث = أول نتيجة (غالبًا الصفحة المطلوبة). */
+  onSearchEnter(): void {
+    const first = this.allResults()[0];
+    if (first) {
+      this.goToResult(first);
+    }
+  }
+
+  /** Ctrl+K (أو ⌘K) من أي مكان = خانة البحث. */
+  @HostListener('document:keydown', ['$event'])
+  onGlobalKeydown(event: KeyboardEvent): void {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      this.searchInput?.nativeElement.focus();
+      this.searchInput?.nativeElement.select();
+    }
+  }
+
+  // === طيّ القائمة وترتيبها ===
+
+  toggleSidebarCollapsed(): void {
+    const next = !this.sidebarCollapsed();
+    this.sidebarCollapsed.set(next);
+    this.writeFlag(SIDEBAR_COLLAPSED_STORAGE_KEY, next);
+    if (next) {
+      this.arrangeMode.set(false);
+    }
+  }
+
+  toggleArrangeMode(): void {
+    this.arrangeMode.update(on => !on);
+  }
+
+  /** تحريك صفحة لفوق/لتحت جوّا مجموعتها. */
+  moveItem(section: NavSection, index: number, delta: -1 | 1): void {
+    const ids = section.items.map(i => i.id);
+    const target = index + delta;
+    if (target < 0 || target >= ids.length) {
+      return;
+    }
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    const current = this.currentOrder();
+    this.saveNavOrder({ ...current, items: { ...current.items, [section.id]: ids } });
+  }
+
+  /** تحريك مجموعة كاملة لفوق/لتحت ("الرئيسية" بتضل أول دايمًا). */
+  moveGroup(sectionIndex: number, delta: -1 | 1): void {
+    const ids = this.navSections().map(s => s.id);
+    const target = sectionIndex + delta;
+    if (target < 0 || target >= ids.length || ids[target] === 'main' || ids[sectionIndex] === 'main') {
+      return;
+    }
+    [ids[sectionIndex], ids[target]] = [ids[target], ids[sectionIndex]];
+    this.saveNavOrder({ ...this.currentOrder(), groups: ids });
+  }
+
+  resetNavOrder(): void {
+    this.navOrder.set(null);
+    try {
+      localStorage.removeItem(NAV_ORDER_STORAGE_KEY);
+    } catch {
+      /* تفضيل شكلي بس. */
+    }
+  }
+
+  private currentOrder(): NavOrder {
+    return this.navOrder() ?? { groups: this.navSections().map(s => s.id), items: {} };
+  }
+
+  private saveNavOrder(order: NavOrder): void {
+    this.navOrder.set(order);
+    try {
+      localStorage.setItem(NAV_ORDER_STORAGE_KEY, JSON.stringify(order));
+    } catch {
+      /* تفضيل شكلي بس - فشل الحفظ ما بيأثر على شي. */
+    }
+  }
+
+  private readNavOrder(): NavOrder | null {
+    try {
+      const raw = localStorage.getItem(NAV_ORDER_STORAGE_KEY);
+      const parsed = raw ? (JSON.parse(raw) as NavOrder) : null;
+      return parsed && Array.isArray(parsed.groups) && typeof parsed.items === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private readFlag(key: string): boolean {
+    try {
+      return localStorage.getItem(key) === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  private writeFlag(key: string, value: boolean): void {
+    try {
+      localStorage.setItem(key, String(value));
+    } catch {
+      /* تفضيل شكلي بس. */
+    }
   }
 
   /**
@@ -181,9 +346,15 @@ export class ShellComponent {
     }
 
     const trimmed = query.trim();
+    this.pageResults.set(this.matchPages(trimmed));
+    if (this.pageResults().length > 0) {
+      // الصفحات فورية - ما بتستنّى تأجيل بحث المنتجات والفواتير.
+      this.searchOpen.set(true);
+    }
+
     if (trimmed.length < 2) {
       this.searchResults.set([]);
-      this.searchOpen.set(false);
+      this.searchOpen.set(this.pageResults().length > 0);
       return;
     }
 

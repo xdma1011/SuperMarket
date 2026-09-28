@@ -386,7 +386,7 @@ export class ReportsComponent implements OnInit {
       return column.enumMap[String(value)] ?? String(value);
     }
     if (column.type === 'currency') {
-      return Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return Number(value).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
     }
     if (column.type === 'number') {
       return Number(value).toLocaleString('en-US');

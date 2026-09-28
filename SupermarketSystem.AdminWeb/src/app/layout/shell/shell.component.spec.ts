@@ -34,6 +34,8 @@ describe('ShellComponent', () => {
       ]
     }).compileComponents();
 
+    localStorage.removeItem('nav.order');
+    localStorage.removeItem('nav.sidebarCollapsed');
     fixture = TestBed.createComponent(ShellComponent);
     component = fixture.componentInstance;
   });
@@ -143,7 +145,8 @@ describe('ShellComponent', () => {
       jasmine.clock().tick(400);
 
       expect(component.searchResults()).toEqual([]);
-      expect(component.searchOpen()).toBeFalse();
+      // حرف واحد ممكن يطابق أسماء صفحات (محلي) - بس ما في أي طلب API.
+      expect(component.searchOpen()).toBe(component.pageResults().length > 0);
       expect(apiClientSpy.get).not.toHaveBeenCalled();
     });
 
@@ -214,6 +217,66 @@ describe('ShellComponent', () => {
       expect(authServiceSpy.logout).toHaveBeenCalled();
       expect(permissionsSpy.reset).toHaveBeenCalled();
       expect(router.navigateByUrl).toHaveBeenCalledWith('/login');
+    });
+  });
+
+  describe('بحث الصفحات وترتيب القائمة وطيّها', () => {
+    beforeEach(() => {
+      permissionsSpy.has.and.returnValue(true);
+    });
+
+    it('البحث بيطلع الصفحات المطابقة من أول حرف وقبل أي نتائج تانية، بلا حساسية للهمزة', () => {
+      component.onSearchInput('ضيافه');
+
+      expect(component.pageResults().map(r => r.id)).toEqual(['complimentary']);
+      expect(component.allResults()[0].type).toBe('page');
+      expect(component.searchOpen()).toBeTrue();
+    });
+
+    it('Enter بيروح لأول نتيجة (الصفحة)', () => {
+      const router = TestBed.inject(Router);
+      const navigate = spyOn(router, 'navigateByUrl').and.resolveTo(true);
+      component.onSearchInput('الجرد');
+
+      component.onSearchEnter();
+
+      expect(navigate).toHaveBeenCalledWith('/stocktakes');
+    });
+
+    it('تحريك صفحة لفوق بيغيّر الترتيب وبينحفظ، وإعادة الترتيب الافتراضي بترجّعه', () => {
+      const inventory = () => component.navSections().find(s => s.id === 'inventory')!;
+      const original = inventory().items.map(i => i.id);
+
+      component.moveItem(inventory(), 1, -1);
+
+      expect(inventory().items.map(i => i.id).slice(0, 2)).toEqual([original[1], original[0]]);
+      expect(localStorage.getItem('nav.order')).toContain(original[1]);
+
+      component.resetNavOrder();
+
+      expect(inventory().items.map(i => i.id)).toEqual(original);
+      expect(localStorage.getItem('nav.order')).toBeNull();
+    });
+
+    it('تحريك مجموعة ما بيتخطّى "الرئيسية" (بتضل أول)', () => {
+      const ids = () => component.navSections().map(s => s.id);
+      const salesIndex = ids().indexOf('sales');
+
+      component.moveGroup(salesIndex, -1);
+
+      expect(ids()[0]).toBe('main');
+      component.moveGroup(ids().indexOf('inventory'), -1);
+      expect(ids().indexOf('inventory')).toBeLessThan(ids().indexOf('sales'));
+    });
+
+    it('طيّ القائمة الجانبية بينحفظ وبيطفّي وضع الترتيب', () => {
+      component.toggleArrangeMode();
+
+      component.toggleSidebarCollapsed();
+
+      expect(component.sidebarCollapsed()).toBeTrue();
+      expect(component.arrangeMode()).toBeFalse();
+      expect(localStorage.getItem('nav.sidebarCollapsed')).toBe('true');
     });
   });
 });

@@ -264,8 +264,8 @@ describe('ReportsComponent', () => {
       expect(component.formatCell('Unknown', { type: 'enum', enumMap: { Defective: 'تالف/معيب' } })).toBe('Unknown');
     });
 
-    it('ينسّق القيمة المالية بمنزلتين عشريتين', () => {
-      expect(component.formatCell(1000, { type: 'currency' })).toBe('1,000.00');
+    it('ينسّق القيمة المالية بثلاث منازل (فلس)', () => {
+      expect(component.formatCell(1000, { type: 'currency' })).toBe('1,000.000');
     });
 
     it('ينسّق الرقم بلا منازل عشرية إجبارية', () => {

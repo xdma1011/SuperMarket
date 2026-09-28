@@ -17,6 +17,7 @@ export enum ReportsOperation {
   ProductMargin = 'product-margin',
   ExpiringBatches = 'inventory/expiring-batches',
   CashierVariance = 'cashiers/variance',
+  DrawerOpens = 'cashiers/drawer-opens',
   WasteLog = 'inventory/waste-log',
   SupplierPaymentDue = 'suppliers/payment-due'
 }

@@ -5,7 +5,7 @@
     (click)="closeDrawer()"
   ></div>
 
-  <aside class="sidebar" [class.drawer-open]="drawerOpen()">
+  <aside class="sidebar" [class.drawer-open]="drawerOpen()" [class.collapsed]="sidebarCollapsed() && !drawerOpen()">
     <div class="brand">
       <div class="brand-mark">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -21,42 +21,77 @@
     </div>
 
     <nav class="nav-list" aria-label="القائمة الرئيسية">
-      @for (section of navSections(); track section.id) {
+      @if (arrangeMode()) {
+        <div class="arrange-bar">
+          <span class="arrange-hint">رتّب الصفحات والمجموعات بالأسهم</span>
+          <div class="arrange-actions">
+            <button type="button" class="arrange-btn" (click)="resetNavOrder()">إعادة الترتيب الافتراضي</button>
+            <button type="button" class="arrange-btn primary" (click)="toggleArrangeMode()">تم</button>
+          </div>
+        </div>
+      }
+
+      @for (section of navSections(); track section.id; let si = $index) {
         <div class="nav-section">
           @if (section.label) {
-            <button
-              type="button"
-              class="nav-section-header"
-              [attr.aria-expanded]="!isGroupCollapsed(section.id)"
-              (click)="toggleGroup(section.id)"
-            >
-              <span>{{ section.label }}</span>
-              <svg class="chevron" [class.collapsed]="isGroupCollapsed(section.id)" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M6 9l6 6 6-6"></path>
-              </svg>
-            </button>
+            @if (arrangeMode()) {
+              <div class="nav-section-header arranging">
+                <span>{{ section.label }}</span>
+                <span class="move-btns">
+                  <button type="button" class="move-btn" (click)="moveGroup(si, -1)" [attr.aria-label]="'تحريك ' + section.label + ' لفوق'">↑</button>
+                  <button type="button" class="move-btn" (click)="moveGroup(si, 1)" [attr.aria-label]="'تحريك ' + section.label + ' لتحت'">↓</button>
+                </span>
+              </div>
+            } @else {
+              <button
+                type="button"
+                class="nav-section-header"
+                [attr.aria-expanded]="!isGroupCollapsed(section.id)"
+                (click)="toggleGroup(section.id)"
+              >
+                <span>{{ section.label }}</span>
+                <svg class="chevron" [class.collapsed]="isGroupCollapsed(section.id)" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M6 9l6 6 6-6"></path>
+                </svg>
+              </button>
+            }
           }
 
-          @if (!section.label || !isGroupCollapsed(section.id)) {
+          @if (!section.label || arrangeMode() || sidebarCollapsed() || !isGroupCollapsed(section.id)) {
             <div class="nav-section-items">
-              @for (item of section.items; track item.id) {
-                <a
-                  class="nav-item"
-                  [routerLink]="item.route"
-                  routerLinkActive="active"
-                  [routerLinkActiveOptions]="{ exact: item.route === '/' || item.route === '/purchases' }"
-                  [title]="item.label"
-                >
-                  <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    @for (d of icons[item.icon]; track $index) {
-                      <path [attr.d]="d"></path>
+              @for (item of section.items; track item.id; let ii = $index) {
+                @if (arrangeMode()) {
+                  <div class="nav-item arranging">
+                    <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      @for (d of icons[item.icon]; track $index) {
+                        <path [attr.d]="d"></path>
+                      }
+                    </svg>
+                    <span class="nav-label-text">{{ item.label }}</span>
+                    <span class="move-btns">
+                      <button type="button" class="move-btn" (click)="moveItem(section, ii, -1)" [disabled]="ii === 0" [attr.aria-label]="'تحريك ' + item.label + ' لفوق'">↑</button>
+                      <button type="button" class="move-btn" (click)="moveItem(section, ii, 1)" [disabled]="ii === section.items.length - 1" [attr.aria-label]="'تحريك ' + item.label + ' لتحت'">↓</button>
+                    </span>
+                  </div>
+                } @else {
+                  <a
+                    class="nav-item"
+                    [routerLink]="item.route"
+                    routerLinkActive="active"
+                    [routerLinkActiveOptions]="{ exact: item.route === '/' || item.route === '/purchases' }"
+                    [title]="item.label"
+                  >
+                    <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      @for (d of icons[item.icon]; track $index) {
+                        <path [attr.d]="d"></path>
+                      }
+                    </svg>
+                    <span class="nav-label-text">{{ item.label }}</span>
+                    @if (item.badge) {
+                      <span class="nav-badge">{{ item.badge }}</span>
                     }
-                  </svg>
-                  <span class="nav-label-text">{{ item.label }}</span>
-                  @if (item.badge) {
-                    <span class="nav-badge">{{ item.badge }}</span>
-                  }
-                </a>
+                  </a>
+                }
               }
             </div>
           }
@@ -70,7 +105,10 @@
         <span class="session-title">الجلسة مفتوحة</span>
       </div>
       <div class="session-detail">{{ authService.currentUserFullName() }}</div>
-      <button type="button" class="logout-link" (click)="logout()">تسجيل الخروج</button>
+      <div class="session-links">
+        <button type="button" class="logout-link" (click)="toggleArrangeMode()">{{ arrangeMode() ? 'إنهاء الترتيب' : 'ترتيب القائمة' }}</button>
+        <button type="button" class="logout-link" (click)="logout()">تسجيل الخروج</button>
+      </div>
     </div>
   </aside>
 
@@ -80,6 +118,20 @@
         <span></span><span></span><span></span>
       </button>
 
+      <button type="button" class="collapse-btn" (click)="toggleSidebarCollapsed()"
+              [attr.aria-label]="sidebarCollapsed() ? 'فتح القائمة الجانبية' : 'طيّ القائمة الجانبية'"
+              [title]="sidebarCollapsed() ? 'فتح القائمة' : 'طيّ القائمة'">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 4h18v16H3z"></path>
+          <path d="M15 4v16"></path>
+          @if (sidebarCollapsed()) {
+            <path d="M9 10l-2 2 2 2"></path>
+          } @else {
+            <path d="M7 10l2 2-2 2"></path>
+          }
+        </svg>
+      </button>
+
       <div class="search-wrap" (click)="$event.stopPropagation()">
         <label class="search-box">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6">
@@ -87,12 +139,15 @@
             <line x1="10.2" y1="10.2" x2="14" y2="14"></line>
           </svg>
           <input
+            #searchInput
             type="text"
             [ngModel]="searchQuery()"
             (ngModelChange)="onSearchInput($event)"
-            (focus)="hasQuery() && searchResults().length > 0 ? searchOpen.set(true) : null"
-            placeholder="بحث عام: منتج، فاتورة، مورد…"
+            (keydown.enter)="onSearchEnter()"
+            (focus)="hasQuery() && allResults().length > 0 ? searchOpen.set(true) : null"
+            placeholder="بحث: صفحة، منتج، فاتورة، مورد…"
           />
+          <kbd class="search-kbd">Ctrl K</kbd>
           @if (hasQuery()) {
             <button type="button" class="clear-btn" (click)="clearQuery()" aria-label="مسح البحث">×</button>
           }
@@ -100,18 +155,17 @@
 
         @if (searchOpen()) {
           <div class="search-dropdown" (click)="$event.stopPropagation()">
+            @for (r of allResults(); track r.type + r.id) {
+              <button type="button" class="search-result-row" [class.page-result]="r.type === 'page'" (click)="goToResult(r)">
+                <span class="search-result-type">{{ r.typeLabel }}</span>
+                <span class="search-result-label">{{ r.label }}</span>
+                <span class="search-result-sub">{{ r.sublabel }}</span>
+              </button>
+            }
             @if (searching()) {
               <div class="search-empty">جارٍ البحث…</div>
-            } @else if (searchResults().length === 0) {
+            } @else if (allResults().length === 0) {
               <div class="search-empty">لا نتائج مطابقة.</div>
-            } @else {
-              @for (r of searchResults(); track r.type + r.id) {
-                <button type="button" class="search-result-row" (click)="goToResult(r)">
-                  <span class="search-result-type">{{ r.typeLabel }}</span>
-                  <span class="search-result-label">{{ r.label }}</span>
-                  <span class="search-result-sub">{{ r.sublabel }}</span>
-                </button>
-              }
             }
           </div>
         }

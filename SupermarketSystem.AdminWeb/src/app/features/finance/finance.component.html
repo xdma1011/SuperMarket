@@ -62,39 +62,39 @@
       <div class="kpi-grid">
         <div class="kpi-card">
           <span class="kpi-label">صافي الإيراد</span>
-          <span class="kpi-value">{{ s.netRevenue | number: '1.2-2' }}</span>
+          <span class="kpi-value">{{ s.netRevenue | number: '1.3-3' }}</span>
         </div>
         <div class="kpi-card">
           <span class="kpi-label">تكلفة البضاعة المباعة</span>
-          <span class="kpi-value">{{ s.costOfGoodsSold | number: '1.2-2' }}</span>
+          <span class="kpi-value">{{ s.costOfGoodsSold | number: '1.3-3' }}</span>
         </div>
         <div class="kpi-card">
           <span class="kpi-label">الربح الإجمالي</span>
-          <span class="kpi-value">{{ s.grossProfit | number: '1.2-2' }}</span>
+          <span class="kpi-value">{{ s.grossProfit | number: '1.3-3' }}</span>
         </div>
         <div class="kpi-card">
           <span class="kpi-label">إجمالي المصاريف</span>
-          <span class="kpi-value">{{ s.totalExpenses | number: '1.2-2' }}</span>
+          <span class="kpi-value">{{ s.totalExpenses | number: '1.3-3' }}</span>
         </div>
         <div class="kpi-card highlight">
           <span class="kpi-label">صافي ربح الشهر</span>
-          <span class="kpi-value">{{ s.netProfit | number: '1.2-2' }}</span>
+          <span class="kpi-value">{{ s.netProfit | number: '1.3-3' }}</span>
         </div>
       </div>
 
       <div class="detail-grid">
-        <div class="detail-row"><span>إجمالي المبيعات</span><span class="mono">{{ s.totalSales | number: '1.2-2' }}</span></div>
-        <div class="detail-row"><span>إجمالي المرتجعات</span><span class="mono">{{ s.totalReturnedAmount | number: '1.2-2' }}</span></div>
-        <div class="detail-row"><span>فائض الجرد (زيادة)</span><span class="mono">+{{ s.stocktakeSurplusValue | number: '1.2-2' }}</span></div>
-        <div class="detail-row"><span>نقص الجرد (خسارة)</span><span class="mono">-{{ s.stocktakeShortageValue | number: '1.2-2' }}</span></div>
-        <div class="detail-row"><span>التلف والهلاك (خسارة، غير المستبدَل من الشركة)</span><span class="mono">-{{ s.wasteLossValue | number: '1.2-2' }}</span></div>
+        <div class="detail-row"><span>إجمالي المبيعات</span><span class="mono">{{ s.totalSales | number: '1.3-3' }}</span></div>
+        <div class="detail-row"><span>إجمالي المرتجعات</span><span class="mono">{{ s.totalReturnedAmount | number: '1.3-3' }}</span></div>
+        <div class="detail-row"><span>فائض الجرد (زيادة)</span><span class="mono">+{{ s.stocktakeSurplusValue | number: '1.3-3' }}</span></div>
+        <div class="detail-row"><span>نقص الجرد (خسارة)</span><span class="mono">-{{ s.stocktakeShortageValue | number: '1.3-3' }}</span></div>
+        <div class="detail-row"><span>التلف والهلاك (خسارة، غير المستبدَل من الشركة)</span><span class="mono">-{{ s.wasteLossValue | number: '1.3-3' }}</span></div>
       </div>
 
       @if (s.expensesByCategory.length > 0) {
         <h3 class="section-title">المصاريف حسب التصنيف</h3>
         <div class="detail-grid">
           @for (e of s.expensesByCategory; track e.category) {
-            <div class="detail-row"><span>{{ categoryLabels[e.category] }}</span><span class="mono">{{ e.amount | number: '1.2-2' }}</span></div>
+            <div class="detail-row"><span>{{ categoryLabels[e.category] }}</span><span class="mono">{{ e.amount | number: '1.3-3' }}</span></div>
           }
         </div>
       }
@@ -139,7 +139,7 @@
             <tr>
               <td>{{ branchName(e.branchId) }}</td>
               <td>{{ categoryLabels[e.category] }}</td>
-              <td class="mono">{{ e.amount | number: '1.2-2' }}</td>
+              <td class="mono">{{ e.amount | number: '1.3-3' }}</td>
               <td class="mono">{{ e.paymentDateUtc | date: 'yyyy-MM-dd' }}</td>
               <td class="mono">{{ monthNames[e.periodMonth - 1] }} {{ e.periodYear }}</td>
               <td>{{ e.notes || '—' }}</td>
@@ -204,7 +204,7 @@
               <td>
                 <span class="status-chip" [class.inactive]="c.type === 'Withdrawal'">{{ typeLabels[c.type] }}</span>
               </td>
-              <td class="mono">{{ c.amount | number: '1.2-2' }}</td>
+              <td class="mono">{{ c.amount | number: '1.3-3' }}</td>
               <td class="mono">{{ c.occurredAtUtc | date: 'yyyy-MM-dd' }}</td>
               <td>{{ c.notes || '—' }}</td>
               <td>{{ c.recordedByUsername }}</td>

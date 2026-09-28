@@ -1,5 +1,7 @@
 using SupermarketSystem.API.Common;
 using SupermarketSystem.Application.Common.Interfaces;
+using SupermarketSystem.Application.Common.Pagination;
+using SupermarketSystem.Application.Reporting.GetRecentReturns;
 using SupermarketSystem.Application.Sales.MarkReturnReviewed;
 using SupermarketSystem.Application.Sales.ProcessReturn;
 
@@ -10,6 +12,22 @@ public static class ReturnEndpoints
     public static IEndpointRouteBuilder MapReturnEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1/returns").WithTags("Sales");
+
+        // قائمة فواتير الإرجاع (صفحة الإرجاعات) - نفس استعلام تقرير "الإرجاعات الأخيرة"، بس بصلاحية
+        // معالجة الإرجاع بدل عرض التقارير، عشان صفحة الإرجاعات ما تحتاج صلاحية التقارير.
+        group.MapGet("/", async (
+            int? pageNumber, int? pageSize, string? sortBy, string? sortDirection,
+            Guid? branchId, DateTime? fromUtc, DateTime? toUtc,
+            GetRecentReturnsHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var paging = PagingBinder.Build(pageNumber, pageSize, search: null, sortBy, sortDirection);
+            return Results.Ok(await handler.HandleAsync(new GetRecentReturnsQuery(paging, branchId, fromUtc, toUtc), cancellationToken));
+        })
+        .WithName("GetReturnInvoices")
+        .RequirePermission(PermissionCodes.ReturnsProcess)
+        .WithSummary("فواتير الإرجاع - الأحدث أولًا، مع رقم فاتورة البيع الأصلية.")
+        .Produces<PagedResult<RecentReturnItemDto>>(StatusCodes.Status200OK);
 
         group.MapPost("/", async (
             ProcessReturnCommand command,

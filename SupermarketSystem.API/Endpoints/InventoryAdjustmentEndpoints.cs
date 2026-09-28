@@ -1,6 +1,7 @@
 using SupermarketSystem.API.Common;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Pagination;
+using SupermarketSystem.Application.Inventory.GetComplimentaryLog;
 using SupermarketSystem.Application.Inventory.GetCurrentStock;
 using SupermarketSystem.Application.Inventory.RecordComplimentaryIssue;
 using SupermarketSystem.Application.Inventory.RecordWasteIssue;
@@ -29,6 +30,20 @@ public static class InventoryAdjustmentEndpoints
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status404NotFound)
         .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+
+        // سجل الضيافة (جدول صفحة الضيافة) - جوّا المجموعة: نفس صلاحية التسجيل (ComplimentaryIssue).
+        group.MapGet("/complimentary-issues", async (
+            int? pageNumber, int? pageSize, string? sortBy, string? sortDirection,
+            Guid? branchId, DateTime? fromUtc, DateTime? toUtc,
+            GetComplimentaryLogHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var paging = PagingBinder.Build(pageNumber, pageSize, search: null, sortBy, sortDirection);
+            return Results.Ok(await handler.HandleAsync(new GetComplimentaryLogQuery(paging, branchId, fromUtc, toUtc), cancellationToken));
+        })
+        .WithName("GetComplimentaryLog")
+        .WithSummary("سجل الضيافة/الاستهلاك الداخلي - الأحدث أولًا.")
+        .Produces<PagedResult<ComplimentaryLogItemDto>>(StatusCodes.Status200OK);
 
         // خارج المجموعة عمدًا (لا group.MapPost) — نفس الفخ الموثَّق بـ
         // CLAUDE.md §3.4: المجموعة مقفولة بصلاحية الضيافة (ComplimentaryIssue)،

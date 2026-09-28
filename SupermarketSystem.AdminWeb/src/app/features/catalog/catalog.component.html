@@ -283,7 +283,7 @@
                   </button>
                   <button type="button" class="link-btn" [disabled]="branchPriceSaving()" (click)="cancelEditBranchPrice()">إلغاء</button>
                 } @else {
-                  <span class="unit-factor mono">{{ b.sellingPrice | number: '1.2-2' }}</span>
+                  <span class="unit-factor mono">{{ b.sellingPrice | number: '1.3-3' }}</span>
                   <button type="button" class="link-btn" (click)="startEditBranchPrice(b)">تعديل السعر</button>
                 }
 
@@ -346,7 +346,7 @@
               <div class="unit-row" style="flex-direction: column; align-items: stretch; gap: 8px;">
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                   <span class="unit-name">{{ promo.title }}</span>
-                  <span class="unit-factor mono">{{ promo.bundleQuantity }} بـ {{ promo.bundlePrice | number: '1.2-2' }}</span>
+                  <span class="unit-factor mono">{{ promo.bundleQuantity }} بـ {{ promo.bundlePrice | number: '1.3-3' }}</span>
                   @if (promo.maxQuantityPerInvoice) {
                     <span class="status-chip">حد أعلى: {{ promo.maxQuantityPerInvoice }}/فاتورة</span>
                   }

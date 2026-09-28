@@ -245,6 +245,13 @@ public sealed class ReturnsEndToEndHttpTests : IntegrationTestBase
             .Where(n => n.GetProperty("title").GetString()!.StartsWith("إرجاع")).ToList();
         Assert.Equal(2, alerts.Count);
         Assert.All(alerts, a => Assert.Contains(invoiceNumber, a.GetProperty("message").GetString()));
+
+        // قائمة فواتير الإرجاع (صفحة الإرجاعات، 28/9/2026): الاتنين، مع رقم الفاتورة الأصلية.
+        var returnList = JsonDocument.Parse(await admin.GetStringAsync("/api/v1/returns?pageSize=50")).RootElement
+            .GetProperty("items").EnumerateArray()
+            .Where(r => r.GetProperty("originalInvoiceNumber").GetString() == invoiceNumber).ToList();
+        Assert.Equal(2, returnList.Count);
+        Assert.Equal(10.000m, returnList.Sum(r => r.GetProperty("totalAmount").GetDecimal()));
     }
 
     [Fact]

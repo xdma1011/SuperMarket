@@ -1,3 +1,4 @@
+using SupermarketSystem.Application.Inventory.GetComplimentaryLog;
 using SupermarketSystem.Application.CashManagement.RecordDrawerOpen;
 using SupermarketSystem.Application.Reporting.GetDrawerOpenCounts;
 using Microsoft.Extensions.DependencyInjection;
@@ -285,6 +286,7 @@ public static class DependencyInjection
 
         services.AddScoped<CompleteCashClosingHandler>();
         services.AddScoped<RecordDrawerOpenHandler>();
+        services.AddScoped<GetComplimentaryLogHandler>();
         services.AddScoped<GetCashClosingsHandler>();
 
         services.AddScoped<CreateStocktakeHandler>();

@@ -213,6 +213,19 @@ export const REPORT_CONFIGS: ReportConfig[] = [
     ]
   },
   {
+    // زر "فتح الصندوق" بالكاشير (28/9/2026) - درج بينفتح كتير بلا فواتير = باب سرقة معروف.
+    id: 'drawer-opens',
+    title: 'فتح الصندوق بلا بيع (لكل كاشير)',
+    operation: ReportsOperation.DrawerOpens,
+    requiresDateRange: true,
+    columns: [
+      { key: 'username', label: 'الكاشير', type: 'text' },
+      { key: 'openCount', label: 'عدد مرات الفتح', type: 'number' },
+      { key: 'firstOpenedAtUtc', label: 'أول مرة', type: 'date' },
+      { key: 'lastOpenedAtUtc', label: 'آخر مرة', type: 'date' }
+    ]
+  },
+  {
     id: 'waste-log',
     title: 'سجل التلف والهلاك',
     operation: ReportsOperation.WasteLog,

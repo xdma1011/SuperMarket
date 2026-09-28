@@ -35,7 +35,7 @@
             <td>{{ o.customerName }}</td>
             <td class="mono">{{ o.customerPhone || '—' }}</td>
             <td class="mono">{{ o.itemCount }}</td>
-            <td class="mono">{{ o.estimatedTotal | number: '1.2-2' }}</td>
+            <td class="mono">{{ o.estimatedTotal | number: '1.3-3' }}</td>
             <td>
               <span class="status-chip" [class.inactive]="o.status === 4">{{ statusLabel(o.status) }}</span>
             </td>

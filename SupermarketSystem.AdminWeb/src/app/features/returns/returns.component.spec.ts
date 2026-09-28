@@ -52,6 +52,7 @@ describe('ReturnsComponent', () => {
   describe('search', () => {
     it('لا يبحث لو الاستعلام فاضٍ', async () => {
       component.searchQuery.set('   ');
+      apiClientSpy.get.calls.reset(); // قائمة فواتير الإرجاع بتنحمّل مع فتح الصفحة - مش جزء من البحث.
       await component.search();
       expect(apiClientSpy.get).not.toHaveBeenCalledWith(jasmine.anything(), jasmine.anything(), undefined, jasmine.anything());
     });

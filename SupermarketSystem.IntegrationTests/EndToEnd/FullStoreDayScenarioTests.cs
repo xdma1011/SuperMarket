@@ -218,6 +218,10 @@ public sealed class FullStoreDayScenarioTests : IntegrationTestBase
         {
             productId = milkId, productUnitId = milkUnit, branchId, quantity = 1m, reason = "ضيافة زبون"
         }), "ضيافة");
+        // جدول الضيافة (صفحة الضيافة، 28/9/2026)
+        var complimentaryLog = (await GetJsonAsync(admin, $"/api/v1/inventory/complimentary-issues?branchId={branchId}"))
+            .GetProperty("items").EnumerateArray().ToList();
+        Check("سجل الضيافة: السطر اللي انسجّل", "ضيافة زبون", complimentaryLog.FirstOrDefault().ValueKind == JsonValueKind.Undefined ? null : complimentaryLog.First().GetProperty("notes").GetString());
         await ReadJsonAsync(await admin.PostAsJsonAsync("/api/v1/finance/expenses", new
         {
             branchId, category = 2, amount = 1.000m, paymentDateUtc = DateTime.UtcNow.ToString("yyyy-MM-dd"),
