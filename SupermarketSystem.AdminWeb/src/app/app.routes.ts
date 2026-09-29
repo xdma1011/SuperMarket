@@ -161,6 +161,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/customers/customers.component').then(m => m.CustomersComponent)
       },
       {
+        path: 'coupons',
+        canActivate: [requirePermissionGuard('Customers.Manage')],
+        loadComponent: () => import('./features/coupons/coupons.component').then(m => m.CouponsComponent)
+      },
+      {
         path: 'cash-closings',
         canActivate: [requirePermissionGuard('CashClosing.Manage')],
         loadComponent: () => import('./features/cash-closings/cash-closings.component').then(m => m.CashClosingsComponent)

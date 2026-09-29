@@ -13,7 +13,8 @@ namespace SupermarketSystem.Application.Partners;
 public sealed record PartnerDto(
     Guid Id, Guid BranchId, string FullName, int TypeCode, string TypeTitle,
     Guid? UserId, string? Username, decimal? SpeculativeProfitPercent, bool IsActive, string? Notes,
-    decimal CapitalBalance, decimal SharesTotal, decimal WithdrawalsTotal, decimal AtCostDeductedTotal, decimal CurrentBalance);
+    decimal CapitalBalance, decimal SharesTotal, decimal WithdrawalsTotal, decimal AtCostDeductedTotal, decimal CurrentBalance,
+    string? TelegramPhone = null, bool TelegramLinked = false, bool HasCashierBarcode = false, DateTime? CashierBarcodeIssuedAtUtc = null);
 
 public sealed record GetPartnersQuery(Guid? BranchId);
 
@@ -73,6 +74,7 @@ public sealed class GetPartnersHandler
         var usernames = await _context.Users.IgnoreQueryFilters().AsNoTracking()
             .Where(u => userIds.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, u => u.Username, cancellationToken);
+        var linkedPhones = await PartnerVerificationSecrets.LinkedPhoneKeysAsync(_context, partners.Select(p => p.TelegramPhone), cancellationToken);
 
         return partners.Select(p =>
         {
@@ -81,7 +83,10 @@ public sealed class GetPartnersHandler
                 p.Id, p.BranchId, p.FullName, (int)p.Type, PartnerTitles.Type(p.Type),
                 p.UserId, p.UserId is { } uid ? usernames.GetValueOrDefault(uid) : null,
                 p.SpeculativeProfitPercent, p.IsActive, p.Notes,
-                capital.GetValueOrDefault(p.Id), b.SharesTotal, b.WithdrawalsTotal, b.AtCostDeductedTotal, b.Current);
+                capital.GetValueOrDefault(p.Id), b.SharesTotal, b.WithdrawalsTotal, b.AtCostDeductedTotal, b.Current,
+                p.TelegramPhone,
+                PartnerVerificationSecrets.PhoneKey(p.TelegramPhone) is { } key && linkedPhones.Contains(key),
+                p.CashierBarcodeHash is not null, p.CashierBarcodeIssuedAtUtc);
         }).ToList();
     }
 }

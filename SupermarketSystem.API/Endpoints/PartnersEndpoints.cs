@@ -47,6 +47,23 @@ public static class PartnersEndpoints
                 (await handler.HandleAsync(new SetPartnerActiveCommand(partnerId, request.IsActive), cancellationToken)).ToHttpResult())
             .WithName("SetPartnerActive");
 
+        group.MapPut("/{partnerId:guid}/telegram-phone", async (Guid partnerId, SetPartnerTelegramPhoneRequest request, SetPartnerTelegramPhoneHandler handler, CancellationToken cancellationToken) =>
+                (await handler.HandleAsync(new SetPartnerTelegramPhoneCommand(partnerId, request.TelegramPhone), cancellationToken)).ToHttpResult())
+            .WithName("SetPartnerTelegramPhone")
+            .WithSummary("رقم تلغرام الشريك - لكود التحقق (OTP) وقت سحبه من الكاشير. فاضي = بلا.")
+            .ProducesProblem(StatusCodes.Status400BadRequest);
+
+        group.MapPost("/{partnerId:guid}/cashier-barcode", async (Guid partnerId, IssuePartnerBarcodeHandler handler, CancellationToken cancellationToken) =>
+                (await handler.HandleAsync(partnerId, cancellationToken)).ToHttpResult(r => Results.Ok(r)))
+            .WithName("IssuePartnerCashierBarcode")
+            .WithSummary("إصدار باركود شخصي جديد للشريك (بيلغي القديم) - الأرقام بترجع مرة وحدة بس للطباعة.")
+            .Produces<IssuePartnerBarcodeResponse>(StatusCodes.Status200OK);
+
+        group.MapDelete("/{partnerId:guid}/cashier-barcode", async (Guid partnerId, RevokePartnerBarcodeHandler handler, CancellationToken cancellationToken) =>
+                (await handler.HandleAsync(partnerId, cancellationToken)).ToHttpResult())
+            .WithName("RevokePartnerCashierBarcode")
+            .WithSummary("إلغاء باركود الشريك (كرت ضايع).");
+
         group.MapGet("/{partnerId:guid}/ledger", async (Guid partnerId, GetPartnerLedgerHandler handler, CancellationToken cancellationToken) =>
             {
                 var ledger = await handler.HandleAsync(partnerId, cancellationToken);
@@ -113,12 +130,35 @@ public static class PartnersEndpoints
             .WithName("RecordVerifiedPartnerWithdrawal")
             .WithTags("Partners")
             .RequirePermission(PermissionCodes.SalesCreate)
-            .WithSummary("سحب شريك من شاشة الكاشير: يوزر وكلمة سر الشريك نفسه (الكاشير داخل بحسابه)، والسحب من الصندوق.")
+            .WithSummary("سحب شريك من شاشة الكاشير: يوزر وكلمة سر الشريك، أو كود تلغرام، أو باركوده الشخصي (الكاشير داخل بحسابه)، والسحب من الصندوق.")
             .Produces<PartnerWithdrawalResponse>(StatusCodes.Status201Created)
             .ProducesProblem(StatusCodes.Status403Forbidden);
 
+        // تحقق الشريك بالكاشير بطرق إضافية (29/9/2026) - الكاشير داخل بحسابه (Sales.Create)، برّا المجموعة (§3.4).
+        app.MapGet("/api/v1/partner-withdrawals/verification-options", async (
+                Guid branchId, GetPartnerVerificationOptionsHandler handler, CancellationToken cancellationToken) =>
+                Results.Ok(await handler.HandleAsync(branchId, cancellationToken)))
+            .WithName("GetPartnerVerificationOptions")
+            .WithTags("Partners")
+            .RequirePermission(PermissionCodes.SalesCreate)
+            .WithSummary("طرق تحقق الشريك المفعّلة بالكاشير، والشركاء اللي بيقدروا يستلموا كود تلغرام.")
+            .Produces<PartnerVerificationOptionsDto>(StatusCodes.Status200OK);
+
+        app.MapPost("/api/v1/partner-withdrawals/otp", async (
+                RequestPartnerOtpCommand command, RequestPartnerOtpHandler handler, CancellationToken cancellationToken) =>
+                (await handler.HandleAsync(command, cancellationToken)).ToHttpResult(r => Results.Ok(r)))
+            .WithName("RequestPartnerWithdrawalOtp")
+            .WithTags("Partners")
+            .RequirePermission(PermissionCodes.SalesCreate)
+            .WithSummary("كود تلغرام للشريك لسحب مبلغ محدد من الكاشير - صالح 5 دقايق ولنفس المبلغ بس.")
+            .Produces<RequestPartnerOtpResponse>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+
         return app;
     }
+
+    public sealed record SetPartnerTelegramPhoneRequest(string? TelegramPhone);
 
     public sealed record UpdatePartnerRequest(string FullName, Guid? UserId, decimal? SpeculativeProfitPercent, string? Notes);
 

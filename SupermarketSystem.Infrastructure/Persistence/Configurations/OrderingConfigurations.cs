@@ -57,3 +57,54 @@ public class OrderItemConfiguration : IEntityTypeConfiguration<OrderItem>
         builder.HasOne<ProductUnit>().WithMany().HasForeignKey(i => i.ProductUnitId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+public class CouponConfiguration : IEntityTypeConfiguration<Coupon>
+{
+    public void Configure(EntityTypeBuilder<Coupon> builder)
+    {
+        builder.ToTable("Coupons");
+        builder.HasKey(c => c.Id);
+
+        builder.Property(c => c.Code).IsRequired().HasMaxLength(Coupon.MaxCodeLength);
+        builder.Property(c => c.Title).IsRequired().HasMaxLength(Coupon.MaxTitleLength);
+        builder.Property(c => c.DiscountType).HasConversion<int>().IsRequired();
+        builder.Property(c => c.Value).HasColumnType("decimal(18,4)").IsRequired();
+        builder.Property(c => c.MaxDiscountAmount).HasColumnType("decimal(18,4)");
+        builder.Property(c => c.MinOrderAmount).HasColumnType("decimal(18,4)").IsRequired();
+        builder.Property(c => c.StartAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(c => c.EndAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(c => c.LastSentAtUtc).HasColumnType("datetime2");
+        builder.Property(c => c.CreatedAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(c => c.UpdatedAtUtc).HasColumnType("datetime2");
+
+        builder.HasIndex(c => c.Code).IsUnique();
+        builder.HasIndex(c => c.CustomerId);
+
+        builder.HasOne<Customer>().WithMany().HasForeignKey(c => c.CustomerId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class CouponRedemptionConfiguration : IEntityTypeConfiguration<CouponRedemption>
+{
+    public void Configure(EntityTypeBuilder<CouponRedemption> builder)
+    {
+        builder.ToTable("CouponRedemptions");
+        builder.HasKey(r => r.Id);
+
+        builder.Property(r => r.Status).HasConversion<int>().IsRequired();
+        builder.Property(r => r.EstimatedDiscountAmount).HasColumnType("decimal(18,4)").IsRequired();
+        builder.Property(r => r.DiscountAmount).HasColumnType("decimal(18,4)");
+        builder.Property(r => r.ReservedAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(r => r.ClosedAtUtc).HasColumnType("datetime2");
+
+        // كوبون واحد لكل طلب.
+        builder.HasIndex(r => r.OrderId).IsUnique();
+        builder.HasIndex(r => new { r.CouponId, r.CustomerId, r.Status });
+        builder.HasIndex(r => r.SaleInvoiceId);
+
+        builder.HasOne<Coupon>().WithMany().HasForeignKey(r => r.CouponId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Customer>().WithMany().HasForeignKey(r => r.CustomerId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Order>().WithMany().HasForeignKey(r => r.OrderId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<SaleInvoice>().WithMany().HasForeignKey(r => r.SaleInvoiceId).OnDelete(DeleteBehavior.Restrict);
+    }
+}

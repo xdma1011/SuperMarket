@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Policies;
 using SupermarketSystem.Application.Common.Results;
+using SupermarketSystem.Application.Ordering.Coupons;
 using SupermarketSystem.Domain.Customers;
 using SupermarketSystem.Domain.Ordering;
 
@@ -23,9 +24,11 @@ public sealed record PlaceOrderCommand(
     string? DeliveryNote,
     decimal? DeliveryLatitude,
     decimal? DeliveryLongitude,
-    IReadOnlyList<PlaceOrderItemDto> Items);
+    IReadOnlyList<PlaceOrderItemDto> Items,
+    string? CouponCode = null);
 
-public sealed record PlaceOrderResponse(Guid OrderId, decimal EstimatedTotal);
+/// <summary>EstimatedTotal قبل الكوبون؛ CouponDiscount تقديري (بينحسب فعليًا على أسعار لحظة التسليم).</summary>
+public sealed record PlaceOrderResponse(Guid OrderId, decimal EstimatedTotal, string? CouponCode = null, decimal CouponDiscount = 0m);
 
 public static class PlaceOrderValidator
 {
@@ -175,7 +178,30 @@ public sealed class PlaceOrderHandler
                 "Order.BelowMinimumAmount", $"أقل مبلغ مسموح للطلب {minimumOrderAmount:F2} - إجمالي طلبك الحالي {estimatedTotal:F2}."));
         }
 
+        // كوبون خصم (29/9/2026): بينحجز مع الطلب (بيرجع لو الطلب انرفض). كود غلط = الطلب ما بينقبل برسالة واضحة -
+        // الزبون بيصلّح الكود أو بيشيله (أحسن من طلب بيوصل بسعر غير اللي توقّعه).
+        CouponRedemption? couponRedemption = null;
+        string? couponCode = null;
+        if (!string.IsNullOrWhiteSpace(command.CouponCode))
+        {
+            var couponCheck = await CouponRules.ValidateForOrderAsync(
+                _context, command.CouponCode, customer.Id, estimatedTotal, _dateTimeProvider.UtcNow, cancellationToken);
+            if (couponCheck.IsFailure)
+            {
+                return Result.Failure<PlaceOrderResponse>(couponCheck.Error!);
+            }
+
+            var (coupon, estimatedDiscount) = couponCheck.Value;
+            couponRedemption = new CouponRedemption(coupon.Id, customer.Id, order.Id, estimatedDiscount, _dateTimeProvider.UtcNow);
+            couponCode = coupon.Code;
+        }
+
         _context.Orders.Add(order);
+        if (couponRedemption is not null)
+        {
+            _context.CouponRedemptions.Add(couponRedemption);
+        }
+
         await _context.SaveChangesAsync(cancellationToken);
 
         // مؤشر إساءة استخدام محتملة - تنبيه لصاحب المشروع بس، ما بيمنع
@@ -197,6 +223,6 @@ public sealed class PlaceOrderHandler
             }
         }
 
-        return Result.Success(new PlaceOrderResponse(order.Id, estimatedTotal));
+        return Result.Success(new PlaceOrderResponse(order.Id, estimatedTotal, couponCode, couponRedemption?.EstimatedDiscountAmount ?? 0m));
     }
 }

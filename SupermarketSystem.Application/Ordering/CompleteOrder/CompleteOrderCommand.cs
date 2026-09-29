@@ -106,13 +106,34 @@ public sealed class CompleteOrderHandler
             order.BranchId, command.ClientRequestId, order.CustomerId,
             InvoiceLevelDiscountAmount: 0, saleItems, salePayments);
 
-        var saleResult = await _completeSaleHandler.HandleAsync(completeSaleCommand, cancellationToken);
+        // كوبون محجوز مع الطلب (29/9/2026): الخصم بينحسب على أسعار لحظة التسليم (مش التقديري وقت الطلب) وبينطبق
+        // كخصم فاتورة. حد أدنى الطلب انفحص وقت الطلب - تغيّر سعر بعدها ما بيلغي خصم الزبون (سماح).
+        var couponRedemption = await _context.CouponRedemptions
+            .FirstOrDefaultAsync(r => r.OrderId == order.Id && r.Status == CouponRedemptionStatus.Reserved, cancellationToken);
+        Coupon? coupon = couponRedemption is null
+            ? null
+            : await _context.Coupons.AsNoTracking().FirstOrDefaultAsync(c => c.Id == couponRedemption.CouponId, cancellationToken);
+        var couponDiscount = coupon is null ? null : new CouponSaleDiscount(coupon.DiscountFor);
+
+        var saleResult = couponDiscount is null
+            ? await _completeSaleHandler.HandleAsync(completeSaleCommand, cancellationToken)
+            : await _completeSaleHandler.HandleOrderWithCouponAsync(completeSaleCommand, couponDiscount, cancellationToken);
         if (saleResult.IsFailure)
         {
             return saleResult;
         }
 
         order.Complete(saleResult.Value.SaleInvoiceId);
+
+        if (couponRedemption is not null && couponDiscount is not null)
+        {
+            // إعادة إرسال (البيعة انسجّلت قبل وانقطع الطلب قبل ما يتسكّر): الخصم = خصم الفاتورة المحفوظ.
+            var appliedDiscount = saleResult.Value.WasReplay
+                ? await _context.SaleInvoices.AsNoTracking()
+                    .Where(s => s.Id == saleResult.Value.SaleInvoiceId).Select(s => s.DiscountAmountSnapshot).FirstOrDefaultAsync(cancellationToken)
+                : couponDiscount.AppliedAmount;
+            couponRedemption.Redeem(saleResult.Value.SaleInvoiceId, appliedDiscount, _dateTimeProvider.UtcNow);
+        }
 
         var loyaltyEnabled = await _settingsProvider.GetBoolAsync(OrderingPolicyKeys.LoyaltyEnabled, false, cancellationToken);
         if (loyaltyEnabled)

@@ -1,12 +1,14 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { PartnersOperation, UsersOperation } from '../../core/api/operations';
 import { AuthService, PublicBranchDto } from '../../core/services/auth.service';
+import { code39Svg } from '../../shared/utils/code39';
 
 export type PartnersTab = 'partners' | 'statements' | 'withdrawals' | 'owner';
 
@@ -26,6 +28,20 @@ export interface PartnerDto {
   withdrawalsTotal: number;
   atCostDeductedTotal: number;
   currentBalance: number;
+  /** رقم تلغرام الشريك لكود التحقق بالكاشير (29/9/2026). */
+  telegramPhone?: string | null;
+  /** الرقم مربوط فعليًا ببوت تلغرام (الشريك فتح البوت وشارك رقمه) - بدونه الكود ما بيوصل. */
+  telegramLinked?: boolean;
+  hasCashierBarcode?: boolean;
+  cashierBarcodeIssuedAtUtc?: string | null;
+}
+
+/** كرت الباركود بعد الإصدار - الأرقام بتبين هون مرة وحدة بس (السيرفر بيحفظ hash). */
+export interface IssuedBarcodeCard {
+  partnerName: string;
+  barcode: string;
+  svg: SafeHtml;
+  rawSvg: string;
 }
 
 export interface PartnerStatementSummaryDto {
@@ -125,6 +141,9 @@ export class PartnersComponent implements OnInit {
   formUserId = '';
   formPercent: number | null = null;
   formNotes = '';
+  formTelegramPhone = '';
+  readonly issuedCard = signal<IssuedBarcodeCard | null>(null);
+  private readonly sanitizer = inject(DomSanitizer);
   readonly ledger = signal<PartnerLedgerDto | null>(null);
 
   // الكشوف
@@ -214,6 +233,7 @@ export class PartnersComponent implements OnInit {
     this.formUserId = partner?.userId ?? '';
     this.formPercent = partner?.speculativeProfitPercent ?? null;
     this.formNotes = partner?.notes ?? '';
+    this.formTelegramPhone = partner?.telegramPhone ?? '';
     this.partnerFormOpen.set(true);
     if (this.users().length === 0) {
       try {
@@ -249,13 +269,20 @@ export class PartnersComponent implements OnInit {
       speculativeProfitPercent: this.formType === 'Speculative' ? this.formPercent : null,
       notes: this.formNotes.trim() || null
     };
+    const telegramPhone = this.formTelegramPhone.trim() || null;
+    const previousTelegramPhone = this.partners().find(p => p.id === this.editingPartnerId)?.telegramPhone ?? null;
     try {
-      if (this.editingPartnerId) {
-        await firstValueFrom(this.apiClient.put(ApiController.Partners, PartnersOperation.Update, body, { id: this.editingPartnerId }));
+      let partnerId = this.editingPartnerId;
+      if (partnerId) {
+        await firstValueFrom(this.apiClient.put(ApiController.Partners, PartnersOperation.Update, body, { id: partnerId }));
       } else {
-        await firstValueFrom(
-          this.apiClient.post(ApiController.Partners, PartnersOperation.Create, { ...body, branchId: this.branchId, type: this.formType })
+        const created = await firstValueFrom(
+          this.apiClient.post<{ partnerId: string }>(ApiController.Partners, PartnersOperation.Create, { ...body, branchId: this.branchId, type: this.formType })
         );
+        partnerId = created.partnerId;
+      }
+      if (partnerId && telegramPhone !== previousTelegramPhone) {
+        await firstValueFrom(this.apiClient.put(ApiController.Partners, PartnersOperation.TelegramPhone, { telegramPhone }, { id: partnerId }));
       }
       this.partnerFormOpen.set(false);
       this.successMessage.set('انحفظ الشريك.');
@@ -294,6 +321,65 @@ export class PartnersComponent implements OnInit {
 
   closeLedger(): void {
     this.ledger.set(null);
+  }
+
+  // ===== تحقق الشريك بالكاشير (29/9/2026) =====
+
+  /** كرت باركود جديد - بيلغي القديم. التفعيل نفسه من صفحة الإعدادات ("التحقق بباركود الشريك"). */
+  async issueBarcode(partner: PartnerDto): Promise<void> {
+    const warning = partner.hasCashierBarcode ? '\nالكرت القديم بيبطل يشتغل.' : '';
+    if (!confirm(`إصدار باركود شخصي لـ${partner.fullName} (للتحقق وقت السحب من الكاشير)؟${warning}`)) return;
+    this.clearMessages();
+    try {
+      const result = await firstValueFrom(this.apiClient.post<{ barcode: string; issuedAtUtc: string }>(
+        ApiController.Partners, PartnersOperation.CashierBarcode, {}, { id: partner.id }));
+      const rawSvg = code39Svg(result.barcode, 2, 90);
+      this.issuedCard.set({
+        partnerName: partner.fullName,
+        barcode: result.barcode,
+        rawSvg,
+        svg: this.sanitizer.bypassSecurityTrustHtml(rawSvg)
+      });
+      await this.reloadAll();
+    } catch (err) {
+      this.errorMessage.set(this.errorDetail(err) ?? 'تعذّر إصدار الباركود.');
+    }
+  }
+
+  async revokeBarcode(partner: PartnerDto): Promise<void> {
+    if (!confirm(`إلغاء باركود ${partner.fullName}؟ (كرت ضايع - ما عاد يسحب فيه)`)) return;
+    this.clearMessages();
+    try {
+      await firstValueFrom(this.apiClient.delete(ApiController.Partners, PartnersOperation.CashierBarcode, { id: partner.id }));
+      this.successMessage.set('انلغى الباركود.');
+      await this.reloadAll();
+    } catch (err) {
+      this.errorMessage.set(this.errorDetail(err) ?? 'تعذّر إلغاء الباركود.');
+    }
+  }
+
+  closeIssuedCard(): void {
+    this.issuedCard.set(null);
+  }
+
+  /** طباعة الكرت بنافذة لحالها (الباركود + الاسم + الأرقام للإدخال اليدوي). */
+  printIssuedCard(): void {
+    const card = this.issuedCard();
+    if (!card) return;
+    const win = window.open('', '_blank', 'width=520,height=360');
+    if (!win) {
+      this.errorMessage.set('المتصفح منع نافذة الطباعة - اسمح بالنوافذ المنبثقة لهالموقع.');
+      return;
+    }
+    const name = card.partnerName.replace(/[<>&]/g, '');
+    win.document.write(
+      `<!doctype html><html dir="rtl"><head><meta charset="utf-8"><title>كرت ${name}</title>` +
+      `<style>body{font-family:sans-serif;text-align:center;margin:24px}.digits{font-family:monospace;font-size:18px;letter-spacing:2px}</style>` +
+      `</head><body><h3>${name} - تحقق سحب شريك</h3>${card.rawSvg}<p class="digits">${card.barcode}</p>` +
+      `<p style="font-size:12px">احتفظ فيه معك - اللي معه الكرت بيقدر يسحب باسمك من الصندوق.</p></body></html>`);
+    win.document.close();
+    win.focus();
+    win.print();
   }
 
   // ===== الكشوف =====

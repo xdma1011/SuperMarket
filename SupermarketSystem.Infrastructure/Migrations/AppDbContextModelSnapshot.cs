@@ -2641,6 +2641,124 @@ namespace SupermarketSystem.Infrastructure.Migrations
                     b.ToTable("NotificationLogs", (string)null);
                 });
 
+            modelBuilder.Entity("SupermarketSystem.Domain.Ordering.Coupon", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("DiscountType")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("EndAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("LastSentAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("MaxDiscountAmount")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int?>("MaxTotalUses")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MaxUsesPerCustomer")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("MinOrderAmount")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime>("StartAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Value")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("CustomerId");
+
+                    b.ToTable("Coupons", (string)null);
+                });
+
+            modelBuilder.Entity("SupermarketSystem.Domain.Ordering.CouponRedemption", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ClosedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CouponId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("DiscountAmount")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("EstimatedDiscountAmount")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("ReservedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("SaleInvoiceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("OrderId")
+                        .IsUnique();
+
+                    b.HasIndex("SaleInvoiceId");
+
+                    b.HasIndex("CouponId", "CustomerId", "Status");
+
+                    b.ToTable("CouponRedemptions", (string)null);
+                });
+
             modelBuilder.Entity("SupermarketSystem.Domain.Ordering.Order", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2814,6 +2932,13 @@ namespace SupermarketSystem.Infrastructure.Migrations
                     b.Property<Guid>("BranchId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("CashierBarcodeHash")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("CashierBarcodeIssuedAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -2834,6 +2959,10 @@ namespace SupermarketSystem.Infrastructure.Migrations
 
                     b.Property<decimal?>("SpeculativeProfitPercent")
                         .HasColumnType("decimal(9,4)");
+
+                    b.Property<string>("TelegramPhone")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<int>("Type")
                         .HasColumnType("int");
@@ -2903,6 +3032,55 @@ namespace SupermarketSystem.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("PartnerMonthlyStatements", (string)null);
+                });
+
+            modelBuilder.Entity("SupermarketSystem.Domain.Partners.PartnerOtpChallenge", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("ConsumedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ConsumedByClientRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("FailedAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PartnerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("RequestedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("PartnerId", "CreatedAtUtc");
+
+                    b.ToTable("PartnerOtpChallenges", (string)null);
                 });
 
             modelBuilder.Entity("SupermarketSystem.Domain.Partners.PartnerStatementLine", b =>
@@ -4325,6 +4503,22 @@ namespace SupermarketSystem.Infrastructure.Migrations
                             Description = "Days a pending review item (unreviewed return, or NeedsReview stock movement) can stay unreviewed before PendingReviewEscalationBackgroundService flags it in an escalation notification.",
                             Key = "PendingReview.EscalationThresholdDays",
                             Value = "3"
+                        },
+                        new
+                        {
+                            Id = new Guid("0f6c2b8e-7d41-4c35-9a2e-5b8d1f3c6a90"),
+                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Allow a partner to verify a cashier withdrawal with a one-time code sent to their Telegram.",
+                            Key = "Partners.CashierVerify.TelegramOtpEnabled",
+                            Value = "false"
+                        },
+                        new
+                        {
+                            Id = new Guid("1a7d3c9f-8e52-4d46-8b3f-6c9e2a4d7b01"),
+                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Allow a partner to verify a cashier withdrawal by scanning their personal barcode card.",
+                            Key = "Partners.CashierVerify.BarcodeEnabled",
+                            Value = "false"
                         });
                 });
 
@@ -4944,6 +5138,40 @@ namespace SupermarketSystem.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("SupermarketSystem.Domain.Ordering.Coupon", b =>
+                {
+                    b.HasOne("SupermarketSystem.Domain.Customers.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("SupermarketSystem.Domain.Ordering.CouponRedemption", b =>
+                {
+                    b.HasOne("SupermarketSystem.Domain.Ordering.Coupon", null)
+                        .WithMany()
+                        .HasForeignKey("CouponId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SupermarketSystem.Domain.Customers.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SupermarketSystem.Domain.Ordering.Order", null)
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SupermarketSystem.Domain.Sales.SaleInvoice", null)
+                        .WithMany()
+                        .HasForeignKey("SaleInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("SupermarketSystem.Domain.Ordering.Order", b =>
                 {
                     b.HasOne("SupermarketSystem.Domain.Branches.Branch", null)
@@ -5040,6 +5268,27 @@ namespace SupermarketSystem.Infrastructure.Migrations
                     b.HasOne("SupermarketSystem.Domain.Branches.Branch", null)
                         .WithMany()
                         .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SupermarketSystem.Domain.Partners.PartnerOtpChallenge", b =>
+                {
+                    b.HasOne("SupermarketSystem.Domain.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SupermarketSystem.Domain.Partners.Partner", null)
+                        .WithMany()
+                        .HasForeignKey("PartnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SupermarketSystem.Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

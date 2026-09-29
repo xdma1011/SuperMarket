@@ -19,7 +19,7 @@ namespace SupermarketSystem.IntegrationTests.EndToEnd;
 ///   بيع 2 (فيزا):         حليب 1              = 1.250
 ///   بيع 3 (كاش، زبون):    رز 2                = 7.000  ← إرجاع رز 1 (3.500 كاش، تالف)
 ///   بيع 4 (كاش):          حليب 3              = 3.750  ← إلغاء (خطأ كاشير)
-///   تلف: حليب 1 (منتهي، مش مستبدَل) = خسارة 0.800 · ضيافة: حليب 1 · مصروف كهربا 1.000
+///   تلف: حليب 1 (منتهي، مش مستبدَل) = خسارة 0.800 · ضيافة: حليب 1 = خسارة 0.800 · مصروف كهربا 1.000
 ///   دفعة للمورد 5.000 كاش من الدرج · تقفيل: معدود 4.400
 ///
 /// الاختبار بيجمع كل الفحوصات وبيطبعها، وبيفشل بالآخر بقائمة كل رقم مش مطابق (مش عند أول واحد).
@@ -282,7 +282,10 @@ public sealed class FullStoreDayScenarioTests : IntegrationTestBase
         Check("الربح: الربح الإجمالي", 3.150m, profit.GetProperty("grossProfit").GetDecimal());
         Check("الربح: المصاريف", 1.000m, profit.GetProperty("totalExpenses").GetDecimal());
         Check("الربح: خسارة التلف", 0.800m, profit.GetProperty("wasteLossValue").GetDecimal());
-        Check("الربح: صافي ربح الشهر", 1.350m, profit.GetProperty("netProfit").GetDecimal());
+        // الضيافة خسارة بالتكلفة (قرار صاحب المشروع 29/9/2026: "اكيد تنحسب"): حليب 1 × 0.800
+        Check("الربح: الضيافة بالتكلفة", 0.800m, profit.GetProperty("complimentaryCostValue").GetDecimal());
+        // 3.150 − 1.000 مصاريف − 0.800 تلف − 0.800 ضيافة
+        Check("الربح: صافي ربح الشهر", 0.550m, profit.GetProperty("netProfit").GetDecimal());
 
         // --- هامش الربح لكل منتج ---
         var margin = await GetJsonAsync(admin, $"/api/v1/reports/product-margin?branchId={branchId}&fromUtc={Uri.EscapeDataString(from)}&toUtc={Uri.EscapeDataString(to)}");

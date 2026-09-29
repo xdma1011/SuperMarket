@@ -44,6 +44,22 @@ public class Partner : AuditableEntity, IBranchOwned
     public bool IsActive { get; private set; }
     public string? Notes { get; private set; }
 
+    public const int MaxTelegramPhoneLength = 20;
+
+    /// <summary>
+    /// رقم تلغرام الشريك (29/9/2026) - لكود التحقق (OTP) بالكاشير. الشريك لازم يكون فاتح البوت وشارك رقمه
+    /// (TelegramChatLink) - الرقم لحاله ما بيكفي، البوت بدّه chat_id.
+    /// </summary>
+    public string? TelegramPhone { get; private set; }
+
+    /// <summary>
+    /// باركود التحقق الشخصي (29/9/2026) - hash بس (SHA-256)، الكود نفسه بيطلع مرة وحدة وقت الإصدار (بيتطبع
+    /// كرت). إصدار جديد بيلغي القديم؛ null = ما في باركود.
+    /// </summary>
+    public string? CashierBarcodeHash { get; private set; }
+
+    public DateTime? CashierBarcodeIssuedAtUtc { get; private set; }
+
     private Partner() { } // EF Core
 
     public Partner(Guid branchId, string fullName, PartnerType type, Guid? userId, decimal? speculativeProfitPercent, string? notes)
@@ -80,6 +96,80 @@ public class Partner : AuditableEntity, IBranchOwned
     }
 
     public void SetActive(bool isActive) => IsActive = isActive;
+
+    public void SetTelegramPhone(string? phone)
+    {
+        if (phone is { Length: > MaxTelegramPhoneLength })
+        {
+            throw new DomainException("Telegram phone is too long.");
+        }
+
+        TelegramPhone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim();
+    }
+
+    public void IssueCashierBarcode(string barcodeHash, DateTime issuedAtUtc)
+    {
+        if (string.IsNullOrWhiteSpace(barcodeHash))
+        {
+            throw new DomainException("Barcode hash is required.");
+        }
+
+        CashierBarcodeHash = barcodeHash;
+        CashierBarcodeIssuedAtUtc = issuedAtUtc;
+    }
+
+    public void RevokeCashierBarcode()
+    {
+        CashierBarcodeHash = null;
+        CashierBarcodeIssuedAtUtc = null;
+    }
+}
+
+/// <summary>
+/// كود تلغرام لسحب شريك من الكاشير (29/9/2026): الكاشير بيطلبه، بيوصل للشريك على تلغرام، الشريك بيكتبه بالكاشير.
+/// مربوط بمبلغ السحب، صالح 5 دقايق، لسحب واحد (ConsumedByClientRequestId - إعادة إرسال نفس السحب بتنقبل)، و5 محاولات غلط بتحرقه.
+/// </summary>
+public class PartnerOtpChallenge : Entity
+{
+    public const int MaxFailedAttempts = 5;
+
+    public Guid BranchId { get; private set; }
+    public Guid PartnerId { get; private set; }
+    public string CodeHash { get; private set; } = null!;
+
+    /// <summary>المبلغ اللي انطلب الكود عشانه - الكود ما بيمشي لمبلغ تاني.</summary>
+    public decimal Amount { get; private set; }
+
+    public DateTime CreatedAtUtc { get; private set; }
+    public DateTime ExpiresAtUtc { get; private set; }
+    public int FailedAttempts { get; private set; }
+    public DateTime? ConsumedAtUtc { get; private set; }
+    public Guid? ConsumedByClientRequestId { get; private set; }
+    public Guid RequestedByUserId { get; private set; }
+
+    private PartnerOtpChallenge() { } // EF Core
+
+    public PartnerOtpChallenge(
+        Guid branchId, Guid partnerId, string codeHash, decimal amount, DateTime createdAtUtc, DateTime expiresAtUtc, Guid requestedByUserId)
+    {
+        BranchId = branchId;
+        PartnerId = partnerId;
+        CodeHash = codeHash;
+        Amount = amount;
+        CreatedAtUtc = createdAtUtc;
+        ExpiresAtUtc = expiresAtUtc;
+        RequestedByUserId = requestedByUserId;
+    }
+
+    public bool IsUsable(DateTime utcNow) => ConsumedAtUtc is null && utcNow < ExpiresAtUtc && FailedAttempts < MaxFailedAttempts;
+
+    public void RegisterFailedAttempt() => FailedAttempts++;
+
+    public void Consume(DateTime utcNow, Guid clientRequestId)
+    {
+        ConsumedAtUtc = utcNow;
+        ConsumedByClientRequestId = clientRequestId;
+    }
 }
 
 public enum PartnerWithdrawalSource

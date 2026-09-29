@@ -120,6 +120,7 @@ app.MapSalesEndpoints();
 app.MapSaleAssistEndpoints();
 app.MapOrderingEndpoints();
 app.MapCustomerEndpoints();
+app.MapCouponEndpoints();
 app.MapCustomerAuthEndpoints();
 app.MapPublicCatalogEndpoints();
 app.MapDriverEndpoints();

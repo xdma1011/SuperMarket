@@ -17,6 +17,9 @@ public class PartnerConfiguration : IEntityTypeConfiguration<Partner>
         builder.Property(p => p.Type).HasConversion<int>().IsRequired();
         builder.Property(p => p.SpeculativeProfitPercent).HasColumnType("decimal(9,4)");
         builder.Property(p => p.Notes).HasMaxLength(Partner.MaxNotesLength);
+        builder.Property(p => p.TelegramPhone).HasMaxLength(Partner.MaxTelegramPhoneLength);
+        builder.Property(p => p.CashierBarcodeHash).HasMaxLength(100);
+        builder.Property(p => p.CashierBarcodeIssuedAtUtc).HasColumnType("datetime2");
         builder.Property(p => p.CreatedAtUtc).HasColumnType("datetime2").IsRequired();
         builder.Property(p => p.UpdatedAtUtc).HasColumnType("datetime2");
 
@@ -25,6 +28,27 @@ public class PartnerConfiguration : IEntityTypeConfiguration<Partner>
 
         builder.HasOne<Branch>().WithMany().HasForeignKey(p => p.BranchId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(p => p.UserId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class PartnerOtpChallengeConfiguration : IEntityTypeConfiguration<PartnerOtpChallenge>
+{
+    public void Configure(EntityTypeBuilder<PartnerOtpChallenge> builder)
+    {
+        builder.ToTable("PartnerOtpChallenges");
+        builder.HasKey(c => c.Id);
+
+        builder.Property(c => c.CodeHash).IsRequired().HasMaxLength(100);
+        builder.Property(c => c.Amount).HasColumnType("decimal(18,4)").IsRequired();
+        builder.Property(c => c.CreatedAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(c => c.ExpiresAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(c => c.ConsumedAtUtc).HasColumnType("datetime2");
+
+        builder.HasIndex(c => new { c.PartnerId, c.CreatedAtUtc });
+
+        builder.HasOne<Partner>().WithMany().HasForeignKey(c => c.PartnerId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Branch>().WithMany().HasForeignKey(c => c.BranchId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(c => c.RequestedByUserId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 

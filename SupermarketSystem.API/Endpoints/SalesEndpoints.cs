@@ -9,6 +9,8 @@ using SupermarketSystem.Application.Sales.RecordSaleInvoicePayment;
 using SupermarketSystem.Application.Sales.VoidSale;
 using SupermarketSystem.Domain.Sales;
 
+using SupermarketSystem.Application.Sales.CreditCustomer;
+
 namespace SupermarketSystem.API.Endpoints;
 
 public static class SalesEndpoints
@@ -77,6 +79,15 @@ public static class SalesEndpoints
         .RequirePermission(PermissionCodes.SalesCreate)
         .WithSummary("قائمة/بحث فواتير البيع - أساس البحث عن فاتورة أصلية قبل أي عملية إرجاع.")
         .Produces<PagedResult<SaleInvoiceListItemDto>>(StatusCodes.Status200OK);
+
+        group.MapGet("/credit-customer", async (string phone, LookupCreditCustomerHandler handler, CancellationToken cancellationToken) =>
+                (await handler.HandleAsync(new LookupCreditCustomerQuery(phone), cancellationToken)).ToHttpResult())
+            .WithName("LookupCreditCustomer")
+            .RequirePermission(PermissionCodes.SalesCreate)
+            .WithSummary("بيع بالدين من الكاشير: الزبون المسجّل برقمه (آخر 9 أرقام) ودينه الحالي.")
+            .Produces<CreditCustomerDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapGet("/filter-options", async (Guid? branchId, GetSaleFilterOptionsHandler handler, CancellationToken cancellationToken) =>
                 Results.Ok(await handler.HandleAsync(branchId, cancellationToken)))

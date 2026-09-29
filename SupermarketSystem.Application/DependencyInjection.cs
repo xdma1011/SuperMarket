@@ -81,6 +81,7 @@ using SupermarketSystem.Application.Catalog.GetProductPromotions;
 using SupermarketSystem.Application.Finance.CreateExpense;
 using SupermarketSystem.Application.Finance.ExpenseTypes;
 using SupermarketSystem.Application.Employees;
+using SupermarketSystem.Application.Sales.CreditCustomer;
 using SupermarketSystem.Application.System.TimeSettings;
 using SupermarketSystem.Application.Finance.GetExpenses;
 using SupermarketSystem.Application.Finance.CreateCapitalTransaction;
@@ -129,6 +130,7 @@ using SupermarketSystem.Application.Ordering.CompleteOrder;
 using SupermarketSystem.Application.Ordering.GetCustomerOrders;
 using SupermarketSystem.Application.Ordering.GetOrderById;
 using SupermarketSystem.Application.Ordering.GetPendingOrders;
+using SupermarketSystem.Application.Ordering.Coupons;
 using SupermarketSystem.Application.Ordering.PlaceOrder;
 using SupermarketSystem.Application.Ordering.RateOrder;
 using SupermarketSystem.Application.Ordering.RejectOrder;
@@ -272,6 +274,20 @@ public static class DependencyInjection
         services.AddScoped<GetDriversHandler>();
 
         services.AddScoped<PlaceOrderHandler>();
+
+        services.AddScoped<GetCouponsHandler>();
+
+        services.AddScoped<CreateCouponHandler>();
+
+        services.AddScoped<UpdateCouponHandler>();
+
+        services.AddScoped<SetCouponActiveHandler>();
+
+        services.AddScoped<SendCouponHandler>();
+
+        services.AddScoped<GetCustomerCouponsHandler>();
+
+        services.AddScoped<PreviewCouponHandler>();
         services.AddScoped<GetPendingOrdersHandler>();
         services.AddScoped<GetOrderByIdHandler>();
         services.AddScoped<GetCustomerOrdersHandler>();
@@ -304,6 +320,7 @@ public static class DependencyInjection
         services.AddScoped<MarkNotificationReadHandler>();
         services.AddScoped<MarkAllNotificationsReadHandler>();
         services.AddScoped<GetNotificationSummaryHandler>();
+        services.AddScoped<LookupCreditCustomerHandler>();
         services.AddScoped<GetTimeSettingsHandler>();
         services.AddScoped<UpdateTimeSettingsHandler>();
         services.AddScoped<GetExpenseTypesHandler>();
@@ -325,6 +342,11 @@ public static class DependencyInjection
         services.AddScoped<GetPartnerStatementByIdHandler>();
         services.AddScoped<RecordPartnerWithdrawalHandler>();
         services.AddScoped<RecordVerifiedPartnerWithdrawalHandler>();
+        services.AddScoped<GetPartnerVerificationOptionsHandler>();
+        services.AddScoped<RequestPartnerOtpHandler>();
+        services.AddScoped<SetPartnerTelegramPhoneHandler>();
+        services.AddScoped<IssuePartnerBarcodeHandler>();
+        services.AddScoped<RevokePartnerBarcodeHandler>();
         services.AddScoped<GetPartnerWithdrawalsHandler>();
         services.AddScoped<GetOwnerReceivablesHandler>();
         services.AddScoped<RecordOwnerRepaymentHandler>();

@@ -19,6 +19,9 @@ interface OrderListItemDto {
   createdAtUtc: string;
   driverId: string | null;
   driverName: string | null;
+  /** كوبون خصم الزبون (29/9/2026) - الخصم تقديري لحد التسليم (بينحسب فعليًا على أسعار لحظتها). */
+  couponCode?: string | null;
+  estimatedCouponDiscount?: number;
 }
 
 interface DriverDto {
@@ -65,7 +68,7 @@ export class OrdersComponent implements OnInit {
   completeAmount: number | null = null;
   completePaymentMethodId = '';
   selectedDriverId = '';
-  private targetOrder: OrderListItemDto | null = null;
+  targetOrder: OrderListItemDto | null = null;
 
   constructor(private readonly apiClient: ApiClient) {}
 
@@ -159,7 +162,8 @@ export class OrdersComponent implements OnInit {
 
   openCompleteModal(order: OrderListItemDto): void {
     this.targetOrder = order;
-    this.completeAmount = order.estimatedTotal;
+    // الكوبون بينطبق بالسيرفر وقت التسليم - المبلغ المتوقع = المجموع ناقص الخصم التقديري.
+    this.completeAmount = Math.round((order.estimatedTotal - (order.estimatedCouponDiscount ?? 0)) * 1000) / 1000;
     this.completeModalOpen.set(true);
   }
 

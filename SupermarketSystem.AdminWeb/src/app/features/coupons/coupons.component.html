@@ -1,0 +1,188 @@
+<div class="page-head">
+  <div>
+    <h1>كوبونات الخصم</h1>
+    <p class="hint">
+      كود خصم لتطبيق الزبائن - لزبون معيّن أو للكل. إنت اللي بتبعته (إشعار على التطبيق + تلغرام لو رقمه مربوط بالبوت)،
+      والزبون بيكتبه وقت الطلب. الخصم بينحسب على أسعار لحظة التسليم وبيطلع بالفاتورة كخصم، وبيرجع للزبون لو الطلب انرفض.
+    </p>
+  </div>
+  <button type="button" class="btn-primary" (click)="openForm()">+ كوبون جديد</button>
+</div>
+
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+@if (successMessage()) {
+  <div class="alert-banner success">{{ successMessage() }}</div>
+}
+
+@if (coupons().length === 0 && !loading()) {
+  <p class="empty">ما في كوبونات لسه.</p>
+} @else {
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>الكود</th>
+          <th>الخصم</th>
+          <th>لمين</th>
+          <th>الفترة</th>
+          <th>الاستعمال</th>
+          <th>الحالة</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (c of coupons(); track c.id) {
+          <tr [class.inactive]="!c.isActive">
+            <td>
+              <strong dir="ltr">{{ c.code }}</strong>
+              <small class="sub">{{ c.title }}</small>
+            </td>
+            <td>
+              {{ describe(c) }}
+              @if (c.minOrderAmount > 0) { <small class="sub">على طلب {{ c.minOrderAmount | number: '1.3-3' }} وأكتر</small> }
+            </td>
+            <td>
+              @if (c.customerId) { {{ c.customerName }} <small class="sub" dir="ltr">{{ c.customerPhone }}</small> }
+              @else { كل الزبائن }
+            </td>
+            <td>
+              <small class="sub">من {{ formatDate(c.startAtUtc) }}</small>
+              <small class="sub">لـ {{ formatDate(c.endAtUtc) }}</small>
+            </td>
+            <td>
+              {{ c.redeemedCount }} مستعمل
+              @if (c.reservedCount > 0) { · {{ c.reservedCount }} بطلبات مفتوحة }
+              @if (c.redeemedDiscountTotal > 0) { <small class="sub">خصم فعلي {{ c.redeemedDiscountTotal | number: '1.3-3' }} د.أ</small> }
+              @if (c.maxTotalUses) { <small class="sub">الحد: {{ c.maxTotalUses }}</small> }
+            </td>
+            <td>
+              <span class="chip" [class.ok]="c.statusTitle === 'شغّال'" [class.warn]="c.statusTitle !== 'شغّال'">{{ c.statusTitle }}</span>
+              @if (c.lastSentAtUtc) { <small class="sub">آخر إرسال {{ formatDate(c.lastSentAtUtc) }}</small> }
+            </td>
+            <td class="actions">
+              <button type="button" class="btn-link" (click)="openSend(c)" [disabled]="!c.isActive">إرسال</button>
+              <button type="button" class="btn-link" (click)="openForm(c)">تعديل</button>
+              <button type="button" class="btn-link" (click)="toggleActive(c)">{{ c.isActive ? 'إيقاف' : 'تفعيل' }}</button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+@if (formOpen()) {
+  <div class="modal-backdrop" (click)="closeForm()">
+    <div class="modal-card" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+      <h2>{{ editingId ? 'تعديل كوبون' : 'كوبون جديد' }}</h2>
+      <div class="form-grid">
+        <label class="field">
+          <span>الكود (حروف إنجليزية وأرقام)</span>
+          <input type="text" dir="ltr" maxlength="20" placeholder="EID-2026" [(ngModel)]="formCode" [disabled]="!!editingId" />
+        </label>
+        <label class="field">
+          <span>العنوان (بيبين للزبون)</span>
+          <input type="text" maxlength="200" placeholder="خصم العيد" [(ngModel)]="formTitle" />
+        </label>
+        <label class="field">
+          <span>نوع الخصم</span>
+          <select [(ngModel)]="formType">
+            <option value="FixedAmount">مبلغ ثابت (د.أ)</option>
+            <option value="Percent">نسبة من الطلب %</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>{{ formType === 'Percent' ? 'النسبة %' : 'المبلغ (د.أ)' }}</span>
+          <input type="number" min="0" step="0.001" [(ngModel)]="formValue" />
+        </label>
+        @if (formType === 'Percent') {
+          <label class="field">
+            <span>سقف الخصم (د.أ، اختياري)</span>
+            <input type="number" min="0" step="0.001" [(ngModel)]="formMaxDiscount" />
+          </label>
+        }
+        <label class="field">
+          <span>أقل مبلغ طلب (اختياري)</span>
+          <input type="number" min="0" step="0.001" [(ngModel)]="formMinOrder" />
+        </label>
+        <label class="field">
+          <span>من يوم</span>
+          <input type="date" [(ngModel)]="formStartDate" />
+        </label>
+        <label class="field">
+          <span>لحد يوم (شامل)</span>
+          <input type="date" [(ngModel)]="formEndDate" />
+        </label>
+        <label class="field">
+          <span>لمين</span>
+          <select [(ngModel)]="formAudience" [disabled]="!!editingId">
+            <option value="all">كل الزبائن</option>
+            <option value="customer">زبون معيّن بس</option>
+          </select>
+        </label>
+        @if (formAudience === 'customer') {
+          <label class="field">
+            <span>الزبون</span>
+            <select [(ngModel)]="formCustomerId" [disabled]="!!editingId">
+              <option value="">— اختر —</option>
+              @for (cu of customers(); track cu.id) {
+                <option [value]="cu.id">{{ cu.fullName }} {{ cu.phone ? '(' + cu.phone + ')' : '' }}</option>
+              }
+            </select>
+          </label>
+        }
+        <label class="field">
+          <span>كم مرة لكل زبون</span>
+          <input type="number" min="1" step="1" [(ngModel)]="formMaxUsesPerCustomer" />
+        </label>
+        <label class="field">
+          <span>حد الاستعمال الكلي (اختياري - مثلًا أول 50)</span>
+          <input type="number" min="1" step="1" [(ngModel)]="formMaxTotalUses" />
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-link" (click)="closeForm()">إلغاء</button>
+        <button type="button" class="btn-primary" [disabled]="submitting()" (click)="save()">حفظ</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (sendTarget(); as c) {
+  <div class="modal-backdrop" (click)="closeSend()">
+    <div class="modal-card" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+      <h2>إرسال <span dir="ltr">{{ c.code }}</span></h2>
+      @if (c.customerId) {
+        <p class="hint">كوبون مخصص - بينبعت لـ{{ c.customerName }} بس.</p>
+      } @else {
+        <div class="form-grid">
+          <label class="field">
+            <span>لمين</span>
+            <select [(ngModel)]="sendMode">
+              <option value="all">كل الزبائن</option>
+              <option value="customer">زبون واحد</option>
+            </select>
+          </label>
+          @if (sendMode === 'customer') {
+            <label class="field">
+              <span>الزبون</span>
+              <select [(ngModel)]="sendCustomerId">
+                <option value="">— اختر —</option>
+                @for (cu of customers(); track cu.id) {
+                  <option [value]="cu.id">{{ cu.fullName }} {{ cu.phone ? '(' + cu.phone + ')' : '' }}</option>
+                }
+              </select>
+            </label>
+          }
+        </div>
+      }
+      <p class="hint">بيوصل إشعار على تطبيق الزبون، وعلى تلغرام لو رقمه مربوط ببوت المحل.</p>
+      <div class="modal-actions">
+        <button type="button" class="btn-link" (click)="closeSend()">إلغاء</button>
+        <button type="button" class="btn-primary" [disabled]="submitting()" (click)="send()">إرسال</button>
+      </div>
+    </div>
+  </div>
+}

@@ -32,7 +32,9 @@ public sealed record OrderDetailDto(
     DateTime CreatedAtUtc,
     DateTime? DecidedAtUtc,
     int? Rating,
-    string? RatingComment);
+    string? RatingComment,
+    string? CouponCode = null,
+    decimal CouponDiscount = 0m);
 
 public sealed class GetOrderByIdHandler
 {
@@ -90,6 +92,14 @@ public sealed class GetOrderByIdHandler
                 i.EstimatedUnitPrice))
             .ToList();
 
+        // كوبون الطلب (29/9/2026): الخصم الفعلي بعد التسليم، وإلا التقديري (الكوبون المرجوع مع الرفض ما بيبين).
+        var coupon = await (
+            from r in _context.CouponRedemptions.AsNoTracking()
+            join c in _context.Coupons.AsNoTracking() on r.CouponId equals c.Id
+            where r.OrderId == order.Id && r.Status != Domain.Ordering.CouponRedemptionStatus.Released
+            select new { c.Code, Discount = r.DiscountAmount ?? r.EstimatedDiscountAmount })
+            .FirstOrDefaultAsync(cancellationToken);
+
         return Result.Success(new OrderDetailDto(
             order.Id,
             order.CustomerId,
@@ -106,6 +116,8 @@ public sealed class GetOrderByIdHandler
             order.CreatedAtUtc,
             order.DecidedAtUtc,
             order.Rating,
-            order.RatingComment));
+            order.RatingComment,
+            coupon?.Code,
+            coupon?.Discount ?? 0m));
     }
 }

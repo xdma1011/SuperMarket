@@ -5,6 +5,7 @@ import '../../providers/auth_provider.dart';
 import '../../services/customer_service.dart';
 import '../auth/phone_entry_screen.dart';
 import 'complaint_screen.dart';
+import 'coupons_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -80,6 +81,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(height: 12),
                 ],
+                ListTile(
+                  leading: const Icon(Icons.local_offer_outlined),
+                  title: const Text('كوبوناتي'),
+                  trailing: const Icon(Icons.arrow_back_ios, size: 16),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CouponsScreen())),
+                ),
                 ListTile(
                   leading: const Icon(Icons.report_problem_outlined),
                   title: const Text('تقديم شكوى'),

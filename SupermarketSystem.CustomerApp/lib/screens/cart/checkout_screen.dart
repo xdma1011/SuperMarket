@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/branch_provider.dart';
 import '../../providers/cart_provider.dart';
+import '../../models/coupon.dart';
 import '../../services/api_client.dart';
+import '../../services/coupon_service.dart';
 import '../../services/order_service.dart';
 import 'location_picker_screen.dart';
 
@@ -17,9 +19,56 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
   final _noteController = TextEditingController();
+  final _couponController = TextEditingController();
   LatLng? _deliveryLocation;
   bool _placing = false;
   String? _error;
+
+  // كوبون الخصم (29/9/2026): فحص قبل الطلب بس - الحجز الفعلي مع الطلب، والخصم النهائي على أسعار لحظة التسليم.
+  CouponPreview? _couponPreview;
+  String? _couponError;
+  bool _checkingCoupon = false;
+
+  @override
+  void dispose() {
+    _noteController.dispose();
+    _couponController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _applyCoupon() async {
+    final code = _couponController.text.trim();
+    final customerId = context.read<AuthProvider>().customerId;
+    final total = context.read<CartProvider>().estimatedTotal;
+    if (code.isEmpty || customerId == null) return;
+
+    setState(() {
+      _checkingCoupon = true;
+      _couponError = null;
+    });
+    try {
+      final preview = await CouponService.instance.preview(customerId: customerId, code: code, estimatedTotal: total);
+      if (!mounted) return;
+      setState(() {
+        _couponPreview = preview;
+        _checkingCoupon = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _couponPreview = null;
+        _couponError = e.message;
+        _checkingCoupon = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _couponPreview = null;
+        _couponError = 'تعذّر فحص الكود.';
+        _checkingCoupon = false;
+      });
+    }
+  }
 
   Future<void> _pickLocation() async {
     final result = await Navigator.of(context).push<LatLng>(MaterialPageRoute(builder: (_) => const LocationPickerScreen()));
@@ -51,6 +100,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         deliveryLatitude: _deliveryLocation?.latitude,
         deliveryLongitude: _deliveryLocation?.longitude,
         items: cart.items,
+        couponCode: _couponController.text.trim().isEmpty ? null : _couponController.text.trim(),
       );
 
       if (!mounted) return;
@@ -97,7 +147,42 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text('عدد الأصناف: ${cart.itemCount}'),
-            Text('الإجمالي التقديري: ${cart.estimatedTotal.toStringAsFixed(2)} د.أ'),
+            Text('الإجمالي التقديري: ${cart.estimatedTotal.toStringAsFixed(3)} د.أ'),
+            if (_couponPreview != null) ...[
+              Text('خصم ${_couponPreview!.title}: −${_couponPreview!.estimatedDiscount.toStringAsFixed(3)} د.أ',
+                  style: const TextStyle(color: Colors.green)),
+              Text('بعد الخصم: ${_couponPreview!.estimatedTotalAfterDiscount.toStringAsFixed(3)} د.أ',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+            ],
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _couponController,
+                    textDirection: TextDirection.ltr,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'كود خصم (اختياري)'),
+                    onChanged: (_) {
+                      if (_couponPreview != null || _couponError != null) {
+                        setState(() {
+                          _couponPreview = null;
+                          _couponError = null;
+                        });
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: _checkingCoupon ? null : _applyCoupon,
+                  child: _checkingCoupon
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('تطبيق'),
+                ),
+              ],
+            ),
+            if (_couponError != null) Text(_couponError!, style: const TextStyle(color: Colors.red)),
             const SizedBox(height: 16),
             TextField(
               controller: _noteController,

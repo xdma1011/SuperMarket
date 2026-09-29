@@ -93,6 +93,33 @@ describe('PartnersComponent', () => {
     expect(component.errorMessage()).toBe('ما في رأس مال مسجَّل');
   });
 
+  it('رقم تلغرام بينحفظ لحاله بعد إنشاء الشريك (بالـid الجديد)، وبلا رقم ما في طلب زيادة', async () => {
+    api.post.and.returnValue(of({ partnerId: 'new' }));
+    api.put.and.returnValue(of({}));
+    await component.openPartnerForm();
+    component.formName = 'محمد';
+    component.formTelegramPhone = ' 0791112222 ';
+    await component.savePartner();
+    expect(api.put).toHaveBeenCalledWith('partners' as never, '{id}/telegram-phone', { telegramPhone: '0791112222' }, { id: 'new' });
+
+    api.put.calls.reset();
+    await component.openPartnerForm(AHMAD);
+    await component.savePartner();
+    expect(api.put.calls.allArgs().some(a => a[1] === '{id}/telegram-phone')).toBeFalse();
+  });
+
+  it('إصدار باركود شخصي بيعرض الكرت (SVG + الأرقام) مرة وحدة', async () => {
+    spyOn(window, 'confirm').and.returnValue(true);
+    api.post.and.returnValue(of({ barcode: '12345678901234567890', issuedAtUtc: '2026-09-29T10:00:00Z' }));
+    await component.issueBarcode(AHMAD);
+    expect(api.post).toHaveBeenCalledWith('partners' as never, '{id}/cashier-barcode', {}, { id: 'p1' });
+    const card = component.issuedCard();
+    expect(card?.barcode).toBe('12345678901234567890');
+    expect(card?.rawSvg).toContain('<svg');
+    component.closeIssuedCard();
+    expect(component.issuedCard()).toBeNull();
+  });
+
   it('الاسترجاع ما بيتجاوز المستحق', async () => {
     const receivable = { branchId: 'b1', branchName: '', ownerUserId: 'u1', ownerName: 'صاحب المحل', balance: 2, entries: [] };
     component.repayAmount['u1'] = 5;

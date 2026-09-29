@@ -10,6 +10,7 @@ export enum ApiController {
   Branches = 'branches',
   CashClosings = 'cash-closings',
   CashierSync = 'cashier-sync',
+  Coupons = 'coupons',
   Customers = 'customers',
   Driver = 'driver',
   Employees = 'employees',

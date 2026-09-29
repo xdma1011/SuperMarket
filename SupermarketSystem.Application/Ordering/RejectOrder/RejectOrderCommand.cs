@@ -51,6 +51,10 @@ public sealed class RejectOrderHandler
             return Result.Failure(Error.Conflict("Order.InvalidTransition", ex.Message));
         }
 
+        // كوبون محجوز مع الطلب بيرجع للزبون (استعماله ما بينحسب).
+        var couponRedemption = await _context.CouponRedemptions.FirstOrDefaultAsync(r => r.OrderId == order.Id, cancellationToken);
+        couponRedemption?.Release(_dateTimeProvider.UtcNow);
+
         await _context.SaveChangesAsync(cancellationToken);
 
         await _pushNotifier.NotifyOrderStatusChangedAsync(

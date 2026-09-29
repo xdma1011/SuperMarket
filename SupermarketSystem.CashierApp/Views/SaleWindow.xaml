@@ -256,8 +256,14 @@
             <Button x:Name="HeldSalesButton" Grid.Column="10" Height="42" Width="150" FontSize="14" Content="📋 المعلّقة (0)" ToolTip="F9"
                     Style="{StaticResource SecondaryButton}" Click="HeldSalesButton_Click" />
 
-            <Button x:Name="CompleteSaleButton" Grid.Column="12" Height="42" Width="140"
-                    Content="إتمام البيع (F12)" FontSize="16" Click="CompleteSaleButton_Click" />
+            <StackPanel Grid.Column="12" Orientation="Horizontal">
+                <!-- بيع بالدين (29/9/2026): زبون مسجّل برقمه (خانة رقم الزبون) - المستلم (لو في) بينحسب دفعة، الباقي عالدين. بدّه نت -->
+                <Button x:Name="CreditSaleButton" Height="42" Width="120" FontSize="14" Content="💳 بالدين" Margin="0,0,10,0"
+                        Style="{StaticResource SecondaryButton}" Click="CreditSaleButton_Click"
+                        ToolTip="اكتب رقم الزبون المسجّل أول - المبلغ المستلم (لو في) بينحسب دفعة والباقي بينضاف على دينه" />
+                <Button x:Name="CompleteSaleButton" Height="42" Width="140"
+                        Content="إتمام البيع (F12)" FontSize="16" Click="CompleteSaleButton_Click" />
+            </StackPanel>
         </Grid>
     </Grid>
 </Window>

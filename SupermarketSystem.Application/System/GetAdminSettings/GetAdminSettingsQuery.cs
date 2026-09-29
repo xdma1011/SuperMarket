@@ -54,7 +54,9 @@ public sealed class GetAdminSettingsHandler
         (TelegramSettingsKeys.BotUsername, "اسم مستخدم بوت تلغرام (بدون @، للرابط العلني)", AdminSettingDataType.String),
         (StoreBrandingKeys.StoreName, "اسم المحل (يُطبع بأعلى فاتورة الكاشير)", AdminSettingDataType.String),
         (OrderingPolicyKeys.DailyOrderCountAlertThreshold, "عدد طلبات نفس الزبون باليوم قبل تنبيهك (إساءة استخدام محتملة)", AdminSettingDataType.Decimal),
-        (PaymentSettingsKeys.UsdToJodExchangeRate, "سعر تحويل الدولار إلى الدينار الأردني (يُستخدم بكبسات الفكة بالكاشير)", AdminSettingDataType.Decimal)
+        (PaymentSettingsKeys.UsdToJodExchangeRate, "سعر تحويل الدولار إلى الدينار الأردني (يُستخدم بكبسات الفكة بالكاشير)", AdminSettingDataType.Decimal),
+        (Partners.PartnerVerificationSettingsKeys.TelegramOtpEnabled, "سحب شريك من الكاشير: السماح بالتحقق بكود على تلغرام الشريك (يوزر وكلمة السر دايمًا شغّالين)", AdminSettingDataType.Boolean),
+        (Partners.PartnerVerificationSettingsKeys.BarcodeEnabled, "سحب شريك من الكاشير: السماح بالتحقق بباركود الشريك الشخصي (بينصدر من صفحة الشركاء)", AdminSettingDataType.Boolean)
     };
 
     private readonly IApplicationDbContext _context;

@@ -115,6 +115,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<DrawerOpenEvent> DrawerOpenEvents => Set<DrawerOpenEvent>();
     public DbSet<Partner> Partners => Set<Partner>();
     public DbSet<PartnerWithdrawal> PartnerWithdrawals => Set<PartnerWithdrawal>();
+    public DbSet<PartnerOtpChallenge> PartnerOtpChallenges => Set<PartnerOtpChallenge>();
     public DbSet<PartnerMonthlyStatement> PartnerMonthlyStatements => Set<PartnerMonthlyStatement>();
     public DbSet<PartnerStatementLine> PartnerStatementLines => Set<PartnerStatementLine>();
     public DbSet<OwnerReceivableEntry> OwnerReceivableEntries => Set<OwnerReceivableEntry>();
@@ -130,6 +131,8 @@ public class AppDbContext : DbContext, IApplicationDbContext
     // Ordering
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+    public DbSet<Coupon> Coupons => Set<Coupon>();
+    public DbSet<CouponRedemption> CouponRedemptions => Set<CouponRedemption>();
 
     // Settings
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();

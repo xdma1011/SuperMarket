@@ -51,6 +51,7 @@ public sealed class GetCustomerOrdersHandler
                 null,
                 null))
             .ToListAsync(cancellationToken);
+        items = await OrderCouponInfo.AttachAsync(_context, items, cancellationToken);
 
         return new PagedResult<OrderListItemDto>(items, totalCount, paging.PageNumber, paging.PageSize);
     }

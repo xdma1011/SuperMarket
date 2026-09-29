@@ -181,6 +181,14 @@ public sealed record VoidSaleResponseDto(
 
 public sealed record VoidSaleResult(bool Success, VoidSaleResponseDto? Response, string? ErrorMessage);
 
+/// <summary>طرق تحقق الشريك بالكاشير (يوزر وكلمة سر دايمًا؛ تلغرام والباركود حسب الإعدادات).</summary>
+public sealed record PartnerVerificationOptionsDto(bool PasswordEnabled, bool TelegramOtpEnabled, bool BarcodeEnabled, List<OtpPartnerDto> OtpPartners);
+
+public sealed record OtpPartnerDto(Guid PartnerId, string FullName);
+
+/// <summary>GET /sales/credit-customer — الزبون المسجّل برقمه ودينه الحالي (قبل البيع بالدين).</summary>
+public sealed record CreditCustomerDto(Guid CustomerId, string FullName, string? Phone, decimal CurrentDebt, int UnpaidInvoiceCount);
+
 /// <summary>
 /// أبسط عميل ممكن — ميثودان أصليان (SendPendingSaleAsync) + ميثودا
 /// مزامنة الكتالوج المضافتان هون.
@@ -779,16 +787,17 @@ public sealed class ApiClient
     }
 
     /// <summary>
-    /// POST /partner-withdrawals/verified — سحب شريك من الصندوق بتحقق هويته (يوزره وكلمة سره) والكاشير داخل بحسابه.
-    /// أونلاين بس. بيرجّع اسم الشريك ورصيده بعد السحب.
+    /// POST /partner-withdrawals/verified — سحب شريك من الصندوق بتحقق هويته والكاشير داخل بحسابه: يوزره وكلمة سره،
+    /// أو كود تلغرام (otpChallengeId + otpCode)، أو باركوده الشخصي. أونلاين بس. بيرجّع اسم الشريك ورصيده بعد السحب.
     /// </summary>
     public async Task<(bool Success, string? PartnerName, decimal? NewBalance, string? ErrorMessage)> RecordVerifiedPartnerWithdrawalAsync(
-        Guid branchId, string username, string password, decimal amount, string? notes, Guid clientRequestId, CancellationToken cancellationToken)
+        Guid branchId, string? username, string? password, decimal amount, string? notes, Guid clientRequestId, CancellationToken cancellationToken,
+        Guid? otpChallengeId = null, string? otpCode = null, string? barcode = null)
     {
         try
         {
             var response = await _http.PostAsJsonAsync("partner-withdrawals/verified",
-                new { branchId, username, password, amount, notes, clientRequestId }, cancellationToken);
+                new { branchId, username, password, amount, notes, clientRequestId, otpChallengeId, otpCode, barcode }, cancellationToken);
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
@@ -802,6 +811,44 @@ public sealed class ApiClient
         catch (Exception ex)
         {
             return (false, null, null, $"تعذّر الاتصال بالسيرفر: {ex.Message}");
+        }
+    }
+
+    /// <summary>GET /partner-withdrawals/verification-options — طرق تحقق الشريك المفعّلة من الإعدادات (null = ما في نت).</summary>
+    public async Task<PartnerVerificationOptionsDto?> GetPartnerVerificationOptionsAsync(Guid branchId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await _http.GetAsync($"partner-withdrawals/verification-options?branchId={branchId}", cancellationToken);
+            return response.IsSuccessStatusCode
+                ? await response.Content.ReadFromJsonAsync<PartnerVerificationOptionsDto>(cancellationToken: cancellationToken)
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>POST /partner-withdrawals/otp — كود تلغرام للشريك لسحب مبلغ محدد (صالح 5 دقايق ولنفس المبلغ بس).</summary>
+    public async Task<(Guid? ChallengeId, string? ErrorMessage)> RequestPartnerOtpAsync(
+        Guid branchId, Guid partnerId, decimal amount, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await _http.PostAsJsonAsync("partner-withdrawals/otp", new { branchId, partnerId, amount }, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return (null, ServerError(body));
+            }
+
+            using var document = JsonDocument.Parse(body);
+            return (document.RootElement.GetProperty("challengeId").GetGuid(), null);
+        }
+        catch (Exception ex)
+        {
+            return (null, $"تعذّر الاتصال بالسيرفر: {ex.Message}");
         }
     }
 
@@ -844,6 +891,30 @@ public sealed class ApiClient
         catch (Exception ex)
         {
             return (false, $"تعذّر الاتصال بالسيرفر: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// GET /sales/credit-customer?phone= — البيع بالدين (29/9/2026): تأكيد الزبون المسجّل برقمه ودينه الحالي قبل البيع.
+    /// أونلاين بس - البيع بالدين لازم زبون مسجّل بالسيرفر (مش مجرد رقم).
+    /// </summary>
+    public async Task<(CreditCustomerDto? Customer, string? ErrorMessage)> LookupCreditCustomerAsync(string phone, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await _http.GetAsync($"sales/credit-customer?phone={Uri.EscapeDataString(phone)}", cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var customer = await response.Content.ReadFromJsonAsync<CreditCustomerDto>(cancellationToken: cancellationToken);
+                return customer is null ? (null, "رد غير متوقع من السيرفر.") : (customer, null);
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            return (null, ServerError(errorBody));
+        }
+        catch (Exception ex)
+        {
+            return (null, $"تعذّر الاتصال بالسيرفر: {ex.Message}");
         }
     }
 

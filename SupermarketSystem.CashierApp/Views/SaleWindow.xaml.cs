@@ -662,13 +662,108 @@ public partial class SaleWindow : Window
 
     private async void CompleteSaleButton_Click(object sender, RoutedEventArgs e)
     {
+        await CompleteSaleAsync(creditCustomer: null, creditPaidNow: 0m);
+    }
+
+    /// <summary>
+    /// بيع بالدين (29/9/2026): زبون مسجّل برقمه (خانة رقم الزبون) - السيرفر بيأكّده ويرجّع دينه الحالي، الكاشير بيأكّد،
+    /// وبعدين البيعة بتنبعت بـcustomerId صريح + allowCreditSale (قاعدة السيرفر). المبلغ المستلم (لو أقل من الإجمالي)
+    /// بينحسب دفعة، والباقي عالدين. بدّه نت لحظة التأكيد بس - البيعة نفسها بتنحفظ وبتنبعت زي أي بيعة (ولو علقت
+    /// بالطابور بتنقبل بعدين لأن الزبون محدَّد صراحة).
+    /// </summary>
+    private async void CreditSaleButton_Click(object sender, RoutedEventArgs e)
+    {
         if (_cart.Count == 0)
         {
             ShowError("السلة فاضية.");
             return;
         }
 
-        if (PaymentMethodCombo.SelectedItem is not PaymentMethodDto selectedMethod)
+        var phone = CustomerPhoneBox.Text.Trim();
+        if (phone.Length == 0)
+        {
+            ShowError("البيع بالدين بدّه رقم الزبون المسجّل - اكتبه بخانة \"رقم الزبون\".");
+            CustomerPhoneBox.Focus();
+            return;
+        }
+
+        if (!IsPlausiblePhone(phone))
+        {
+            ShowError("رقم الزبون مش صحيح - اكتبه أرقام (مثلًا 0791234567).");
+            CustomerPhoneBox.Focus();
+            return;
+        }
+
+        var total = _cart.Sum(l => l.LineTotal);
+        var paidNow = 0m;
+        var tenderedText = TenderedAmountBox.Text.Trim();
+        if (tenderedText.Length > 0
+            && (!decimal.TryParse(tenderedText, NumberStyles.Number, CultureInfo.InvariantCulture, out paidNow) || paidNow < 0))
+        {
+            ShowError("المبلغ المستلم مش رقم صحيح - فضّيه لو الزبون ما دفع إشي.");
+            TenderedAmountBox.Focus();
+            return;
+        }
+
+        paidNow = decimal.Round(paidNow, 3);
+        if (paidNow >= total)
+        {
+            ShowError("المبلغ المستلم بيغطي الفاتورة كلها - استعمل \"إتمام البيع\" العادي.");
+            return;
+        }
+
+        if (paidNow > 0 && PaymentMethodCombo.SelectedItem is not PaymentMethodDto)
+        {
+            ShowError("اختر طريقة دفع للمبلغ المستلم.");
+            return;
+        }
+
+        HideError();
+        CreditSaleButton.IsEnabled = false;
+        var (customer, lookupError) = await _apiClient.LookupCreditCustomerAsync(phone, CancellationToken.None);
+        CreditSaleButton.IsEnabled = true;
+        if (customer is null)
+        {
+            ShowError($"{lookupError} (البيع بالدين بدّه نت وزبون مسجّل بهالرقم - غير هيك بيع عادي.)");
+            return;
+        }
+
+        var addedDebt = total - paidNow;
+        var confirm = MessageBox.Show(this,
+            $"بيع بالدين لـ: {customer.FullName} ({customer.Phone})\n\n" +
+            $"الفاتورة: {total:0.000} د.أ\n" +
+            $"مدفوع هلق: {paidNow:0.000} د.أ\n" +
+            $"بينضاف عالدين: {addedDebt:0.000} د.أ\n\n" +
+            $"دينه الحالي: {customer.CurrentDebt:0.000} د.أ ({customer.UnpaidInvoiceCount} فاتورة)\n" +
+            $"دينه بعد البيعة: {customer.CurrentDebt + addedDebt:0.000} د.أ\n\nأكمّل؟",
+            "بيع بالدين", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        await CompleteSaleAsync(customer, paidNow);
+    }
+
+    // رقم منطقي (7-15 رقم، مسموح مسافة/شرطة/+) - عشان ما ينحفظ رقم غلط على الفاتورة.
+    private static bool IsPlausiblePhone(string phone)
+    {
+        var digits = phone.Count(char.IsAsciiDigit);
+        return digits is >= 7 and <= 15 && phone.All(ch => char.IsAsciiDigit(ch) || ch is ' ' or '-' or '+');
+    }
+
+    private async Task CompleteSaleAsync(CreditCustomerDto? creditCustomer, decimal creditPaidNow)
+    {
+        if (_cart.Count == 0)
+        {
+            ShowError("السلة فاضية.");
+            return;
+        }
+
+        var selectedMethod = PaymentMethodCombo.SelectedItem as PaymentMethodDto;
+        // بيع بالدين بلا ولا فلس مدفوع ما بدّه طريقة دفع.
+        var needsPaymentMethod = creditCustomer is null || creditPaidNow > 0;
+        if (needsPaymentMethod && selectedMethod is null)
         {
             ShowError("اختر طريقة دفع.");
             return;
@@ -682,9 +777,7 @@ public partial class SaleWindow : Window
 
         // رقم الزبون اختياري - بس لو انكتب لازم يكون رقم منطقي (7-15 رقم)، عشان ما ينحفظ غلط على الفاتورة.
         var customerPhone = CustomerPhoneBox.Text.Trim();
-        var phoneDigits = customerPhone.Count(char.IsAsciiDigit);
-        if (customerPhone.Length > 0
-            && (phoneDigits is < 7 or > 15 || customerPhone.Any(ch => !char.IsAsciiDigit(ch) && ch is not (' ' or '-' or '+'))))
+        if (customerPhone.Length > 0 && !IsPlausiblePhone(customerPhone))
         {
             ShowError("رقم الزبون مش صحيح - اكتبه أرقام (مثلًا 0791234567) أو فضّي الخانة.");
             CustomerPhoneBox.Focus();
@@ -693,9 +786,12 @@ public partial class SaleWindow : Window
 
         HideError();
         CompleteSaleButton.IsEnabled = false;
+        CreditSaleButton.IsEnabled = false;
 
         var total = _cart.Sum(l => l.LineTotal);
         var clientRequestId = Guid.NewGuid();
+        // البيع العادي = دفعة بالإجمالي كامل؛ بالدين = المستلم بس (ممكن صفر = بلا دفعات).
+        var paymentAmount = creditCustomer is null ? total : creditPaidNow;
 
         // بناء الطلب بنفس شكل CompleteSaleCommand حرفيًا — productBatchId
         // يجي من CartLine (اختيار FIFO تلقائي صار وقت الإضافة للسلة
@@ -705,7 +801,9 @@ public partial class SaleWindow : Window
         {
             branchId = _authSession.BranchId.Value,
             clientRequestId,
-            customerId = (Guid?)null,
+            // بالدين: زبون صريح + allowCreditSale (السيرفر بيرفض أي دفع ناقص بدونهم).
+            customerId = creditCustomer?.CustomerId,
+            allowCreditSale = creditCustomer is not null,
             invoiceLevelDiscountAmount = 0m,
             items = _cart.Select(l => new
             {
@@ -722,12 +820,12 @@ public partial class SaleWindow : Window
             {
                 new
                 {
-                    paymentMethodId = selectedMethod.Id,
-                    amount = total,
+                    paymentMethodId = selectedMethod?.Id ?? Guid.Empty,
+                    amount = paymentAmount,
                     externalReference = (string?)null,
                     clientRequestId = Guid.NewGuid()
                 }
-            },
+            }.Where(p => p.amount > 0).ToArray(),
             // طلب جاهز من مساعد الكاشير (لو السلة نزلت منه) - بيتسكّر بالسيرفر بنفس معاملة البيع.
             preparedOrderId = _preparedOrderId,
             // السيرفر بيربط الزبون المسجّل بنفس الرقم (حتى لو البيعة وصلت متأخرة من الطابور الأوفلاين).
@@ -802,7 +900,9 @@ public partial class SaleWindow : Window
                 l.PromotionAmount > 0 ? $"{l.ProductName} (عرض: {l.PromotionTitle})" : l.ProductName,
                 l.UnitName, l.Quantity, l.UnitPrice, l.LineTotal)).ToList(),
             Total: total,
-            PaymentMethodName: selectedMethod.Name,
+            PaymentMethodName: creditCustomer is null
+                ? selectedMethod!.Name
+                : $"بالدين - {creditCustomer.FullName} (مدفوع {creditPaidNow:0.000}، عالدين {total - creditPaidNow:0.000})",
             StoreName: StoreBrandingCache.ReadStoreName(Path.GetDirectoryName(_dbPath) ?? ""));
 
         var printResult = await _receiptPrinter.PrintAsync(receiptData, CancellationToken.None);
@@ -814,13 +914,15 @@ public partial class SaleWindow : Window
         CustomerPhoneBox.Clear();
         UpdateTotal();
         CompleteSaleButton.IsEnabled = true;
+        CreditSaleButton.IsEnabled = true;
         BarcodeBox.Focus();
 
         // سطر حالة بالشاشة بدل رسالة منبثقة بعد كل بيعة (طلب صاحب المشروع 28/9/2026: "مستفزة").
         // الإرسال والطباعة منفصلين: فشل الطباعة أبدًا ما يعني فشل البيع.
+        var saleKind = creditCustomer is null ? "تم البيع" : $"تم البيع بالدين لـ{creditCustomer.FullName}";
         var saleMessage = sendResult.Success
-            ? $"✓ تم البيع ({total:0.000} د.أ) وانبعت للسيرفر"
-            : $"✓ تم البيع ({total:0.000} د.أ) - انحفظ على الجهاز وبينبعت لحاله";
+            ? $"✓ {saleKind} ({total:0.000} د.أ) وانبعت للسيرفر"
+            : $"✓ {saleKind} ({total:0.000} د.أ) - انحفظ على الجهاز وبينبعت لحاله";
         var isWarning = !sendResult.Success;
 
         if (printResult.NotConfigured)

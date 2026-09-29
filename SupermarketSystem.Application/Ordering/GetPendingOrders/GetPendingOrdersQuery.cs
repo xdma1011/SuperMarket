@@ -19,7 +19,34 @@ public sealed record OrderListItemDto(
     int ItemCount,
     DateTime CreatedAtUtc,
     Guid? DriverId,
-    string? DriverName);
+    string? DriverName,
+    string? CouponCode = null,
+    decimal EstimatedCouponDiscount = 0m);
+
+/// <summary>كوبون كل طلب بالقائمة (29/9/2026) - الخصم الفعلي بعد التسليم أو التقديري قبله؛ المرجوع مع الرفض ما بيبين.</summary>
+internal static class OrderCouponInfo
+{
+    public static async Task<List<OrderListItemDto>> AttachAsync(
+        IApplicationDbContext context, List<OrderListItemDto> items, CancellationToken cancellationToken)
+    {
+        var orderIds = items.Select(i => i.Id).ToList();
+        if (orderIds.Count == 0)
+        {
+            return items;
+        }
+
+        var coupons = await (
+            from r in context.CouponRedemptions.AsNoTracking()
+            join c in context.Coupons.AsNoTracking() on r.CouponId equals c.Id
+            where orderIds.Contains(r.OrderId) && r.Status != CouponRedemptionStatus.Released
+            select new { r.OrderId, c.Code, Discount = r.DiscountAmount ?? r.EstimatedDiscountAmount })
+            .ToDictionaryAsync(x => x.OrderId, cancellationToken);
+
+        return items
+            .Select(i => coupons.TryGetValue(i.Id, out var c) ? i with { CouponCode = c.Code, EstimatedCouponDiscount = c.Discount } : i)
+            .ToList();
+    }
+}
 
 public sealed class GetPendingOrdersHandler
 {
@@ -70,6 +97,7 @@ public sealed class GetPendingOrdersHandler
                 order.DriverId,
                 driver == null ? null : driver.FullName))
             .ToListAsync(cancellationToken);
+        items = await OrderCouponInfo.AttachAsync(_context, items, cancellationToken);
 
         return new PagedResult<OrderListItemDto>(items, totalCount, paging.PageNumber, paging.PageSize);
     }

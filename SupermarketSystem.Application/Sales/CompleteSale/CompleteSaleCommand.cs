@@ -233,7 +233,19 @@ public sealed class CompleteSaleHandler
     public Task<Result<CompleteSaleResponse>> HandleAsync(
         CompleteSaleCommand command,
         CancellationToken cancellationToken) =>
-        HandleCoreAsync(command, atCost: null, cancellationToken);
+        HandleCoreAsync(command, atCost: null, coupon: null, cancellationToken);
+
+    /// <summary>
+    /// طلب تطبيق الزبائن عليه كوبون (29/9/2026): الخصم بينحسب هون على مجموع الأسطر **بأسعار السيرفر لحظة التسليم**
+    /// وبينضاف لخصم الفاتورة (نفس خانة DiscountAmountSnapshot - فالتقارير والربح والإرجاع بتحسبه زي أي خصم فاتورة)،
+    /// بلا فحص حد الخصم اليدوي (مش خصم يدوي من الكاشير - كوبون صاحب المحل). مش جزء من CompleteSaleCommand عمدًا:
+    /// بيوصل بس من CompleteOrderHandler بعد ما يتأكد من حجز الكوبون.
+    /// </summary>
+    public Task<Result<CompleteSaleResponse>> HandleOrderWithCouponAsync(
+        CompleteSaleCommand command,
+        CouponSaleDiscount coupon,
+        CancellationToken cancellationToken) =>
+        HandleCoreAsync(command, atCost: null, coupon, cancellationToken);
 
     /// <summary>
     /// سحب بضاعة لصاحب المحل/شريك بسعر التكلفة (28/9/2026) - نفس مسار البيع بالكامل (مخزون ذري، رقم
@@ -245,13 +257,14 @@ public sealed class CompleteSaleHandler
         CompleteSaleCommand command,
         bool deductFromShare,
         CancellationToken cancellationToken) =>
-        HandleCoreAsync(command, new AtCostMode(deductFromShare), cancellationToken);
+        HandleCoreAsync(command, new AtCostMode(deductFromShare), coupon: null, cancellationToken);
 
     private sealed record AtCostMode(bool DeductFromShare);
 
     private async Task<Result<CompleteSaleResponse>> HandleCoreAsync(
         CompleteSaleCommand command,
         AtCostMode? atCost,
+        CouponSaleDiscount? coupon,
         CancellationToken cancellationToken)
     {
         var validationError = CompleteSaleValidator.Validate(command);
@@ -616,7 +629,14 @@ public sealed class CompleteSaleHandler
 
         // --- 4. Totals, then the payment-completeness rule ---
         var itemsTotal = resolvedLines.Sum(l => l.LineTotal);
-        var invoiceTotal = itemsTotal - command.InvoiceLevelDiscountAmount;
+        // الكوبون على الباقي بعد أي خصم فاتورة يدوي (ما بيتجاوزه أبدًا)؛ صفر لأي بيع عادي.
+        var couponAmount = coupon is null ? 0m : coupon.DiscountFor(Math.Max(0m, itemsTotal - command.InvoiceLevelDiscountAmount));
+        if (coupon is not null)
+        {
+            coupon.AppliedAmount = couponAmount;
+        }
+
+        var invoiceTotal = itemsTotal - command.InvoiceLevelDiscountAmount - couponAmount;
 
         if (command.InvoiceLevelDiscountAmount > 0)
         {
@@ -810,9 +830,9 @@ public sealed class CompleteSaleHandler
                     invoiceItem.Id));
             }
 
-            if (command.InvoiceLevelDiscountAmount > 0)
+            if (command.InvoiceLevelDiscountAmount + couponAmount > 0)
             {
-                invoice.ApplyInvoiceLevelDiscount(discountId: null, command.InvoiceLevelDiscountAmount);
+                invoice.ApplyInvoiceLevelDiscount(discountId: null, command.InvoiceLevelDiscountAmount + couponAmount);
             }
 
             var cashMovements = new List<CashDrawerLog>();
@@ -925,4 +945,17 @@ public sealed class CompleteSaleHandler
     {
         public decimal LineTotal => (UnitPrice * Quantity) - ManualDiscountAmount - PromotionAmount;
     }
+}
+
+/// <summary>خصم كوبون طلب (راجع HandleOrderWithCouponAsync) - AppliedAmount = الخصم الفعلي اللي انطبق.</summary>
+public sealed class CouponSaleDiscount
+{
+    public CouponSaleDiscount(Func<decimal, decimal> discountFor)
+    {
+        DiscountFor = discountFor;
+    }
+
+    public Func<decimal, decimal> DiscountFor { get; }
+
+    public decimal AppliedAmount { get; internal set; }
 }

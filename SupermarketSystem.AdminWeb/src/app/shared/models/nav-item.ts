@@ -37,6 +37,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'returns', label: 'الإرجاعات', route: '/returns', group: 'sales', icon: 'undo', requiredPermission: 'Returns.Process' },
   { id: 'cash-closings', label: 'تقفيل الصندوق', route: '/cash-closings', group: 'sales', icon: 'cash', requiredPermission: 'CashClosing.Manage' },
   { id: 'customers', label: 'الزبائن', route: '/customers', group: 'sales', icon: 'users', requiredPermission: 'Customers.Manage' },
+  { id: 'coupons', label: 'كوبونات الخصم', route: '/coupons', group: 'sales', icon: 'tag', requiredPermission: 'Customers.Manage' },
   { id: 'driver', label: 'طلباتي (توصيل)', route: '/driver', group: 'sales', icon: 'truck', requiredPermission: 'Orders.Deliver' },
 
   { id: 'catalog', label: 'الكتالوج', route: '/catalog', group: 'inventory', icon: 'tag', requiredPermission: 'Catalog.Manage' },

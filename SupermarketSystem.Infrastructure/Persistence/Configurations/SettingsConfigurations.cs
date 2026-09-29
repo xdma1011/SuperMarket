@@ -94,7 +94,12 @@ public class SystemSettingConfiguration : IEntityTypeConfiguration<SystemSetting
             NewSetting("b5d0e7f2-4c8a-4b16-9d9f-0a3e6c1b8f45", "Catalog.Version", "1",
                 "Global catalog version counter — incremented atomically on every product/category/unit/price change. The cashier app (offline-first) polls this cheaply to know when to pull a full catalog re-sync."),
             NewSetting("d6e1f8a3-5c9b-4d27-8e4a-1b6c9d2e5f78", PendingReviewSettingsKeys.EscalationThresholdDays, "3",
-                "Days a pending review item (unreviewed return, or NeedsReview stock movement) can stay unreviewed before PendingReviewEscalationBackgroundService flags it in an escalation notification."));
+                "Days a pending review item (unreviewed return, or NeedsReview stock movement) can stay unreviewed before PendingReviewEscalationBackgroundService flags it in an escalation notification."),
+            // تحقق الشريك بالكاشير (29/9/2026) - الطريقتين الإضافيتين مطفيين لحد ما صاحب المحل يفعّلهم.
+            NewSetting("0f6c2b8e-7d41-4c35-9a2e-5b8d1f3c6a90", Application.Partners.PartnerVerificationSettingsKeys.TelegramOtpEnabled, "false",
+                "Allow a partner to verify a cashier withdrawal with a one-time code sent to their Telegram."),
+            NewSetting("1a7d3c9f-8e52-4d46-8b3f-6c9e2a4d7b01", Application.Partners.PartnerVerificationSettingsKeys.BarcodeEnabled, "false",
+                "Allow a partner to verify a cashier withdrawal by scanning their personal barcode card."));
     }
 
     private static readonly DateTime SeedTimestamp = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);

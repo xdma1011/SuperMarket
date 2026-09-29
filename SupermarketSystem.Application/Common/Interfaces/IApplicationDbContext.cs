@@ -103,6 +103,7 @@ public interface IApplicationDbContext
     DbSet<DrawerOpenEvent> DrawerOpenEvents { get; }
     DbSet<Partner> Partners { get; }
     DbSet<PartnerWithdrawal> PartnerWithdrawals { get; }
+    DbSet<PartnerOtpChallenge> PartnerOtpChallenges { get; }
     DbSet<PartnerMonthlyStatement> PartnerMonthlyStatements { get; }
     DbSet<PartnerStatementLine> PartnerStatementLines { get; }
     DbSet<OwnerReceivableEntry> OwnerReceivableEntries { get; }
@@ -118,6 +119,8 @@ public interface IApplicationDbContext
     // Ordering (تطبيق الزبائن - أساس، راجع نقاش صاحب المشروع)
     DbSet<Order> Orders { get; }
     DbSet<OrderItem> OrderItems { get; }
+    DbSet<Coupon> Coupons { get; }
+    DbSet<CouponRedemption> CouponRedemptions { get; }
 
     // Settings
     DbSet<SystemSetting> SystemSettings { get; }

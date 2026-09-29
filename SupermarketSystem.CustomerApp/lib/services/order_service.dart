@@ -33,6 +33,7 @@ class OrderService {
     double? deliveryLatitude,
     double? deliveryLongitude,
     required List<CartItem> items,
+    String? couponCode,
   }) async {
     final result = await _api.post('/orders', body: {
       'customerPhone': customerPhone,
@@ -48,6 +49,7 @@ class OrderService {
                 'quantity': c.quantity,
               })
           .toList(),
+      'couponCode': couponCode,
     });
     return result['orderId'] as String;
   }

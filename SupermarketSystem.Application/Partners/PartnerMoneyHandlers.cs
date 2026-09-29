@@ -22,8 +22,13 @@ namespace SupermarketSystem.Application.Partners;
 public sealed record RecordPartnerWithdrawalCommand(
     Guid PartnerId, decimal Amount, PartnerWithdrawalSource Source, string? Notes, DateTime? OccurredAtUtc, Guid ClientRequestId);
 
+/// <summary>
+/// طريقة تحقق وحدة بس: يوزر+كلمة سر (دايمًا)، أو OtpChallengeId+OtpCode (كود تلغرام)، أو Barcode (باركود الشريك) -
+/// الطريقتين الأخيرتين لازم يكونوا مفعّلين من الإعدادات (PartnerVerificationSettingsKeys).
+/// </summary>
 public sealed record RecordVerifiedPartnerWithdrawalCommand(
-    Guid BranchId, string Username, string Password, decimal Amount, string? Notes, Guid ClientRequestId);
+    Guid BranchId, string? Username, string? Password, decimal Amount, string? Notes, Guid ClientRequestId,
+    Guid? OtpChallengeId = null, string? OtpCode = null, string? Barcode = null);
 
 public sealed record PartnerWithdrawalResponse(
     Guid WithdrawalId, Guid PartnerId, string PartnerName, decimal Amount, int SourceCode, string SourceTitle, decimal NewBalance, bool WasReplay);
@@ -49,7 +54,7 @@ internal sealed class PartnerWithdrawalRecorder
 
     public async Task<Result<PartnerWithdrawalResponse>> RecordAsync(
         Partner partner, decimal amount, PartnerWithdrawalSource source, string? notes, DateTime? occurredAtUtc,
-        Guid clientRequestId, Guid actorUserId, bool atCashier, CancellationToken cancellationToken)
+        Guid clientRequestId, Guid actorUserId, bool atCashier, CancellationToken cancellationToken, string? cashierVerification = null)
     {
         var replay = await _context.PartnerWithdrawals.IgnoreQueryFilters().AsNoTracking()
             .FirstOrDefaultAsync(w => w.ClientRequestId == clientRequestId, cancellationToken);
@@ -107,7 +112,7 @@ internal sealed class PartnerWithdrawalRecorder
         await _notificationDispatcher.NotifyAsync(
             $"سحب شريك — {partner.FullName} ({amount:0.000} د.أ)",
             $"{partner.FullName} سحب {amount:0.000} د.أ {PartnerTitles.Source(source)} بفرع {branch}" +
-            (atCashier ? $" - من الكاشير (سجّله {who} وتحقق بحساب الشريك)" : $" - سجّله {who}") +
+            (atCashier ? $" - من الكاشير (سجّله {who} وتحقق {cashierVerification ?? "بحساب الشريك"})" : $" - سجّله {who}") +
             $".\nرصيده بعد السحب: {balance:0.000} د.أ" + (notes is null ? "" : $"\nملاحظة: {notes}") +
             (source == PartnerWithdrawalSource.OwnerPocket ? $"\nانسجّل {amount:0.000} د.أ مستحق لـ{who}." : ""),
             cancellationToken,
@@ -185,7 +190,7 @@ public sealed class RecordVerifiedPartnerWithdrawalHandler
 
     public async Task<Result<PartnerWithdrawalResponse>> HandleAsync(RecordVerifiedPartnerWithdrawalCommand command, CancellationToken cancellationToken)
     {
-        if (command.ClientRequestId == Guid.Empty || string.IsNullOrWhiteSpace(command.Username) || string.IsNullOrWhiteSpace(command.Password))
+        if (command.ClientRequestId == Guid.Empty)
         {
             return Result.Failure<PartnerWithdrawalResponse>(InvalidCredentials());
         }
@@ -195,8 +200,23 @@ public sealed class RecordVerifiedPartnerWithdrawalHandler
             return Result.Failure<PartnerWithdrawalResponse>(Error.Forbidden("PartnerWithdrawal.BranchNotAllowed", "مش فرعك."));
         }
 
+        if (!string.IsNullOrWhiteSpace(command.Barcode))
+        {
+            return await HandleBarcodeAsync(command, cancellationToken);
+        }
+
+        if (command.OtpChallengeId is not null)
+        {
+            return await HandleOtpAsync(command, cancellationToken);
+        }
+
+        if (string.IsNullOrWhiteSpace(command.Username) || string.IsNullOrWhiteSpace(command.Password))
+        {
+            return Result.Failure<PartnerWithdrawalResponse>(InvalidCredentials());
+        }
+
         var now = _dateTimeProvider.UtcNow;
-        var user = await _context.Users.IgnoreQueryFilters().FirstOrDefaultAsync(u => u.Username == command.Username.Trim(), cancellationToken);
+        var user = await _context.Users.IgnoreQueryFilters().FirstOrDefaultAsync(u => u.Username == command.Username!.Trim(), cancellationToken);
         if (user is null || string.IsNullOrWhiteSpace(user.PasswordHash) || !user.IsActive || user.IsDeleted)
         {
             return Result.Failure<PartnerWithdrawalResponse>(InvalidCredentials());
@@ -225,8 +245,99 @@ public sealed class RecordVerifiedPartnerWithdrawalHandler
 
         var actor = _currentUser.UserId ?? user.Id;
         return await _recorder.RecordAsync(partner, command.Amount, PartnerWithdrawalSource.Drawer, command.Notes, null,
-            command.ClientRequestId, actor, atCashier: true, cancellationToken);
+            command.ClientRequestId, actor, atCashier: true, cancellationToken, "بيوزر وكلمة سر الشريك");
     }
+
+    /// <summary>باركود الشريك الشخصي (مطبوع بكرت) - hash بس بالقاعدة.</summary>
+    private async Task<Result<PartnerWithdrawalResponse>> HandleBarcodeAsync(RecordVerifiedPartnerWithdrawalCommand command, CancellationToken cancellationToken)
+    {
+        if (!await _settingsProvider.GetBoolAsync(PartnerVerificationSettingsKeys.BarcodeEnabled, false, cancellationToken))
+        {
+            return Result.Failure<PartnerWithdrawalResponse>(Error.Forbidden(
+                "PartnerWithdrawal.BarcodeDisabled", "التحقق بباركود الشريك مش مفعّل - بيتفعّل من صفحة الإعدادات."));
+        }
+
+        if (PartnerVerificationSecrets.NormalizeBarcode(command.Barcode) is not { } barcode)
+        {
+            return Result.Failure<PartnerWithdrawalResponse>(InvalidBarcode());
+        }
+
+        var hash = PartnerVerificationSecrets.Hash(barcode);
+        var partner = await _context.Partners.IgnoreQueryFilters().AsNoTracking()
+            .FirstOrDefaultAsync(p => p.BranchId == command.BranchId && p.IsActive && p.CashierBarcodeHash == hash, cancellationToken);
+        if (partner is null)
+        {
+            return Result.Failure<PartnerWithdrawalResponse>(InvalidBarcode());
+        }
+
+        var actor = _currentUser.UserId ?? throw new InvalidOperationException("لا يمكن تسجيل سحب بلا هوية مستخدم.");
+        return await _recorder.RecordAsync(partner, command.Amount, PartnerWithdrawalSource.Drawer, command.Notes, null,
+            command.ClientRequestId, actor, atCashier: true, cancellationToken, "بباركود الشريك الشخصي");
+    }
+
+    /// <summary>كود تلغرام: نفس الشريك، نفس الفرع، نفس المبلغ، لسا صالح - وإعادة إرسال نفس السحب (نفس ClientRequestId) بتنقبل.</summary>
+    private async Task<Result<PartnerWithdrawalResponse>> HandleOtpAsync(RecordVerifiedPartnerWithdrawalCommand command, CancellationToken cancellationToken)
+    {
+        if (!await _settingsProvider.GetBoolAsync(PartnerVerificationSettingsKeys.TelegramOtpEnabled, false, cancellationToken))
+        {
+            return Result.Failure<PartnerWithdrawalResponse>(Error.Forbidden(
+                "PartnerOtp.Disabled", "التحقق بكود تلغرام مش مفعّل - بيتفعّل من صفحة الإعدادات."));
+        }
+
+        var challenge = await _context.PartnerOtpChallenges
+            .FirstOrDefaultAsync(c => c.Id == command.OtpChallengeId && c.BranchId == command.BranchId, cancellationToken);
+        if (challenge is null)
+        {
+            return Result.Failure<PartnerWithdrawalResponse>(InvalidOtp());
+        }
+
+        var partner = await _context.Partners.IgnoreQueryFilters().AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == challenge.PartnerId && p.IsActive, cancellationToken);
+        if (partner is null)
+        {
+            return Result.Failure<PartnerWithdrawalResponse>(InvalidOtp());
+        }
+
+        var actor = _currentUser.UserId ?? throw new InvalidOperationException("لا يمكن تسجيل سحب بلا هوية مستخدم.");
+        if (challenge.ConsumedByClientRequestId == command.ClientRequestId)
+        {
+            // نفس السحب انبعت مرة تانية (انقطاع نت بعد ما انسجّل) - الـrecorder بيرجّع نفس النتيجة.
+            return await _recorder.RecordAsync(partner, challenge.Amount, PartnerWithdrawalSource.Drawer, command.Notes, null,
+                command.ClientRequestId, actor, atCashier: true, cancellationToken, "بكود تلغرام");
+        }
+
+        var now = _dateTimeProvider.UtcNow;
+        if (!challenge.IsUsable(now))
+        {
+            return Result.Failure<PartnerWithdrawalResponse>(Error.Forbidden(
+                "PartnerOtp.Expired", "الكود خلص أو انستعمل أو انحرق بمحاولات غلط - اطلب كود جديد."));
+        }
+
+        var amount = Math.Round(command.Amount, 3, MidpointRounding.AwayFromZero);
+        if (string.IsNullOrWhiteSpace(command.OtpCode) || !PartnerVerificationSecrets.HashEquals(command.OtpCode.Trim(), challenge.CodeHash))
+        {
+            challenge.RegisterFailedAttempt();
+            await _context.SaveChangesAsync(cancellationToken);
+            return Result.Failure<PartnerWithdrawalResponse>(InvalidOtp());
+        }
+
+        if (amount != challenge.Amount)
+        {
+            return Result.Failure<PartnerWithdrawalResponse>(Error.Forbidden(
+                "PartnerOtp.AmountMismatch", $"الكود انطلب لسحب {challenge.Amount:0.000} د.أ بس - لمبلغ تاني اطلب كود جديد."));
+        }
+
+        challenge.Consume(now, command.ClientRequestId);
+        await _context.SaveChangesAsync(cancellationToken);
+        return await _recorder.RecordAsync(partner, challenge.Amount, PartnerWithdrawalSource.Drawer, command.Notes, null,
+            command.ClientRequestId, actor, atCashier: true, cancellationToken, "بكود تلغرام");
+    }
+
+    private static Error InvalidBarcode() =>
+        Error.Forbidden("PartnerWithdrawal.InvalidBarcode", "الباركود مش معروف أو انلغى - اطلب كرت جديد من صفحة الشركاء.");
+
+    private static Error InvalidOtp() =>
+        Error.Forbidden("PartnerOtp.Invalid", "الكود غلط.");
 
     /// <summary>نفس قاعدة قفل الدخول (LoginHandler): آخر N محاولات كلها فاشلة وآخرها ضمن مدة القفل.</summary>
     private async Task<bool> IsLockedOutAsync(Guid userId, DateTime utcNow, CancellationToken cancellationToken)

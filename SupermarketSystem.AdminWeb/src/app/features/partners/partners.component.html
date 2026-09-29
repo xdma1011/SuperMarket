@@ -57,6 +57,12 @@
                     <strong>{{ p.fullName }}</strong>
                     @if (p.username) { <small class="sub">حساب: {{ p.username }}</small> }
                     @if (!p.isActive) { <span class="chip">موقوف</span> }
+                    @if (p.telegramPhone) {
+                      <small class="sub" [class.warn]="!p.telegramLinked">
+                        تلغرام: {{ p.telegramPhone }} {{ p.telegramLinked ? '✓' : '(مش مربوط بالبوت لسه)' }}
+                      </small>
+                    }
+                    @if (p.hasCashierBarcode) { <small class="sub">باركود شخصي ✓</small> }
                   </td>
                   <td>{{ p.typeTitle }}</td>
                   <td class="money">
@@ -71,6 +77,10 @@
                     <button type="button" class="btn-link" (click)="openLedger(p)">كشف حساب</button>
                     <button type="button" class="btn-link" (click)="openPartnerForm(p)">تعديل</button>
                     <button type="button" class="btn-link" (click)="toggleActive(p)">{{ p.isActive ? 'إيقاف' : 'تفعيل' }}</button>
+                    <button type="button" class="btn-link" (click)="issueBarcode(p)">{{ p.hasCashierBarcode ? 'باركود جديد' : 'باركود شخصي' }}</button>
+                    @if (p.hasCashierBarcode) {
+                      <button type="button" class="btn-link" (click)="revokeBarcode(p)">إلغاء الباركود</button>
+                    }
                   </td>
                 </tr>
               }
@@ -309,14 +319,38 @@
             }
           </select>
         </label>
+        <label class="field">
+          <span>رقم تلغرام (اختياري - لكود التحقق وقت السحب من الكاشير)</span>
+          <input type="tel" dir="ltr" maxlength="20" placeholder="0791234567" [(ngModel)]="formTelegramPhone" />
+        </label>
         <label class="field wide">
           <span>ملاحظات (اختياري)</span>
           <input type="text" maxlength="500" [(ngModel)]="formNotes" />
         </label>
       </div>
+      <p class="hint">
+        كود تلغرام بيوصل بس لو الشريك فتح بوت المحل وكبس "مشاركة رقم الهاتف" بنفس الرقم. طرق التحقق (كود تلغرام، باركود
+        الشريك) بتتفعّل من صفحة الإعدادات؛ يوزر وكلمة السر دايمًا شغّالين.
+      </p>
       <div class="modal-actions">
         <button type="button" class="btn-link" (click)="closePartnerForm()">إلغاء</button>
         <button type="button" class="btn-primary" [disabled]="submitting()" (click)="savePartner()">حفظ</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (issuedCard(); as card) {
+  <div class="modal-backdrop" (click)="closeIssuedCard()">
+    <div class="modal-card" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+      <h2>باركود {{ card.partnerName }}</h2>
+      <p class="hint">اطبعه كرت وخلّيه مع الشريك - الأرقام بتبين هون <strong>مرة وحدة بس</strong>. اللي معه الكرت بيقدر يسحب
+        باسم الشريك من الصندوق؛ لو ضاع: "باركود جديد" أو "إلغاء الباركود".</p>
+      <div class="barcode-card" [innerHTML]="card.svg"></div>
+      <p class="barcode-digits" dir="ltr">{{ card.barcode }}</p>
+      <div class="modal-actions">
+        <button type="button" class="btn-link" (click)="closeIssuedCard()">سكّر</button>
+        <button type="button" class="btn-primary" (click)="printIssuedCard()">🖨 طباعة الكرت</button>
       </div>
     </div>
   </div>
