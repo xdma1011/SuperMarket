@@ -164,9 +164,20 @@ public sealed class UsersHandlerTests : IntegrationTestBase
         using var scope = CreateScope();
         var handler = scope.ServiceProvider.GetRequiredService<GetUsersHandler>();
 
-        var result = await handler.HandleAsync(new GetUsersQuery(new PagedRequest { PageSize = 100 }), CancellationToken.None);
+        // جدول المستخدمين مش بيتصفّر بين الاختبارات (مستثنى من Respawn)، فبعد تشغيلات كتير المستخدم الجديد ممكن
+        // يطلع بصفحة تانية - بنلف على الصفحات بدل ما نفترض إنه بأول 100 (كانت بتفشل وتضطر نمسح قاعدة الاختبار).
+        UserItemDto? item = null;
+        for (var page = 1; item is null; page++)
+        {
+            var result = await handler.HandleAsync(new GetUsersQuery(new PagedRequest { PageNumber = page, PageSize = 100 }), CancellationToken.None);
+            item = result.Items.SingleOrDefault(u => u.UserId == userId);
+            if (item is null && page * 100 >= result.TotalCount)
+            {
+                break;
+            }
+        }
 
-        var item = result.Items.Single(u => u.UserId == userId);
+        Assert.NotNull(item);
         Assert.Contains("كاشير", item.RoleNames);
         Assert.Equal(Fixture.TestBranchId, item.DefaultBranchId);
     }

@@ -77,6 +77,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             await db.Database.MigrateAsync();
+            await ArchivePreviousRunAsync(db);
             await SeedFixedDataAsync(scope.ServiceProvider);
         }
 
@@ -95,6 +96,43 @@ public sealed class DatabaseFixture : IAsyncLifetime
                 "Users", "UserRoles", "UserBranches", "Branches"
             ]
         });
+    }
+
+    /// <summary>
+    /// "الداتا تبعت التست خليها، لا تمسح شي" (صاحب المشروع 29/9/2026): الاختبارات لازم تبلّش كل مرة من قاعدة نظيفة
+    /// (Respawn)، فقبل ما هالتشغيلة تمسح أي إشي، بياخد نسخة احتياطية كاملة من اللي خلّفته التشغيلة اللي قبلها
+    /// (sprmrkt_test_archive_&lt;التاريخ&gt;.bak بمجلد النسخ الافتراضي لـSQL Server). قاعدة فاضية ما إلها نسخة. فشل النسخ
+    /// ما بيوقف الاختبارات (بيتسجّل بس). ترجيعها: RESTORE DATABASE بأي اسم **بلا** "test" - هيك الاختبارات بترفض تلمسها.
+    /// </summary>
+    private static async Task ArchivePreviousRunAsync(AppDbContext db)
+    {
+        try
+        {
+            // أي صف بأي جدول بيتصفّر (مش بس بيع/منتجات) - نفس قائمة الاستثناء تبع Respawn تحت.
+            var rows = await db.Database.SqlQueryRaw<long>(@"
+                SELECT COALESCE(SUM(p.rows), 0) AS Value FROM sys.tables t
+                JOIN sys.partitions p ON p.object_id = t.object_id AND p.index_id IN (0, 1)
+                WHERE t.is_ms_shipped = 0 AND t.temporal_type <> 1 AND t.name NOT IN (
+                    '__EFMigrationsHistory', 'Permissions', 'Roles', 'RolePermissions', 'PaymentMethods',
+                    'UnitsOfMeasure', 'Users', 'UserRoles', 'UserBranches', 'Branches')").SingleAsync();
+            if (rows == 0)
+            {
+                return;
+            }
+
+            var database = db.Database.GetDbConnection().Database;
+            var file = $"sprmrkt_test_archive_{DateTime.Now:yyyyMMdd_HHmmss}.bak";
+            db.Database.SetCommandTimeout(TimeSpan.FromMinutes(5));
+#pragma warning disable EF1002 // اسم القاعدة من الـconnection string نفسه (متحقق إنه فيه "test")، والملف مولَّد هون.
+            await db.Database.ExecuteSqlRawAsync(
+                $"BACKUP DATABASE [{database.Replace("]", "]]")}] TO DISK = N'{file}' WITH COPY_ONLY, INIT");
+#pragma warning restore EF1002
+            Console.WriteLine($"[اختبارات] بيانات التشغيلة السابقة انحفظت بـ{file} قبل التصفير.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[اختبارات] ما قدرت أحفظ نسخة من بيانات التشغيلة السابقة: {ex.Message}");
+        }
     }
 
     private async Task SeedFixedDataAsync(IServiceProvider services)
