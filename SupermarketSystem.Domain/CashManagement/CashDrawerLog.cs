@@ -69,7 +69,13 @@ public enum CashDrawerReferenceType
     PartnerWithdrawal = 7,
 
     /// <summary>صاحب المحل استرجع مستحقه من كاش الصندوق (OwnerReceivableEntry، Repayment) - PayOut.</summary>
-    OwnerReceivableRepayment = 8
+    OwnerReceivableRepayment = 8,
+
+    /// <summary>مصروف انصرف من كاش الصندوق (Expense.PaidFromDrawer، 29/9/2026) - PayOut.</summary>
+    Expense = 9,
+
+    /// <summary>راتب أو سلفة موظف انصرفت من كاش الصندوق (EmployeePayment.PaidFromDrawer، 29/9/2026) - PayOut.</summary>
+    EmployeePayment = 10
 }
 
 /// <summary>

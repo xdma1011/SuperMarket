@@ -36,7 +36,29 @@ public class Expense : Entity, IBranchOwned
     public string? Notes { get; private set; }
     public Guid RecordedByUserId { get; private set; }
 
+    /// <summary>
+    /// نوع المصروف اللي بيعرّفه صاحب المحل (29/9/2026) - تنظيف، صيانة، أو أي إشي. Category القديم بيضل للتوافق
+    /// (الأنواع الستة المبذورة إلها Category مقابل، والأنواع الجديدة = Other). null = سجل قديم قبل الـMigration.
+    /// </summary>
+    public Guid? ExpenseTypeId { get; private set; }
+
+    /// <summary>انصرف من كاش الصندوق - بينكتب PayOut بـCashDrawerLog فبينقص المتوقع بالتقفيل (ما بيطلع عجز وهمي).</summary>
+    public bool PaidFromDrawer { get; private set; }
+
+    /// <summary>مصروف راتب انعمل تلقائيًا من صرف راتب موظف (EmployeePayment) - الصندوق بيتأثر من الصرف نفسه، مش من هون.</summary>
+    public Guid? EmployeePaymentId { get; private set; }
+
     private Expense() { } // EF Core
+
+    public Expense(
+        Guid branchId, Guid expenseTypeId, ExpenseCategory category, decimal amount, DateTime paymentDateUtc,
+        int periodYear, int periodMonth, string? notes, Guid recordedByUserId, bool paidFromDrawer, Guid? employeePaymentId = null)
+        : this(branchId, category, amount, paymentDateUtc, periodYear, periodMonth, notes, recordedByUserId)
+    {
+        ExpenseTypeId = expenseTypeId;
+        PaidFromDrawer = paidFromDrawer;
+        EmployeePaymentId = employeePaymentId;
+    }
 
     public Expense(
         Guid branchId, ExpenseCategory category, decimal amount, DateTime paymentDateUtc,

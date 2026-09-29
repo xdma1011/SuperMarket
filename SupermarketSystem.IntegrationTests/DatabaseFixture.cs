@@ -92,6 +92,9 @@ public sealed class DatabaseFixture : IAsyncLifetime
                 // هذا شغل الـmigrations لا الاختبارات).
                 "Permissions", "Roles", "RolePermissions",
                 "PaymentMethods", "UnitsOfMeasure",
+                // أنواع المصاريف (29/9/2026): الستة المبذورة بتنمسح نهائيًا لو انصفّرت. الاختبارات بتضيف أنواع
+                // بأسماء فريدة (Guid) - فتراكمها بين التشغيلات ما بيكسر شي.
+                "ExpenseTypes",
                 // مستخدم ودور وفرع الاختبار الثابتين المبذورين هون فوق.
                 "Users", "UserRoles", "UserBranches", "Branches"
             ]
@@ -114,7 +117,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
                 JOIN sys.partitions p ON p.object_id = t.object_id AND p.index_id IN (0, 1)
                 WHERE t.is_ms_shipped = 0 AND t.temporal_type <> 1 AND t.name NOT IN (
                     '__EFMigrationsHistory', 'Permissions', 'Roles', 'RolePermissions', 'PaymentMethods',
-                    'UnitsOfMeasure', 'Users', 'UserRoles', 'UserBranches', 'Branches')").SingleAsync();
+                    'UnitsOfMeasure', 'ExpenseTypes', 'Users', 'UserRoles', 'UserBranches', 'Branches')").SingleAsync();
             if (rows == 0)
             {
                 return;

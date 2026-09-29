@@ -11,6 +11,7 @@ export * from './inventory.operations';
 export * from './notifications.operations';
 export * from './orders.operations';
 export * from './partners.operations';
+export * from './employees.operations';
 export * from './payment-methods.operations';
 export * from './purchase-invoices.operations';
 export * from './reports.operations';

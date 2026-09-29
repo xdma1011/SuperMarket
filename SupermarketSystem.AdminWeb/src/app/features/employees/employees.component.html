@@ -1,0 +1,223 @@
+<div class="page-head">
+  <div>
+    <h1>الموظفين والرواتب</h1>
+    <p class="hint">
+      الراتب بينسجّل مصروف "رواتب" بكشف ربح شهره تلقائيًا. السلفة مش مصروف - دين على الموظف بينخصم من راتب جاي.
+      "من الصندوق" بينقص الكاش المتوقع بتقفيل الصندوق (فما بيطلع عجز).
+    </p>
+  </div>
+  @if (branches().length > 1) {
+    <select class="branch-select" [(ngModel)]="branchId" (change)="onBranchChange()" aria-label="الفرع">
+      @for (b of branches(); track b.id) {
+        <option [value]="b.id">{{ b.name }}</option>
+      }
+    </select>
+  }
+</div>
+
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+@if (successMessage()) {
+  <div class="alert-banner success">{{ successMessage() }}</div>
+}
+
+<div class="summary-row">
+  <div class="summary-card">
+    <span>مجموع الرواتب الشهرية (الفعّالين)</span>
+    <strong>{{ totalMonthlySalaries() | number: '1.3-3' }} د.أ</strong>
+  </div>
+  <div class="summary-card">
+    <span>سلف متبقية على الموظفين</span>
+    <strong [class.negative]="totalOutstandingAdvances() > 0">{{ totalOutstandingAdvances() | number: '1.3-3' }} د.أ</strong>
+  </div>
+</div>
+
+<div class="data-panel">
+  <div class="panel-head">
+    <h2>الموظفين</h2>
+    <div class="inline-form">
+      <label class="toggle-inactive">
+        <input type="checkbox" [(ngModel)]="showInactive" (change)="load()" />
+        عرض الموقوفين
+      </label>
+      <button type="button" class="btn-primary" (click)="openEmployeeForm()">+ موظف جديد</button>
+    </div>
+  </div>
+
+  @if (employees().length === 0 && !loading()) {
+    <p class="empty">ما في موظفين بهالفرع لسه. ضيف موظف براتبه الشهري، وبعدين "صرف راتب" أو "سلفة" من هون.</p>
+  } @else {
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>الموظف</th>
+            <th>الراتب الشهري</th>
+            <th>آخر راتب</th>
+            <th>سلف متبقية</th>
+            <th>مجموع الرواتب</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (e of employees(); track e.id) {
+            <tr [class.inactive]="!e.isActive" [class.selected]="historyEmployee()?.id === e.id">
+              <td>
+                <strong>{{ e.fullName }}</strong>
+                @if (!e.isActive) { <span class="chip">موقوف</span> }
+                @if (e.phone) { <small class="sub">{{ e.phone }}</small> }
+              </td>
+              <td class="money">{{ e.monthlySalary | number: '1.3-3' }}</td>
+              <td>{{ lastSalaryLabel(e) }}</td>
+              <td class="money" [class.negative]="e.outstandingAdvance > 0">{{ e.outstandingAdvance | number: '1.3-3' }}</td>
+              <td class="money">{{ e.totalSalariesPaid | number: '1.3-3' }}</td>
+              <td class="actions">
+                <button type="button" class="btn-link" (click)="openPayForm(e, 'Salary')">صرف راتب</button>
+                @if (e.isActive) {
+                  <button type="button" class="btn-link" (click)="openPayForm(e, 'Advance')">سلفة</button>
+                }
+                <button type="button" class="btn-link" (click)="showHistory(e)">السجل</button>
+                <button type="button" class="btn-link" (click)="openEmployeeForm(e)">تعديل</button>
+                <button type="button" class="btn-link" (click)="toggleActive(e)">{{ e.isActive ? 'إيقاف' : 'تفعيل' }}</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
+
+<div class="data-panel">
+  <div class="panel-head">
+    <h2>
+      سجل الرواتب والسلف
+      @if (historyEmployee(); as h) { — {{ h.fullName }} }
+    </h2>
+    @if (historyEmployee()) {
+      <button type="button" class="btn-link" (click)="showHistory(null)">كل الموظفين</button>
+    }
+  </div>
+  @if (history().length === 0) {
+    <p class="empty">ما في رواتب أو سلف مسجّلة لسه.</p>
+  } @else {
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>التاريخ</th>
+            <th>الموظف</th>
+            <th>النوع</th>
+            <th>عن شهر</th>
+            <th>المبلغ</th>
+            <th>سلفة انخصمت</th>
+            <th>انصرف فعليًا</th>
+            <th>من</th>
+            <th>ملاحظات</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (p of history(); track p.id) {
+            <tr>
+              <td class="mono">{{ p.occurredAtUtc | date: 'yyyy-MM-dd HH:mm' }}</td>
+              <td>{{ p.employeeName }}</td>
+              <td><span class="chip" [class.advance]="p.typeCode === 2">{{ p.typeTitle }}</span></td>
+              <td>{{ periodLabel(p) }}</td>
+              <td class="money">{{ p.grossAmount | number: '1.3-3' }}</td>
+              <td class="money">{{ p.advanceDeducted > 0 ? (p.advanceDeducted | number: '1.3-3') : '—' }}</td>
+              <td class="money-strong">{{ p.netPaid | number: '1.3-3' }}</td>
+              <td>
+                @if (p.paidFromDrawer) { <span class="chip drawer">الصندوق</span> } @else { برّا الصندوق }
+              </td>
+              <td>{{ p.notes || '—' }}<small class="sub">سجّله {{ p.recordedByName }}</small></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
+
+@if (employeeFormOpen()) {
+  <div class="modal-backdrop" (click)="closeEmployeeForm()">
+    <div class="modal-card" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+      <h2>{{ editingEmployee ? 'تعديل موظف' : 'موظف جديد' }}</h2>
+      <div class="form-grid">
+        <label class="field">
+          <span>الاسم</span>
+          <input type="text" maxlength="150" [(ngModel)]="formName" />
+        </label>
+        <label class="field">
+          <span>الراتب الشهري (د.أ)</span>
+          <input type="number" min="0" step="0.001" [(ngModel)]="formSalary" placeholder="0.000" />
+        </label>
+        <label class="field">
+          <span>رقم التلفون (اختياري)</span>
+          <input type="tel" maxlength="30" [(ngModel)]="formPhone" />
+        </label>
+        <label class="field">
+          <span>ملاحظات (اختياري)</span>
+          <input type="text" maxlength="500" [(ngModel)]="formNotes" />
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-link" (click)="closeEmployeeForm()">إلغاء</button>
+        <button type="button" class="btn-primary" [disabled]="submitting()" (click)="saveEmployee()">حفظ</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (payTarget(); as target) {
+  <div class="modal-backdrop" (click)="closePayForm()">
+    <div class="modal-card" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+      <h2>{{ payKind === 'Salary' ? 'صرف راتب' : 'سلفة' }} — {{ target.fullName }}</h2>
+      <div class="form-grid">
+        @if (payKind === 'Salary') {
+          <label class="field">
+            <span>عن شهر</span>
+            <input type="month" [(ngModel)]="payMonth" />
+          </label>
+          <label class="field">
+            <span>الراتب (د.أ)</span>
+            <input type="number" min="0.001" step="0.001" [(ngModel)]="payAmount" placeholder="0.000" />
+          </label>
+          @if (target.outstandingAdvance > 0) {
+            <label class="field">
+              <span>خصم من السلف (عليه {{ target.outstandingAdvance | number: '1.3-3' }})</span>
+              <input type="number" min="0" step="0.001" [max]="target.outstandingAdvance" [(ngModel)]="payDeduct" placeholder="0.000" />
+            </label>
+          }
+        } @else {
+          <label class="field">
+            <span>مبلغ السلفة (د.أ)</span>
+            <input type="number" min="0.001" step="0.001" [(ngModel)]="payAmount" placeholder="0.000" />
+          </label>
+        }
+        <label class="field">
+          <span>ملاحظات (اختياري)</span>
+          <input type="text" maxlength="500" [(ngModel)]="payNotes" />
+        </label>
+        <label class="check-field">
+          <input type="checkbox" [(ngModel)]="payFromDrawer" />
+          <span>من كاش الصندوق
+            <small>بينقص الكاش المتوقع بالتقفيل الجاي. اتركه فاضي لو دفعت من جيبك أو من البنك.</small>
+          </span>
+        </label>
+      </div>
+      @if (payKind === 'Salary') {
+        <p class="net-line">
+          بيطلع فعليًا: <strong>{{ payNet | number: '1.3-3' }} د.أ</strong>
+          · بينسجّل مصروف رواتب: <strong>{{ (payAmount ?? 0) | number: '1.3-3' }} د.أ</strong> بكشف ربح الشهر
+        </p>
+      } @else {
+        <p class="net-line">السلفة مش مصروف بالكشف - بتنخصم من راتبه الجاي (خانة "خصم من السلف").</p>
+      }
+      <div class="modal-actions">
+        <button type="button" class="btn-link" (click)="closePayForm()">إلغاء</button>
+        <button type="button" class="btn-primary" [disabled]="submitting()" (click)="submitPayment()">صرف</button>
+      </div>
+    </div>
+  </div>
+}

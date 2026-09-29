@@ -12,6 +12,7 @@ using SupermarketSystem.Domain.Inventory;
 using SupermarketSystem.Domain.Notifications;
 using SupermarketSystem.Domain.Ordering;
 using SupermarketSystem.Domain.Partners;
+using SupermarketSystem.Domain.Employees;
 using SupermarketSystem.Domain.Payments;
 using SupermarketSystem.Domain.Purchasing;
 using SupermarketSystem.Domain.Sales;
@@ -89,6 +90,9 @@ public interface IApplicationDbContext
     // Finance
     DbSet<Expense> Expenses { get; }
     DbSet<CapitalTransaction> CapitalTransactions { get; }
+    DbSet<ExpenseType> ExpenseTypes { get; }
+    DbSet<Employee> Employees { get; }
+    DbSet<EmployeePayment> EmployeePayments { get; }
 
     // Payments
     DbSet<PaymentMethod> PaymentMethods { get; }

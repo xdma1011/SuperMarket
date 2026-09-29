@@ -14,6 +14,7 @@ using SupermarketSystem.Domain.Inventory;
 using SupermarketSystem.Domain.Notifications;
 using SupermarketSystem.Domain.Ordering;
 using SupermarketSystem.Domain.Partners;
+using SupermarketSystem.Domain.Employees;
 using SupermarketSystem.Domain.Payments;
 using SupermarketSystem.Domain.Purchasing;
 using SupermarketSystem.Domain.Sales;
@@ -101,6 +102,9 @@ public class AppDbContext : DbContext, IApplicationDbContext
     // Finance
     public DbSet<Expense> Expenses => Set<Expense>();
     public DbSet<CapitalTransaction> CapitalTransactions => Set<CapitalTransaction>();
+    public DbSet<ExpenseType> ExpenseTypes => Set<ExpenseType>();
+    public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<EmployeePayment> EmployeePayments => Set<EmployeePayment>();
 
     // Payments
     public DbSet<PaymentMethod> PaymentMethods => Set<PaymentMethod>();

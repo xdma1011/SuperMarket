@@ -13,6 +13,9 @@ public sealed record GetMonthlyProfitStatementQuery(Guid BranchId, int Year, int
 
 public sealed record ExpenseByCategoryDto(ExpenseCategory Category, decimal Amount);
 
+/// <summary>المصاريف حسب النوع اللي بيعرّفه صاحب المحل (29/9/2026). ExpenseTypeId=null = سجل قديم بلا نوع (ما بيصير بعد الـMigration).</summary>
+public sealed record ExpenseByTypeDto(Guid? ExpenseTypeId, string TypeName, decimal Amount);
+
 /// <summary>
 /// كشف ربح شهري لفرع واحد - مستقل تمامًا عن رأس المال (CapitalTransaction):
 /// هذا رقم إعلامي "كيف كان الشهر"، ما يغيّر أي رصيد تلقائيًا (طلب صاحب
@@ -124,6 +127,26 @@ public sealed class GetMonthlyProfitStatementHandler
 
         var totalExpenses = expensesByCategory.Sum(e => e.Amount);
 
+        var typeTotals = await _context.Expenses.AsNoTracking()
+            .Where(e => e.BranchId == query.BranchId && e.PeriodYear == query.Year && e.PeriodMonth == query.Month)
+            .GroupBy(e => e.ExpenseTypeId)
+            .Select(g => new { TypeId = g.Key, Amount = g.Sum(e => e.Amount) })
+            .ToListAsync(cancellationToken);
+        var typeIds = typeTotals.Where(t => t.TypeId != null).Select(t => t.TypeId!.Value).ToList();
+        var types = await _context.ExpenseTypes.AsNoTracking()
+            .Where(t => typeIds.Contains(t.Id))
+            .ToDictionaryAsync(t => t.Id, t => new { t.Name, t.SortOrder }, cancellationToken);
+        var expensesByType = typeTotals
+            .Select(t => new
+            {
+                Dto = new ExpenseByTypeDto(t.TypeId,
+                    t.TypeId is { } id && types.TryGetValue(id, out var type) ? type.Name : "بلا نوع", t.Amount),
+                Sort = t.TypeId is { } sid && types.TryGetValue(sid, out var st) ? st.SortOrder : int.MaxValue
+            })
+            .OrderBy(x => x.Sort).ThenBy(x => x.Dto.TypeName)
+            .Select(x => x.Dto)
+            .ToList();
+
         var inventory = await GetInventoryVarianceAndWasteAsync(query.BranchId, periodStartUtc, periodEndUtc, cancellationToken);
 
         var netProfit = grossProfit - totalExpenses
@@ -136,7 +159,7 @@ public sealed class GetMonthlyProfitStatementHandler
             totalExpenses, expensesByCategory,
             inventory.StocktakeSurplusValue, inventory.StocktakeShortageValue, inventory.StocktakeExcludedNoCostHistory,
             inventory.WasteLossValue, inventory.WasteExcludedNoCostHistory,
-            netProfit));
+            netProfit, expensesByType));
     }
 
     private sealed record InventoryValuation(
@@ -238,4 +261,5 @@ public sealed record GetMonthlyProfitStatementResponse(
     int StocktakeMovementsExcludedNoCostHistory,
     decimal WasteLossValue,
     int WasteMovementsExcludedNoCostHistory,
-    decimal NetProfit);
+    decimal NetProfit,
+    IReadOnlyList<ExpenseByTypeDto> ExpensesByType);

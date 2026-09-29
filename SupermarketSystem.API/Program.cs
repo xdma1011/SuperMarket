@@ -131,6 +131,7 @@ app.MapBackupEndpoints();
 app.MapReportingEndpoints();
 app.MapFinanceEndpoints();
 app.MapPartnersEndpoints();
+app.MapEmployeeEndpoints();
 
 app.Run();
 

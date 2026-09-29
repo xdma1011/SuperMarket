@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, inject } from '@angular/core';
+import { Component, OnInit, computed, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -19,7 +19,6 @@ interface PagedResult<T> {
 }
 
 /** قيم الإرسال (أرقام) - الباك إند بيقبلها، بس بيرجّع الأسماء بالردود (JsonStringEnumConverter عام). */
-type ExpenseCategory = 1 | 2 | 3 | 4 | 5;
 type CapitalTransactionType = 1 | 2;
 type ExpenseCategoryName = 'Rent' | 'Electricity' | 'Water' | 'Salary' | 'Other';
 type CapitalTransactionTypeName = 'Deposit' | 'Withdrawal';
@@ -34,6 +33,26 @@ interface ExpenseListItemDto {
   periodMonth: number;
   notes: string | null;
   recordedByUsername: string;
+  /** 29/9/2026: النوع اللي بيعرّفه صاحب المحل، "من الصندوق"، والموظف لو المصروف راتب من صفحة الموظفين. */
+  expenseTypeId?: string | null;
+  expenseTypeName?: string;
+  paidFromDrawer?: boolean;
+  employeeName?: string | null;
+}
+
+export interface ExpenseTypeDto {
+  id: string;
+  name: string;
+  isActive: boolean;
+  sortOrder: number;
+  isBuiltIn: boolean;
+  expenseCount: number;
+}
+
+interface ExpenseByTypeDto {
+  expenseTypeId: string | null;
+  typeName: string;
+  amount: number;
 }
 
 interface CapitalTransactionListItemDto {
@@ -79,6 +98,7 @@ interface GetMonthlyProfitStatementResponse {
   wasteLossValue: number;
   wasteMovementsExcludedNoCostHistory: number;
   netProfit: number;
+  expensesByType?: ExpenseByTypeDto[];
 }
 
 const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategoryName, string> = {
@@ -93,6 +113,8 @@ const CAPITAL_TYPE_LABELS: Record<CapitalTransactionTypeName, string> = {
   Deposit: 'إضافة',
   Withdrawal: 'سحب'
 };
+
+type FinanceTab = 'statement' | 'expenses' | 'types' | 'capital';
 
 const MONTH_NAMES = [
   'كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران',
@@ -118,7 +140,7 @@ export class FinanceComponent implements OnInit {
   readonly branches = signal<BranchDto[]>([]);
   readonly errorMessage = signal<string | null>(null);
 
-  readonly activeTab = signal<'statement' | 'expenses' | 'capital'>('statement');
+  readonly activeTab = signal<FinanceTab>('statement');
 
   // --- كشف الربح الشهري ---
   readonly statement = signal<GetMonthlyProfitStatementResponse | null>(null);
@@ -135,12 +157,24 @@ export class FinanceComponent implements OnInit {
   readonly expensesPageSize = signal(20);
   readonly expensesLoading = signal(true);
   filterExpenseBranchId = '';
+  filterExpenseTypeId = '';
+
+  // --- أنواع المصاريف (صاحب المحل بيعرّفها) ---
+  readonly expenseTypes = signal<ExpenseTypeDto[]>([]);
+  readonly activeExpenseTypes = computed(() => this.expenseTypes().filter(t => t.isActive));
+  readonly typesError = signal<string | null>(null);
+  readonly typesBusy = signal(false);
+  newTypeName = '';
+  /** تعديل اسم نوع بمكانه: id → الاسم الجديد. */
+  readonly editingTypeId = signal<string | null>(null);
+  editingTypeName = '';
 
   readonly expenseFormOpen = signal(false);
   readonly expenseSubmitting = signal(false);
   readonly expenseFormError = signal<string | null>(null);
   newExpenseBranchId = '';
-  newExpenseCategory: ExpenseCategory = 1;
+  newExpenseTypeId = '';
+  newExpensePaidFromDrawer = false;
   newExpenseAmount: number | null = null;
   newExpensePaymentDate = new Date().toISOString().slice(0, 10);
   newExpensePeriodYear = new Date().getFullYear();
@@ -177,6 +211,7 @@ export class FinanceComponent implements OnInit {
     this.loadBranches();
     this.loadExpenses();
     this.loadCapitalTransactions();
+    void this.loadExpenseTypes();
   }
 
   branchName(branchId: string): string {
@@ -199,7 +234,7 @@ export class FinanceComponent implements OnInit {
     }
   }
 
-  setTab(tab: 'statement' | 'expenses' | 'capital'): void {
+  setTab(tab: FinanceTab): void {
     this.activeTab.set(tab);
   }
 
@@ -238,7 +273,8 @@ export class FinanceComponent implements OnInit {
         this.apiClient.get<PagedResult<ExpenseListItemDto>>(ApiController.Finance, FinanceOperation.GetExpenses, undefined, {
           pageNumber: this.expensesPageNumber(),
           pageSize: this.expensesPageSize(),
-          branchId: this.filterExpenseBranchId || undefined
+          branchId: this.filterExpenseBranchId || undefined,
+          expenseTypeId: this.filterExpenseTypeId || undefined
         })
       );
       this.expenses.set(result.items);
@@ -265,7 +301,8 @@ export class FinanceComponent implements OnInit {
     this.expenseFormOpen.set(true);
     this.expenseFormError.set(null);
     this.newExpenseBranchId ||= this.branches()[0]?.id ?? '';
-    this.newExpenseCategory = 1;
+    this.newExpenseTypeId = '';
+    this.newExpensePaidFromDrawer = false;
     this.newExpenseAmount = null;
     this.newExpensePaymentDate = new Date().toISOString().slice(0, 10);
     this.newExpensePeriodYear = new Date().getFullYear();
@@ -283,6 +320,11 @@ export class FinanceComponent implements OnInit {
       return;
     }
 
+    if (!this.newExpenseTypeId) {
+      this.expenseFormError.set('اختار نوع المصروف.');
+      return;
+    }
+
     this.expenseSubmitting.set(true);
     this.expenseFormError.set(null);
 
@@ -290,7 +332,8 @@ export class FinanceComponent implements OnInit {
       await firstValueFrom(
         this.apiClient.post(ApiController.Finance, FinanceOperation.CreateExpense, {
           branchId: this.newExpenseBranchId,
-          category: this.newExpenseCategory,
+          expenseTypeId: this.newExpenseTypeId,
+          paidFromDrawer: this.newExpensePaidFromDrawer,
           amount: this.newExpenseAmount,
           paymentDateUtc: this.newExpensePaymentDate,
           periodYear: this.newExpensePeriodYear,
@@ -306,6 +349,83 @@ export class FinanceComponent implements OnInit {
       this.expenseFormError.set(this.extractErrorMessage(err) ?? 'تعذّر تسجيل المصروف.');
     } finally {
       this.expenseSubmitting.set(false);
+    }
+  }
+
+  // === أنواع المصاريف ===
+
+  expenseTypeLabel(e: ExpenseListItemDto): string {
+    return e.expenseTypeName || this.categoryLabels[e.category] || '—';
+  }
+
+  async loadExpenseTypes(): Promise<void> {
+    try {
+      const result = await firstValueFrom(
+        this.apiClient.get<ExpenseTypeDto[]>(ApiController.Finance, FinanceOperation.ExpenseTypes, undefined, { includeInactive: true })
+      );
+      this.expenseTypes.set(Array.isArray(result) ? result : []);
+    } catch {
+      this.typesError.set('تعذّر تحميل أنواع المصاريف.');
+    }
+  }
+
+  async addExpenseType(): Promise<void> {
+    const name = this.newTypeName.trim();
+    if (!name) {
+      this.typesError.set('اكتب اسم النوع.');
+      return;
+    }
+
+    await this.runTypeAction(async () => {
+      await firstValueFrom(this.apiClient.post(ApiController.Finance, FinanceOperation.CreateExpenseType, { name }));
+      this.newTypeName = '';
+    }, 'تعذّر إضافة النوع.');
+  }
+
+  startRenameType(type: ExpenseTypeDto): void {
+    this.editingTypeId.set(type.id);
+    this.editingTypeName = type.name;
+  }
+
+  cancelRenameType(): void {
+    this.editingTypeId.set(null);
+  }
+
+  async saveRenameType(type: ExpenseTypeDto): Promise<void> {
+    const name = this.editingTypeName.trim();
+    if (!name) {
+      this.typesError.set('اكتب اسم النوع.');
+      return;
+    }
+
+    await this.runTypeAction(async () => {
+      await firstValueFrom(this.apiClient.put(ApiController.Finance, FinanceOperation.UpdateExpenseType, { name, isActive: type.isActive }, { id: type.id }));
+      this.editingTypeId.set(null);
+    }, 'تعذّر تعديل النوع.');
+  }
+
+  async toggleTypeActive(type: ExpenseTypeDto): Promise<void> {
+    await this.runTypeAction(() =>
+      firstValueFrom(this.apiClient.put(ApiController.Finance, FinanceOperation.UpdateExpenseType, { name: type.name, isActive: !type.isActive }, { id: type.id })),
+      'تعذّر تغيير حالة النوع.');
+  }
+
+  async moveType(type: ExpenseTypeDto, up: boolean): Promise<void> {
+    await this.runTypeAction(() =>
+      firstValueFrom(this.apiClient.post(ApiController.Finance, FinanceOperation.MoveExpenseType, { up }, { id: type.id })),
+      'تعذّر تغيير الترتيب.');
+  }
+
+  private async runTypeAction(action: () => Promise<unknown>, fallback: string): Promise<void> {
+    this.typesBusy.set(true);
+    this.typesError.set(null);
+    try {
+      await action();
+      await this.loadExpenseTypes();
+    } catch (err: unknown) {
+      this.typesError.set(this.extractErrorMessage(err) ?? fallback);
+    } finally {
+      this.typesBusy.set(false);
     }
   }
 

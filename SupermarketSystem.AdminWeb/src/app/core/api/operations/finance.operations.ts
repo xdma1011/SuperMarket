@@ -4,5 +4,9 @@ export enum FinanceOperation {
   GetExpenses = 'expenses',
   CreateCapitalTransaction = 'capital-transactions',
   GetCapitalTransactions = 'capital-transactions',
-  GetProfitStatement = 'profit-statement'
+  GetProfitStatement = 'profit-statement',
+  ExpenseTypes = 'expense-types',
+  CreateExpenseType = 'expense-types',
+  UpdateExpenseType = 'expense-types/{id}',
+  MoveExpenseType = 'expense-types/{id}/move'
 }

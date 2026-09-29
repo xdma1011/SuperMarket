@@ -101,6 +101,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/current-stock/current-stock.component').then(m => m.CurrentStockComponent)
       },
       {
+        path: 'employees',
+        canActivate: [requirePermissionGuard('Finance.Manage')],
+        loadComponent: () => import('./features/employees/employees.component').then(m => m.EmployeesComponent)
+      },
+      {
         path: 'partners',
         canActivate: [requirePermissionGuard('Partners.Manage')],
         loadComponent: () => import('./features/partners/partners.component').then(m => m.PartnersComponent)

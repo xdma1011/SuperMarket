@@ -16,7 +16,7 @@ describe('FinanceComponent', () => {
   }
 
   beforeEach(async () => {
-    apiClientSpy = jasmine.createSpyObj('ApiClient', ['get', 'post']);
+    apiClientSpy = jasmine.createSpyObj('ApiClient', ['get', 'post', 'put']);
     apiClientSpy.get.and.returnValue(of({ items: [], totalCount: 0 }));
 
     await TestBed.configureTestingModule({
@@ -118,9 +118,36 @@ describe('FinanceComponent', () => {
       expect(apiClientSpy.post).not.toHaveBeenCalled();
     });
 
+    it('يرفض الإرسال بلا نوع مصروف', async () => {
+      component.newExpenseBranchId = 'b1';
+      component.newExpenseAmount = 50;
+      component.newExpenseTypeId = '';
+
+      await component.submitExpense();
+
+      expect(component.expenseFormError()).toBe('اختار نوع المصروف.');
+      expect(apiClientSpy.post).not.toHaveBeenCalled();
+    });
+
+    it('بيبعت النوع و"من الصندوق" مع المصروف', async () => {
+      component.newExpenseBranchId = 'b1';
+      component.newExpenseAmount = 3.5;
+      component.newExpenseTypeId = 't-clean';
+      component.newExpensePaidFromDrawer = true;
+      apiClientSpy.post.and.returnValue(of({}));
+
+      await component.submitExpense();
+
+      const body = apiClientSpy.post.calls.mostRecent().args[2] as Record<string, unknown>;
+      expect(body['expenseTypeId']).toBe('t-clean');
+      expect(body['paidFromDrawer']).toBeTrue();
+      expect(body['category']).toBeUndefined();
+    });
+
     it('ينجح، يغلق النموذج، ويعيد تحميل القائمة من الصفحة 1', async () => {
       component.newExpenseBranchId = 'b1';
       component.newExpenseAmount = 50;
+      component.newExpenseTypeId = 't1';
       component.expensesPageNumber.set(3);
       apiClientSpy.post.and.returnValue(of({}));
       apiClientSpy.get.and.returnValue(of({ items: [], totalCount: 0 }));
@@ -134,6 +161,7 @@ describe('FinanceComponent', () => {
     it('يعرض رسالة الخطأ التفصيلية من الباك إند لو موجودة', async () => {
       component.newExpenseBranchId = 'b1';
       component.newExpenseAmount = 50;
+      component.newExpenseTypeId = 't1';
       apiClientSpy.post.and.returnValue(throwError(() => ({ error: { detail: 'خطأ ما.' } })));
 
       await component.submitExpense();
@@ -212,5 +240,49 @@ describe('FinanceComponent', () => {
     expect(component.categoryLabels['Rent']).toBe('إيجار');
     expect(component.categoryLabels['Electricity']).toBe('كهرباء');
     expect(component.typeLabels['Withdrawal']).toBe('سحب');
+  });
+  describe('أنواع المصاريف', () => {
+    const types = [
+      { id: 't1', name: 'إيجار', isActive: true, sortOrder: 1, isBuiltIn: true, expenseCount: 2 },
+      { id: 't2', name: 'صيانة', isActive: false, sortOrder: 2, isBuiltIn: false, expenseCount: 1 }
+    ];
+
+    it('بيحمّل كل الأنواع، وقائمة التسجيل فيها الفعّالة بس', async () => {
+      apiClientSpy.get.and.returnValue(of(types));
+
+      await component.loadExpenseTypes();
+
+      expect(component.expenseTypes().length).toBe(2);
+      expect(component.activeExpenseTypes().map(t => t.id)).toEqual(['t1']);
+    });
+
+    it('إضافة نوع بتبعت الاسم وبتفضّي الخانة، واسم فاضي ما بيتبعت', async () => {
+      apiClientSpy.post.and.returnValue(of({}));
+      apiClientSpy.get.and.returnValue(of(types));
+
+      component.newTypeName = '   ';
+      await component.addExpenseType();
+      expect(apiClientSpy.post).not.toHaveBeenCalled();
+      expect(component.typesError()).toBe('اكتب اسم النوع.');
+
+      component.newTypeName = ' تنظيف ';
+      await component.addExpenseType();
+      expect((apiClientSpy.post.calls.mostRecent().args[2] as { name: string }).name).toBe('تنظيف');
+      expect(component.newTypeName).toBe('');
+    });
+
+    it('الإيقاف بيبعت عكس الحالة، وخطأ الباك إند بيبين', async () => {
+      apiClientSpy.put.and.returnValue(throwError(() => ({ error: { detail: 'هالنوع ما بينوقف' } })));
+
+      await component.toggleTypeActive(types[0]);
+
+      expect((apiClientSpy.put.calls.mostRecent().args[2] as { isActive: boolean }).isActive).toBeFalse();
+      expect(component.typesError()).toBe('هالنوع ما بينوقف');
+    });
+
+    it('اسم المصروف بالجدول من النوع، وإلا من التصنيف القديم', () => {
+      expect(component.expenseTypeLabel({ category: 'Rent', expenseTypeName: 'صيانة' } as never)).toBe('صيانة');
+      expect(component.expenseTypeLabel({ category: 'Water' } as never)).toBe('ماء');
+    });
   });
 });

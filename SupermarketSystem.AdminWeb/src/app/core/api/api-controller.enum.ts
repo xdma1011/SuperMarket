@@ -12,6 +12,7 @@ export enum ApiController {
   CashierSync = 'cashier-sync',
   Customers = 'customers',
   Driver = 'driver',
+  Employees = 'employees',
   Finance = 'finance',
   Inventory = 'inventory',
   ProductCategories = 'product-categories',

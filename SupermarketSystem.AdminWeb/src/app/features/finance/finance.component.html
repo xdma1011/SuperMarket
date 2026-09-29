@@ -2,7 +2,7 @@
   <div class="head-text">
     <span class="crumb">المالية</span>
     <h1>المالية</h1>
-    <span class="subtitle">كشف الربح الشهري، المصاريف التشغيلية، وحركات رأس المال - Master Admin حصرًا.</span>
+    <span class="subtitle">كشف الربح الشهري، المصاريف وأنواعها، وحركات رأس المال - Master Admin حصرًا. رواتب الموظفين وسلفهم من صفحة "الموظفين والرواتب".</span>
   </div>
 </div>
 
@@ -13,6 +13,7 @@
 <div class="tabs">
   <button type="button" [class.active]="activeTab() === 'statement'" (click)="setTab('statement')">كشف الربح الشهري</button>
   <button type="button" [class.active]="activeTab() === 'expenses'" (click)="setTab('expenses')">المصاريف</button>
+  <button type="button" [class.active]="activeTab() === 'types'" (click)="setTab('types')">أنواع المصاريف</button>
   <button type="button" [class.active]="activeTab() === 'capital'" (click)="setTab('capital')">حركات رأس المال</button>
 </div>
 
@@ -90,7 +91,14 @@
         <div class="detail-row"><span>التلف والهلاك (خسارة، غير المستبدَل من الشركة)</span><span class="mono">-{{ s.wasteLossValue | number: '1.3-3' }}</span></div>
       </div>
 
-      @if (s.expensesByCategory.length > 0) {
+      @if (s.expensesByType?.length) {
+        <h3 class="section-title">المصاريف حسب النوع</h3>
+        <div class="detail-grid">
+          @for (e of s.expensesByType; track e.expenseTypeId) {
+            <div class="detail-row"><span>{{ e.typeName }}</span><span class="mono">{{ e.amount | number: '1.3-3' }}</span></div>
+          }
+        </div>
+      } @else if (s.expensesByCategory.length > 0) {
         <h3 class="section-title">المصاريف حسب التصنيف</h3>
         <div class="detail-grid">
           @for (e of s.expensesByCategory; track e.category) {
@@ -118,6 +126,12 @@
         <option [value]="b.id">{{ b.name }}</option>
       }
     </select>
+    <select [(ngModel)]="filterExpenseTypeId" (ngModelChange)="onExpensesFilterChange()">
+      <option value="">كل الأنواع</option>
+      @for (t of expenseTypes(); track t.id) {
+        <option [value]="t.id">{{ t.name }}{{ t.isActive ? '' : ' (موقوف)' }}</option>
+      }
+    </select>
   </div>
 
   <section class="table-panel">
@@ -126,11 +140,11 @@
         <thead>
           <tr>
             <th>الفرع</th>
-            <th>التصنيف</th>
+            <th>النوع</th>
             <th>المبلغ</th>
+            <th>انصرف من</th>
             <th>تاريخ الدفع</th>
             <th>الفترة</th>
-            <th>الشريك</th>
             <th>ملاحظات</th>
             <th>سجّله</th>
           </tr>
@@ -139,8 +153,20 @@
           @for (e of expenses(); track e.id) {
             <tr>
               <td>{{ branchName(e.branchId) }}</td>
-              <td>{{ categoryLabels[e.category] }}</td>
+              <td>
+                {{ expenseTypeLabel(e) }}
+                @if (e.employeeName) {
+                  <div class="muted-line">{{ e.employeeName }}</div>
+                }
+              </td>
               <td class="mono">{{ e.amount | number: '1.3-3' }}</td>
+              <td>
+                @if (e.paidFromDrawer) {
+                  <span class="status-chip warn-chip">الصندوق</span>
+                } @else {
+                  <span class="muted-line">برّا الصندوق</span>
+                }
+              </td>
               <td class="mono">{{ e.paymentDateUtc | date: 'yyyy-MM-dd' }}</td>
               <td class="mono">{{ monthNames[e.periodMonth - 1] }} {{ e.periodYear }}</td>
               <td>{{ e.notes || '—' }}</td>
@@ -168,6 +194,75 @@
         (changed)="onExpensesPageChanged($event)"
       ></app-pagination>
     }
+  </section>
+}
+
+@if (activeTab() === 'types') {
+  <section class="panel">
+    <p class="types-hint">
+      إنت بتحدد أنواع المصاريف (تنظيف، صيانة، نقل، ضيافة زباين…). النوع اللي عليه مصاريف ما بينحذف - بتوقفه وبيختفي من قائمة
+      التسجيل، ومصاريفه القديمة بتضل بالكشف. "رواتب" بتنسجّل عليه رواتب الموظفين تلقائيًا، فهو و"أخرى" ما بينوقفوا.
+    </p>
+
+    @if (typesError()) {
+      <p class="form-error">{{ typesError() }}</p>
+    }
+
+    <div class="filter-row">
+      <input type="text" [(ngModel)]="newTypeName" placeholder="نوع جديد (مثلًا: صيانة)" maxlength="100" (keydown.enter)="addExpenseType()" />
+      <button type="button" class="btn-primary" [disabled]="typesBusy()" (click)="addExpenseType()">إضافة نوع</button>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>الترتيب</th>
+            <th>النوع</th>
+            <th>عدد المصاريف</th>
+            <th>الحالة</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (t of expenseTypes(); track t.id; let first = $first; let last = $last) {
+            <tr [class.row-inactive]="!t.isActive">
+              <td>
+                <div class="order-cell">
+                  <button type="button" class="icon-btn" [disabled]="first || typesBusy()" (click)="moveType(t, true)" aria-label="لفوق">↑</button>
+                  <button type="button" class="icon-btn" [disabled]="last || typesBusy()" (click)="moveType(t, false)" aria-label="لتحت">↓</button>
+                </div>
+              </td>
+              <td>
+                @if (editingTypeId() === t.id) {
+                  <input type="text" [(ngModel)]="editingTypeName" maxlength="100" (keydown.enter)="saveRenameType(t)" (keydown.escape)="cancelRenameType()" />
+                } @else {
+                  {{ t.name }}
+                  @if (t.isBuiltIn) {
+                    <span class="muted-line">جاهز</span>
+                  }
+                }
+              </td>
+              <td class="mono">{{ t.expenseCount }}</td>
+              <td>
+                <span class="status-chip" [class.inactive]="!t.isActive">{{ t.isActive ? 'فعّال' : 'موقوف' }}</span>
+              </td>
+              <td>
+                <div class="actions-cell">
+                  @if (editingTypeId() === t.id) {
+                    <button type="button" class="btn-primary btn-sm" [disabled]="typesBusy()" (click)="saveRenameType(t)">حفظ</button>
+                    <button type="button" class="btn-ghost btn-sm" (click)="cancelRenameType()">إلغاء</button>
+                  } @else {
+                    <button type="button" class="btn-ghost btn-sm" (click)="startRenameType(t)">تغيير الاسم</button>
+                    <button type="button" class="btn-ghost btn-sm" [disabled]="typesBusy()" (click)="toggleTypeActive(t)">{{ t.isActive ? 'إيقاف' : 'تفعيل' }}</button>
+                  }
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
   </section>
 }
 
@@ -261,18 +356,17 @@
           </select>
         </label>
         <label class="field">
-          <span>التصنيف</span>
-          <select [(ngModel)]="newExpenseCategory">
-            <option [value]="1">إيجار</option>
-            <option [value]="2">كهرباء</option>
-            <option [value]="3">ماء</option>
-            <option [value]="4">راتب</option>
-            <option [value]="5">أخرى</option>
+          <span>النوع (<a href="javascript:void(0)" (click)="closeExpenseForm(); setTab('types')">إدارة الأنواع</a>)</span>
+          <select [(ngModel)]="newExpenseTypeId">
+            <option value="">— اختار —</option>
+            @for (t of activeExpenseTypes(); track t.id) {
+              <option [value]="t.id">{{ t.name }}</option>
+            }
           </select>
         </label>
         <label class="field">
-          <span>المبلغ</span>
-          <input type="number" min="0.01" step="0.01" [(ngModel)]="newExpenseAmount" placeholder="0.00" />
+          <span>المبلغ (د.أ)</span>
+          <input type="number" min="0.001" step="0.001" [(ngModel)]="newExpenseAmount" placeholder="0.000" />
         </label>
         <label class="field">
           <span>تاريخ الدفع الفعلي</span>
@@ -293,6 +387,12 @@
         <label class="field" style="grid-column: span 2">
           <span>ملاحظات (اختياري)</span>
           <input type="text" [(ngModel)]="newExpenseNotes" placeholder="—" />
+        </label>
+        <label class="check-field" style="grid-column: span 2">
+          <input type="checkbox" [(ngModel)]="newExpensePaidFromDrawer" />
+          <span>انصرف من كاش الصندوق
+            <small>بينقص الكاش المتوقع بتقفيل الصندوق الجاي - بلا هيك المصروف الكاش بيطلع عجز بالتقفيل. اتركه فاضي لو دفعته من جيبك أو من البنك.</small>
+          </span>
         </label>
       </div>
 
