@@ -475,6 +475,31 @@ public partial class SaleWindow : Window
         return (baseUnitPrice, catalogVersion);
     }
 
+    /// <summary>
+    /// عرض الكمية الشغّال هلق (ساعة الجهاز) - بالوحدة الأساسية بس، نفس PROMOTION ASSUMPTION بالسيرفر. بينحفظ على
+    /// السطر، والمبلغ بينحسب مع كل تغيير كمية (CartLine.PromotionAmount).
+    /// </summary>
+    private void AttachPromotion(CartLine line, LocalProductUnit unit)
+    {
+        if (!unit.IsBaseUnit)
+        {
+            return;
+        }
+
+        using var db = new LocalDbContext(_dbPath);
+        var promotion = PromotionPricing.ActiveFor(db, line.ProductId, DateTime.UtcNow);
+        if (promotion is null)
+        {
+            return;
+        }
+
+        line.PromotionId = promotion.PromotionId;
+        line.PromotionTitle = promotion.Title;
+        line.PromotionBundleQuantity = promotion.BundleQuantity;
+        line.PromotionBundlePrice = promotion.BundlePrice;
+        line.PromotionMaxQuantity = promotion.MaxQuantityPerInvoice;
+    }
+
     private void AddSimpleItem(LocalProduct product, LocalProductUnit unit, decimal quantity)
     {
         FlashAddedSuccess();
@@ -501,6 +526,7 @@ public partial class SaleWindow : Window
                 UnitPrice = baseUnitPrice * unit.ConversionFactorToBase,
                 CatalogVersion = catalogVersion
             };
+            AttachPromotion(newLine, unit);
             _lastAddedLine = newLine;
             _cart.Add(newLine);
         }
@@ -576,6 +602,7 @@ public partial class SaleWindow : Window
             CatalogVersion = batchCatalogVersion,
             NeedsReview = needsReview
         };
+        AttachPromotion(newBatchLine, unit);
         _lastAddedLine = newBatchLine;
         _cart.Add(newBatchLine);
 
@@ -695,7 +722,9 @@ public partial class SaleWindow : Window
                 quantity = l.Quantity,
                 manualDiscountAmount = 0m,
                 productBatchId = l.ProductBatchId,
-                catalogVersion = l.CatalogVersion
+                catalogVersion = l.CatalogVersion,
+                // العرض اللي انطبق فعلًا (null = سعر كامل) - السيرفر بيحترم قرار الكاشير (OFFLINE PROMOTION).
+                promotionId = l.AppliedPromotionId
             }),
             payments = new[]
             {
@@ -778,7 +807,8 @@ public partial class SaleWindow : Window
             CreatedAtLocal: DateTime.Now,
             CashierName: _authSession.FullName ?? "",
             Lines: _cart.Select(l => new Services.Printing.ReceiptLine(
-                l.ProductName, l.UnitName, l.Quantity, l.UnitPrice, l.LineTotal)).ToList(),
+                l.PromotionAmount > 0 ? $"{l.ProductName} (عرض: {l.PromotionTitle})" : l.ProductName,
+                l.UnitName, l.Quantity, l.UnitPrice, l.LineTotal)).ToList(),
             Total: total,
             PaymentMethodName: selectedMethod.Name,
             StoreName: StoreBrandingCache.ReadStoreName(Path.GetDirectoryName(_dbPath) ?? ""));

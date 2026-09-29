@@ -20,7 +20,16 @@ public sealed record CatalogSyncBatchDto(
 public sealed record CatalogSyncProductDto(
     Guid ProductId, string Name, Guid CategoryId, string CategoryName,
     decimal SellingPrice, bool IsAvailableForSale, bool IsBatchTracked,
-    List<CatalogSyncUnitDto> Units, List<CatalogSyncBatchDto> Batches);
+    List<CatalogSyncUnitDto> Units, List<CatalogSyncBatchDto> Batches)
+{
+    /// <summary>عروض الكمية المفعّلة بالفرع اللي لسه ما خلصت (الشغّالة والمجدولة) - 29/9/2026.</summary>
+    public List<CatalogSyncPromotionDto>? Promotions { get; init; }
+}
+
+/// <summary>مطابق لـCatalogSyncPromotionDto بالباك إند.</summary>
+public sealed record CatalogSyncPromotionDto(
+    Guid PromotionId, string Title, int BundleQuantity, decimal BundlePrice, decimal? MaxQuantityPerInvoice,
+    DateTime StartAtUtc, DateTime EndAtUtc, DateTime CreatedAtUtc);
 
 public sealed record PagedResultDto<T>(List<T> Items, int TotalCount, int PageNumber, int PageSize);
 

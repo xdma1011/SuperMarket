@@ -62,6 +62,23 @@ public sealed class LocalPaymentMethod
     public bool RequiresExternalReference { get; set; }
 }
 
+/// <summary>
+/// عرض كمية ("N بسعر كذا") لصنف بهالفرع (29/9/2026) - الشغّال والمجدول، بتواريخه. شاشة البيع بتختار الشغّال
+/// لحظة إضافة الصنف حسب ساعة الجهاز (بدء/انتهاء العرض ما بيغيّر رقم نسخة الكتالوج فما في مزامنة وقتها).
+/// </summary>
+public sealed class LocalPromotion
+{
+    public Guid PromotionId { get; set; }
+    public Guid ProductId { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public int BundleQuantity { get; set; }
+    public decimal BundlePrice { get; set; }
+    public decimal? MaxQuantityPerInvoice { get; set; }
+    public DateTime StartAtUtc { get; set; }
+    public DateTime EndAtUtc { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
+}
+
 /// <summary>صف واحد بس - آخر رقم نسخة كتالوج مسحوب فعليًا محليًا.</summary>
 public sealed class SyncState
 {

@@ -99,6 +99,9 @@ interface GetMonthlyProfitStatementResponse {
   wasteMovementsExcludedNoCostHistory: number;
   netProfit: number;
   expensesByType?: ExpenseByTypeDto[];
+  /** تكلفة الضيافة بالشهر (29/9/2026) - بتنطرح من صافي الربح. */
+  complimentaryCostValue?: number;
+  complimentaryMovementsExcludedNoCostHistory?: number;
 }
 
 const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategoryName, string> = {

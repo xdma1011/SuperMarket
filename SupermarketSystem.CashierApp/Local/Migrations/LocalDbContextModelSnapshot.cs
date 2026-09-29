@@ -139,6 +139,44 @@ namespace SupermarketSystem.CashierApp.Local.Migrations
                     b.ToTable("ProductUnits");
                 });
 
+            modelBuilder.Entity("SupermarketSystem.CashierApp.Local.LocalPromotion", b =>
+                {
+                    b.Property<Guid>("PromotionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("BundlePrice")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("BundleQuantity")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("EndAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("MaxQuantityPerInvoice")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("StartAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("PromotionId");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("Promotions");
+                });
+
             modelBuilder.Entity("SupermarketSystem.CashierApp.Local.PendingSale", b =>
                 {
                     b.Property<int>("Id")

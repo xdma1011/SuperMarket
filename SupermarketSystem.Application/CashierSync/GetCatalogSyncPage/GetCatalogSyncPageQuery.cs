@@ -15,7 +15,18 @@ public sealed record CatalogSyncBatchDto(
 
 /// <summary>عرض كمية شغّال الآن بهذا الفرع - يُطبَّق فقط لما البيع يصير بالوحدة الأساسية (نفس PROMOTION ASSUMPTION بـCompleteSaleCommand). للتقدير المحلي الأوفلاين فقط - الحساب النهائي الملزِم سيرفر-سايد دايمًا وقت CompleteSale.</summary>
 public sealed record CatalogSyncPromotionDto(
-    Guid PromotionId, string Title, int BundleQuantity, decimal BundlePrice, decimal? MaxQuantityPerInvoice);
+    Guid PromotionId, string Title, int BundleQuantity, decimal BundlePrice, decimal? MaxQuantityPerInvoice)
+{
+    /// <summary>
+    /// فترة العرض (29/9/2026) - الكاشير بيطبّق العرض محليًا حسب ساعته (بدء/انتهاء بلا مزامنة)، لأن بدء عرض
+    /// مجدول أو انتهاؤه ما بيغيّر رقم نسخة الكتالوج.
+    /// </summary>
+    public DateTime StartAtUtc { get; init; }
+    public DateTime EndAtUtc { get; init; }
+
+    /// <summary>ترتيب الأولوية لو تداخل أكتر من عرض على نفس المنتج: الأقدم إنشاءً (نفس CompleteSaleHandler).</summary>
+    public DateTime CreatedAtUtc { get; init; }
+}
 
 public sealed record CatalogSyncProductDto(
     Guid ProductId,
@@ -27,7 +38,14 @@ public sealed record CatalogSyncProductDto(
     bool IsBatchTracked,
     IReadOnlyList<CatalogSyncUnitDto> Units,
     IReadOnlyList<CatalogSyncBatchDto> Batches,
-    CatalogSyncPromotionDto? ActivePromotion);
+    CatalogSyncPromotionDto? ActivePromotion)
+{
+    /// <summary>
+    /// كل عروض المنتج المفعّلة بهالفرع اللي لسه ما خلصت (الشغّالة + المجدولة) - الكاشير بيختار منها وقت البيع
+    /// حسب الوقت (29/9/2026). ActivePromotion بيضل للتوافق مع نسخ الكاشير القديمة.
+    /// </summary>
+    public IReadOnlyList<CatalogSyncPromotionDto> Promotions { get; init; } = Array.Empty<CatalogSyncPromotionDto>();
+}
 
 /// <summary>
 /// كل شي يحتاجه الكاشير الأوفلاين ليبيع صنف — الاسم، السعر بهذا الفرع،
@@ -110,20 +128,25 @@ public sealed class GetCatalogSyncPageHandler
         // نفس منطق CompleteSaleCommand بالضبط (PROMOTION ASSUMPTION) - تقدير
         // محلي للكاشير الأوفلاين بس، الحساب الملزِم سيرفر-سايد وقت البيع الفعلي.
         var nowUtc = _dateTimeProvider.UtcNow;
-        var activePromotionByProduct = await _context.Promotions.AsNoTracking()
-            .Where(p => productIds.Contains(p.ProductId) && p.StartAtUtc <= nowUtc && p.EndAtUtc >= nowUtc)
+        var branchPromotions = await _context.Promotions.AsNoTracking()
+            .Where(p => productIds.Contains(p.ProductId) && p.EndAtUtc >= nowUtc)
             .Join(_context.PromotionBranches.AsNoTracking().Where(pb => pb.BranchId == query.BranchId && pb.IsActive),
                 p => p.Id, pb => pb.PromotionId,
-                (p, pb) => new { p.Id, p.ProductId, p.Title, p.BundleQuantity, p.BundlePrice, p.MaxQuantityPerInvoice, p.CreatedAtUtc })
+                (p, pb) => new { p.Id, p.ProductId, p.Title, p.BundleQuantity, p.BundlePrice, p.MaxQuantityPerInvoice, p.StartAtUtc, p.EndAtUtc, p.CreatedAtUtc })
             .ToListAsync(cancellationToken);
 
-        var promotionByProduct = activePromotionByProduct
+        var promotionsByProduct = branchPromotions
             .GroupBy(x => x.ProductId)
-            .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedAtUtc).First());
+            .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedAtUtc).Select(x => new CatalogSyncPromotionDto(
+                x.Id, x.Title, x.BundleQuantity, x.BundlePrice, x.MaxQuantityPerInvoice)
+            {
+                StartAtUtc = x.StartAtUtc, EndAtUtc = x.EndAtUtc, CreatedAtUtc = x.CreatedAtUtc
+            }).ToList());
 
         var items = page.Select(x =>
         {
-            promotionByProduct.TryGetValue(x.p.Id, out var promo);
+            var promotions = promotionsByProduct.GetValueOrDefault(x.p.Id) ?? new List<CatalogSyncPromotionDto>();
+            var active = promotions.FirstOrDefault(p => p.StartAtUtc <= nowUtc);
             return new CatalogSyncProductDto(
                 x.p.Id, x.p.Name, x.p.CategoryId, x.CategoryName,
                 x.pb.SellingPrice, x.pb.IsAvailableForSale, x.p.IsBatchTracked,
@@ -133,7 +156,10 @@ public sealed class GetCatalogSyncPageHandler
                         barcodesByUnit.GetValueOrDefault(u.Id, new List<string>())))
                     .ToList(),
                 batchesByProduct.GetValueOrDefault(x.p.Id, new List<CatalogSyncBatchDto>()),
-                promo is null ? null : new CatalogSyncPromotionDto(promo.Id, promo.Title, promo.BundleQuantity, promo.BundlePrice, promo.MaxQuantityPerInvoice));
+                active)
+            {
+                Promotions = promotions
+            };
         })
             .ToList();
 

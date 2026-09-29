@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Results;
+using SupermarketSystem.Application.Common.Time;
 using SupermarketSystem.Domain.Sales;
 
 namespace SupermarketSystem.Application.Sales.PreparedOrders;
@@ -128,7 +129,8 @@ public sealed class CreatePreparedOrderHandler
         }
 
         var nowUtc = _dateTimeProvider.UtcNow;
-        var ticketDate = DateOnly.FromDateTime(nowUtc);
+        // اليوم بتوقيت المحل (29/9/2026) - الترقيم بيبلّش من 1 بنص الليل المحلي، مش الساعة 3 الصبح (نص ليل UTC).
+        var ticketDate = (await BusinessTime.LoadAsync(_context, cancellationToken)).LocalDate(nowUtc);
 
         // رقم الطلب = أكبر رقم اليوم + 1، والفهرس الفريد (فرع، يوم، رقم) هو الضمان الحقيقي - طلبين بنفس
         // اللحظة: التاني بيفشل بالحفظ وبيعيد برقم جديد.

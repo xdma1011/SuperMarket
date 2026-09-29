@@ -135,6 +135,7 @@
                     </DataGridTemplateColumn>
                     <DataGridTextColumn Header="السعر" Binding="{Binding UnitPrice, StringFormat={}{0:0.000}}" Width="100" />
                     <DataGridTextColumn Header="الإجمالي" Binding="{Binding LineTotal, StringFormat={}{0:0.000}}" Width="110" FontWeight="Bold" />
+                    <DataGridTextColumn Header="العرض" Binding="{Binding PromotionMark}" Width="150" />
                     <DataGridTextColumn Header="" Binding="{Binding ReviewMark}" Width="90" />
                     <DataGridTemplateColumn Header="" Width="48">
                         <DataGridTemplateColumn.CellTemplate>

@@ -36,7 +36,10 @@ public sealed record CompleteSaleItemDto(
     // بعدها، السطر بينحسب بسعر نسخته لا بسعر اللحظة - قرار صاحب المشروع (24/9/2026). لكل سطر
     // لحاله لأن المزامنة الخلفية ممكن تحدّث الأسعار والكاشير بنص السلة. null (لوحة الإدارة،
     // الطلبات) = السعر الحالي زي قبل. راجع OFFLINE PRICE بالـHandler.
-    long? CatalogVersion = null);
+    long? CatalogVersion = null,
+    // عرض الكمية اللي الكاشير طبّقه على هالسطر (29/9/2026) - بس بسطر فيه CatalogVersion (يعني من الكاشير):
+    // null = الكاشير ما طبّق عرض، فالسيرفر ما بيطبّق كمان (الزبون دفع السعر الكامل). راجع OFFLINE PROMOTION.
+    Guid? PromotionId = null);
 
 public sealed record CompleteSalePaymentDto(
     Guid PaymentMethodId,
@@ -401,6 +404,26 @@ public sealed class CompleteSaleHandler
             .GroupBy(x => x.ProductId)
             .ToDictionary(g => g.Key, g => g.First());
 
+        // OFFLINE PROMOTION (29/9/2026): سطر من الكاشير (فيه CatalogVersion) بيتسعّر بقرار الكاشير نفسه - العرض
+        // اللي هو طبّقه (PromotionId)، أو ولا عرض. الكاشير بيحسب العرض محليًا حسب ساعته (أوفلاين كمان)، والزبون دفع
+        // على هالأساس - لو السيرفر قرّر لحاله (عرض بلّش/خلص بين البيع ووصوله)، الدفعة ما بتطابق الفاتورة والبيعة
+        // بتعلق بالطابور (كان هاد بالزبط الخلل: الكاشير ما كان يطبّق العروض، والسيرفر يطبّقها → 422).
+        // مش سعر من العميل (§3.6): العرض لازم يكون عرض حقيقي لنفس المنتج ومربوط بالفرع، والحساب بتعريفه على
+        // السيرفر. عرض مش شغّال لحظة الوصول (خلص، أو انوقف بالفرع) بينقبل بس بيتعلّم للمراجعة (§1.6).
+        var claimedPromotionIds = command.Items
+            .Where(i => i.CatalogVersion is not null && i.PromotionId is not null)
+            .Select(i => i.PromotionId!.Value)
+            .Distinct()
+            .ToList();
+        var claimedPromotions = claimedPromotionIds.Count == 0
+            ? new Dictionary<Guid, ClaimedPromotion>()
+            : await (from p in _context.Promotions.AsNoTracking()
+                     join pb in _context.PromotionBranches.AsNoTracking() on p.Id equals pb.PromotionId
+                     where claimedPromotionIds.Contains(p.Id) && pb.BranchId == command.BranchId
+                     select new ClaimedPromotion(p.Id, p.ProductId, p.Title, p.BundleQuantity, p.BundlePrice, p.MaxQuantityPerInvoice,
+                         pb.IsActive && p.StartAtUtc <= nowUtc && p.EndAtUtc >= nowUtc))
+                .ToDictionaryAsync(p => p.PromotionId, cancellationToken);
+
         var reviewFlags = new List<string>();
         var offlinePriceFlaggedProducts = new HashSet<Guid>();
         var resolvedLines = new List<ResolvedSaleLine>();
@@ -508,7 +531,34 @@ public sealed class CompleteSaleHandler
             Guid? promotionId = null;
             string? promotionTitleSnapshot = null;
 
-            if (atCost is null && unit.IsBaseUnit && promotionByProduct.TryGetValue(item.ProductId, out var promo))
+            if (atCost is null && unit.IsBaseUnit && item.CatalogVersion is not null)
+            {
+                // سطر من الكاشير - OFFLINE PROMOTION فوق.
+                if (item.PromotionId is { } claimedId)
+                {
+                    if (!claimedPromotions.TryGetValue(claimedId, out var claimed) || claimed.ProductId != item.ProductId)
+                    {
+                        return Result.Failure<CompleteSaleResponse>(Error.BusinessRule("Sale.PromotionInvalid",
+                            $"العرض المطبّق على '{product.Name}' مش عرض لهالمنتج بهالفرع."));
+                    }
+
+                    var claimedOutcome = PromotionPricingCalculator.Calculate(
+                        item.Quantity, unitPrice, claimed.BundleQuantity, claimed.BundlePrice, claimed.MaxQuantityPerInvoice);
+                    if (claimedOutcome.PromotionAmount > 0)
+                    {
+                        promotionAmount = claimedOutcome.PromotionAmount;
+                        promotionId = claimed.PromotionId;
+                        promotionTitleSnapshot = claimed.Title;
+                        if (!claimed.IsActiveNow)
+                        {
+                            reviewFlags.Add(
+                                $"'{product.Name}' انباع بعرض \"{claimed.Title}\" من الكاشير، والعرض مش شغّال لحظة وصول البيعة " +
+                                "(خلص أو انوقف بالفرع) - غالبًا بيع أوفلاين قبل ما يوصله التغيير.");
+                        }
+                    }
+                }
+            }
+            else if (atCost is null && unit.IsBaseUnit && promotionByProduct.TryGetValue(item.ProductId, out var promo))
             {
                 var outcome = PromotionPricingCalculator.Calculate(
                     item.Quantity, unitPrice, promo.BundleQuantity, promo.BundlePrice, promo.MaxQuantityPerInvoice);
@@ -856,6 +906,9 @@ public sealed class CompleteSaleHandler
         var lastSeen = forBranch.Where(c => c.Version <= catalogVersion).MaxBy(c => c.Version);
         return lastSeen?.RequestedPrice ?? firstUnseen.PreviousPrice;
     }
+
+    private sealed record ClaimedPromotion(
+        Guid PromotionId, Guid ProductId, string Title, int BundleQuantity, decimal BundlePrice, decimal? MaxQuantityPerInvoice, bool IsActiveNow);
 
     private sealed record ResolvedSaleLine(
         Guid ProductId,

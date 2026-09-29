@@ -3,6 +3,7 @@ using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.System.BootstrapAdmin;
 using SupermarketSystem.Application.System.GetAdminSettings;
 using SupermarketSystem.Application.System.GetSecretSettings;
+using SupermarketSystem.Application.System.TimeSettings;
 using SupermarketSystem.Application.System.UpdateAdminSetting;
 using SupermarketSystem.Application.System.UpdateSecretSetting;
 
@@ -82,6 +83,25 @@ public static class SystemEndpoints
         .WithSummary("يحدّث قيمة مفتاح سرّي واحد (Key ضمن whitelist صريحة فقط).")
         .Produces(StatusCodes.Status204NoContent)
         .ProducesProblem(StatusCodes.Status400BadRequest);
+
+        // توقيت المحل (29/9/2026): القراءة بلا دخول (لوحة الإدارة بتحتاجه قبل الدخول لعرض الأوقات، والكاشير كمان) -
+        // مش سر. التعديل = إعدادات حسّاسة.
+        app.MapGet("/api/v1/system/time-settings", async (GetTimeSettingsHandler handler, CancellationToken cancellationToken) =>
+                Results.Ok(await handler.HandleAsync(cancellationToken)))
+            .WithName("GetTimeSettings")
+            .WithTags("System")
+            .AllowAnonymous()
+            .WithSummary("توقيت المحل: المنطقة، الفرق اليدوي (لو محدَّد)، والفرق المطبَّق هلق بالدقائق.")
+            .Produces<TimeSettingsDto>(StatusCodes.Status200OK);
+
+        app.MapPut("/api/v1/system/time-settings", async (UpdateTimeSettingsCommand command, UpdateTimeSettingsHandler handler, CancellationToken cancellationToken) =>
+                (await handler.HandleAsync(command, cancellationToken)).ToHttpResult())
+            .WithName("UpdateTimeSettings")
+            .WithTags("System")
+            .RequirePermission(PermissionCodes.SystemSettingsManage)
+            .WithSummary("يعدّل منطقة المحل الزمنية و/أو فرق يدوي ثابت عن UTC (بيغلب المنطقة - للتوقيت الشتوي/الصيفي بالأردن).")
+            .Produces<TimeSettingsDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest);
 
         return app;
     }

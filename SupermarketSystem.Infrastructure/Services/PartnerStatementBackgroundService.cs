@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SupermarketSystem.Application.Common.Interfaces;
+using SupermarketSystem.Application.Common.Time;
 using SupermarketSystem.Application.Partners;
 using SupermarketSystem.Domain.Notifications;
 using SupermarketSystem.Infrastructure.Persistence;
@@ -50,7 +51,9 @@ public sealed class PartnerStatementBackgroundService : BackgroundService
             await using var db = new AppDbContext(options, new PlaceholderCurrentUserContext());
 
             var now = dateTimeProvider.UtcNow;
-            var previousMonth = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(-1);
+            // "الشهر الماضي" بتوقيت المحل (BusinessTime) - نفس حدود كشف الربح الشهري.
+            var (localYear, localMonth) = (await BusinessTime.LoadAsync(db, cancellationToken)).LocalMonth(now);
+            var previousMonth = new DateTime(localYear, localMonth, 1).AddMonths(-1);
 
             var branchIds = await db.Partners.AsNoTracking().Where(p => p.IsActive).Select(p => p.BranchId).Distinct().ToListAsync(cancellationToken);
             foreach (var branchId in branchIds)

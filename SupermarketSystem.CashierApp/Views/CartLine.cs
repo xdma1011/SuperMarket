@@ -10,7 +10,28 @@ public sealed class CartLine
     public string UnitName { get; set; } = string.Empty;
     public decimal Quantity { get; set; }
     public decimal UnitPrice { get; set; }
-    public decimal LineTotal => Quantity * UnitPrice;
+    public decimal LineTotal => Quantity * UnitPrice - PromotionAmount;
+
+    /// <summary>
+    /// عرض الكمية الشغّال لحظة إضافة الصنف (29/9/2026) - بالوحدة الأساسية بس (نفس السيرفر). الحساب بنفس معادلة
+    /// السيرفر (PromotionPricing)، والسطر بيبعت PromotionId بس لو العرض انطبق فعلًا (الكمية بتكفي حزمة) - السيرفر
+    /// بيحترم هالقرار (OFFLINE PROMOTION)، فالمبلغ اللي دفعه الزبون بيطابق الفاتورة.
+    /// </summary>
+    public Guid? PromotionId { get; set; }
+    public string? PromotionTitle { get; set; }
+    public int PromotionBundleQuantity { get; set; }
+    public decimal PromotionBundlePrice { get; set; }
+    public decimal? PromotionMaxQuantity { get; set; }
+
+    public decimal PromotionAmount => PromotionId is null
+        ? 0m
+        : Services.PromotionPricing.PromotionAmount(Quantity, UnitPrice, PromotionBundleQuantity, PromotionBundlePrice, PromotionMaxQuantity);
+
+    public Guid? AppliedPromotionId => PromotionAmount > 0 ? PromotionId : null;
+
+    public string PromotionMark => PromotionAmount > 0
+        ? $"🏷 {PromotionTitle} (−{PromotionAmount:0.000})"
+        : PromotionId is not null ? $"🏷 {PromotionTitle}" : "";
 
     /// <summary>
     /// رقم نسخة الكتالوج المحلية اللي انقرأ منها UnitPrice - بينبعت مع السطر، والسيرفر بيحسب

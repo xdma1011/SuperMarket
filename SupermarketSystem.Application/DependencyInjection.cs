@@ -81,6 +81,7 @@ using SupermarketSystem.Application.Catalog.GetProductPromotions;
 using SupermarketSystem.Application.Finance.CreateExpense;
 using SupermarketSystem.Application.Finance.ExpenseTypes;
 using SupermarketSystem.Application.Employees;
+using SupermarketSystem.Application.System.TimeSettings;
 using SupermarketSystem.Application.Finance.GetExpenses;
 using SupermarketSystem.Application.Finance.CreateCapitalTransaction;
 using SupermarketSystem.Application.Finance.GetCapitalTransactions;
@@ -303,6 +304,8 @@ public static class DependencyInjection
         services.AddScoped<MarkNotificationReadHandler>();
         services.AddScoped<MarkAllNotificationsReadHandler>();
         services.AddScoped<GetNotificationSummaryHandler>();
+        services.AddScoped<GetTimeSettingsHandler>();
+        services.AddScoped<UpdateTimeSettingsHandler>();
         services.AddScoped<GetExpenseTypesHandler>();
         services.AddScoped<CreateExpenseTypeHandler>();
         services.AddScoped<UpdateExpenseTypeHandler>();

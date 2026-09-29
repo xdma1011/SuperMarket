@@ -28,9 +28,9 @@ namespace SupermarketSystem.IntegrationTests.Scenario;
 ///   S6 خبز 2 = 1.000 كاش ← ملغاة                S7 أرز 2 = 3.000 كاش، إرجاع حبة 1.500 (تكلفة صافية 0.860)
 ///   AC1 سحب بالتكلفة: حليب 1 = 0.800 "اخصمها مني"   AC2 خبز 1 = 0.300 "بدفع حقها" كاش
 ///   → المبيعات 41.100، المرتجع 1.500، الصافي 39.600، التكلفة 23.660، الإجمالي 15.940
-/// تلف خبز 2 (0.600 خسارة) + خبز 1 مستبدَل (بلا خسارة)، ضيافة خبز 1 (مش خسارة بالكشف - قرار موثّق)،
+/// تلف خبز 2 (0.600 خسارة) + خبز 1 مستبدَل (بلا خسارة)، ضيافة خبز 1 (0.300 تكلفة - صارت تنحسب 29/9/2026)،
 /// جرد: حليب ناقص 1 (0.800)، خبز زايد 1 (0.300)، مصاريف 5.000 + 1.200
-///   → صافي الربح = 15.940 − 6.200 + 0.300 − 0.800 − 0.600 = 8.640
+///   → صافي الربح = 15.940 − 6.200 + 0.300 − 0.800 − 0.600 − 0.300 = 8.340
 /// </summary>
 [Collection(DatabaseCollection.Name)]
 public sealed class MonthlyProfitReflectionScenarioTests : IntegrationTestBase
@@ -377,16 +377,16 @@ public sealed class MonthlyProfitReflectionScenarioTests : IntegrationTestBase
         await CapitalAsync(sami, 1000m);
 
         var statement = await PostAsync(admin, "/api/v1/partners/statements", new { branchId, year = previous.Year, month = previous.Month }, "كشف الشركاء");
-        Check("كشف الشركاء: صافي الربح = كشف الربح الشهري", 8.640m, D(statement, "netProfit"));
+        Check("كشف الشركاء: صافي الربح = كشف الربح الشهري", 8.340m, D(statement, "netProfit"));
         var lines = statement.GetProperty("lines").EnumerateArray().ToDictionary(l => l.GetProperty("partnerId").GetGuid());
-        Check("المضارب 25% من 8.640", 2.160m, D(lines[mudarib], "shareAmount"));
-        Check("أحمد 75% من الباقي 6.480", 4.860m, D(lines[ahmad], "shareAmount"));
-        Check("سامي 25% من الباقي", 1.620m, D(lines[sami], "shareAmount"));
-        Check("مجموع الأنصبة = صافي الربح", 8.640m, lines.Values.Sum(l => D(l, "shareAmount")) + D(statement, "unallocatedAmount"));
+        Check("المضارب 25% من 8.340", 2.085m, D(lines[mudarib], "shareAmount"));
+        Check("أحمد 75% من الباقي 6.255 (4.69125)", 4.691m, D(lines[ahmad], "shareAmount"));
+        Check("سامي 25% من الباقي (1.56375)", 1.564m, D(lines[sami], "shareAmount"));
+        Check("مجموع الأنصبة = صافي الربح", 8.340m, lines.Values.Sum(l => D(l, "shareAmount")) + D(statement, "unallocatedAmount"));
 
         async Task<Dictionary<Guid, JsonElement>> PartnersAsync() =>
             (await GetAsync(admin, $"/api/v1/partners?branchId={branchId}", "الشركاء")).EnumerateArray().ToDictionary(p => p.GetProperty("id").GetGuid());
-        Check("رصيد أحمد = نصيبه − الحليب اللي أخده بالتكلفة", 4.060m, D((await PartnersAsync())[ahmad], "currentBalance"));
+        Check("رصيد أحمد = نصيبه − الحليب اللي أخده بالتكلفة", 3.891m, D((await PartnersAsync())[ahmad], "currentBalance"));
 
         await PostAsync(admin, "/api/v1/partners/withdrawals", new
         {
@@ -397,9 +397,9 @@ public sealed class MonthlyProfitReflectionScenarioTests : IntegrationTestBase
             partnerId = sami, amount = 2.000m, source = "OwnerPocket", notes = (string?)null, occurredAtUtc = (DateTime?)null, clientRequestId = Guid.NewGuid()
         }, "سامي بياخد 2 من جيب صاحب المحل");
         var partners = await PartnersAsync();
-        Check("رصيد أحمد بعد السحب", 3.060m, D(partners[ahmad], "currentBalance"));
-        Check("رصيد سامي (سلفة)", -0.380m, D(partners[sami], "currentBalance"));
-        Check("رصيد المضارب", 2.160m, D(partners[mudarib], "currentBalance"));
+        Check("رصيد أحمد بعد السحب", 2.891m, D(partners[ahmad], "currentBalance"));
+        Check("رصيد سامي (سلفة)", -0.436m, D(partners[sami], "currentBalance"));
+        Check("رصيد المضارب", 2.085m, D(partners[mudarib], "currentBalance"));
         var receivables = (await GetAsync(admin, $"/api/v1/partners/owner-receivables?branchId={branchId}", "مستحق لصاحب المحل")).EnumerateArray().ToList();
         Check("المستحق لصاحب المحل (دفع لسامي من جيبه)", 2.000m,
             receivables.Where(r => r.GetProperty("ownerUserId").GetGuid() == Fixture.AdminUserId).Sum(r => D(r, "balance")));
@@ -414,7 +414,7 @@ public sealed class MonthlyProfitReflectionScenarioTests : IntegrationTestBase
         Check("الشهر الحالي: التكلفة", 0.800m, D(current, "costOfGoodsSold"));
         Check("الشهر الحالي: صافي الربح (السحوبات مش مصروف)", 0.450m, D(current, "netProfit"));
         var previousAgain = await GetAsync(admin, $"/api/v1/finance/profit-statement?branchId={branchId}&year={previous.Year}&month={previous.Month}", "كشف الشهر الماضي");
-        Check("الشهر الماضي ما تأثر بالبيعة الجديدة ولا بالسحوبات", 8.640m, D(previousAgain, "netProfit"));
+        Check("الشهر الماضي ما تأثر بالبيعة الجديدة ولا بالسحوبات", 8.340m, D(previousAgain, "netProfit"));
 
         var closing2 = await PostAsync(admin, "/api/v1/cash-closings", new
         {
@@ -523,7 +523,8 @@ public sealed class MonthlyProfitReflectionScenarioTests : IntegrationTestBase
         Check($"[{label}] فائض الجرد", 0.300m, D(p, "stocktakeSurplusValue"));
         Check($"[{label}] نقص الجرد", 0.800m, D(p, "stocktakeShortageValue"));
         Check($"[{label}] خسارة التلف (المستبدَل مش خسارة)", 0.600m, D(p, "wasteLossValue"));
-        Check($"[{label}] صافي الربح", 8.640m, D(p, "netProfit"));
+        Check($"[{label}] تكلفة الضيافة (خبز 1 × 0.300)", 0.300m, D(p, "complimentaryCostValue"));
+        Check($"[{label}] صافي الربح", 8.340m, D(p, "netProfit"));
     }
 
     /// <summary>

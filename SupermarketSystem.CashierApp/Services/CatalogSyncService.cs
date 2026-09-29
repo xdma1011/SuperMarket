@@ -121,6 +121,7 @@ public sealed class CatalogSyncService
             db.ProductBarcodes.RemoveRange(db.ProductBarcodes.Where(b => existingUnitIds.Contains(b.ProductUnitId)));
             db.ProductUnits.RemoveRange(existingUnits);
             db.ProductBatches.RemoveRange(db.ProductBatches.Where(b => b.ProductId == product.ProductId));
+            db.Promotions.RemoveRange(db.Promotions.Where(p => p.ProductId == product.ProductId));
 
             var existingProduct = db.Products.Find(product.ProductId);
             if (existingProduct is null)
@@ -161,6 +162,23 @@ public sealed class CatalogSyncService
                 {
                     db.ProductBarcodes.Add(new LocalProductBarcode { BarcodeValue = barcode, ProductUnitId = unit.UnitId });
                 }
+            }
+
+            // سيرفر قديم بلا Promotions = ولا عرض (زي قبل)، بدل ما نطبّق عرض ما بيعرف عنه السيرفر.
+            foreach (var promotion in product.Promotions ?? new List<CatalogSyncPromotionDto>())
+            {
+                db.Promotions.Add(new LocalPromotion
+                {
+                    PromotionId = promotion.PromotionId,
+                    ProductId = product.ProductId,
+                    Title = promotion.Title,
+                    BundleQuantity = promotion.BundleQuantity,
+                    BundlePrice = promotion.BundlePrice,
+                    MaxQuantityPerInvoice = promotion.MaxQuantityPerInvoice,
+                    StartAtUtc = promotion.StartAtUtc,
+                    EndAtUtc = promotion.EndAtUtc,
+                    CreatedAtUtc = promotion.CreatedAtUtc
+                });
             }
 
             foreach (var batch in product.Batches)

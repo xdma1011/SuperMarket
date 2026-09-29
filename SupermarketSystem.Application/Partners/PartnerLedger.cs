@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Results;
+using SupermarketSystem.Application.Common.Time;
 using SupermarketSystem.Application.Finance.GetMonthlyProfitStatement;
 using SupermarketSystem.Domain.Finance;
 using SupermarketSystem.Domain.Partners;
@@ -143,8 +144,7 @@ public sealed class PartnerStatementGenerator
             return Result.Failure<Guid>(Error.Validation("PartnerStatement.InvalidPeriod", "الشهر مش صحيح."));
         }
 
-        var periodStartUtc = new DateTime(year, month, 1, 0, 0, 0, DateTimeKind.Utc);
-        var periodEndUtc = periodStartUtc.AddMonths(1);
+        var (_, periodEndUtc) = (await BusinessTime.LoadAsync(_context, cancellationToken)).MonthRangeUtc(year, month);
         if (periodEndUtc > _dateTimeProvider.UtcNow)
         {
             return Result.Failure<Guid>(Error.BusinessRule("PartnerStatement.MonthNotEnded", "الشهر لسه ما خلص - الكشف بينزل بعد نهايته."));

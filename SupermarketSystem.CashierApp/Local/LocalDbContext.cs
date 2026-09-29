@@ -18,6 +18,7 @@ public sealed class LocalDbContext : DbContext
     public DbSet<PendingSale> PendingSales => Set<PendingSale>();
     public DbSet<LocalPaymentMethod> PaymentMethods => Set<LocalPaymentMethod>();
     public DbSet<SyncState> SyncStates => Set<SyncState>();
+    public DbSet<LocalPromotion> Promotions => Set<LocalPromotion>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -43,5 +44,8 @@ public sealed class LocalDbContext : DbContext
         modelBuilder.Entity<LocalPaymentMethod>().HasKey(m => m.Id);
 
         modelBuilder.Entity<SyncState>().HasKey(s => s.Id);
+
+        modelBuilder.Entity<LocalPromotion>().HasKey(p => p.PromotionId);
+        modelBuilder.Entity<LocalPromotion>().HasIndex(p => p.ProductId);
     }
 }

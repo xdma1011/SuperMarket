@@ -54,6 +54,12 @@
         </div>
       }
 
+      @if ((s.complimentaryMovementsExcludedNoCostHistory ?? 0) > 0) {
+        <div class="alert-banner warn">
+          تنبيه: {{ s.complimentaryMovementsExcludedNoCostHistory }} عملية ضيافة بهالشهر بلا تكلفة معروفة - مُستبعدة من تكلفة الضيافة أدناه.
+        </div>
+      }
+
       @if (s.wasteMovementsExcludedNoCostHistory > 0) {
         <div class="alert-banner warn">
           تنبيه: {{ s.wasteMovementsExcludedNoCostHistory }} عملية تلف بهالشهر بلا تكلفة معروفة - مُستبعدة كليًا من خسارة التلف أدناه.
@@ -89,6 +95,7 @@
         <div class="detail-row"><span>فائض الجرد (زيادة)</span><span class="mono">+{{ s.stocktakeSurplusValue | number: '1.3-3' }}</span></div>
         <div class="detail-row"><span>نقص الجرد (خسارة)</span><span class="mono">-{{ s.stocktakeShortageValue | number: '1.3-3' }}</span></div>
         <div class="detail-row"><span>التلف والهلاك (خسارة، غير المستبدَل من الشركة)</span><span class="mono">-{{ s.wasteLossValue | number: '1.3-3' }}</span></div>
+        <div class="detail-row"><span>الضيافة والاستهلاك الداخلي (بالتكلفة)</span><span class="mono">-{{ (s.complimentaryCostValue ?? 0) | number: '1.3-3' }}</span></div>
       </div>
 
       @if (s.expensesByType?.length) {

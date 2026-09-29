@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Application.Common.Costing;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Results;
+using SupermarketSystem.Application.Common.Time;
 using SupermarketSystem.Domain.Finance;
 using SupermarketSystem.Domain.Inventory;
 using SupermarketSystem.Domain.Purchasing;
@@ -61,8 +62,11 @@ public sealed record ExpenseByTypeDto(Guid? ExpenseTypeId, string TypeName, deci
 ///   نفس تقييم فروقات الجرد بالضبط (تكلفة دفعة/متوسط مرجّح حتى نهاية الشهر،
 ///   محسوب لحظيًا لا مجمَّد)، و`WasteMovementsExcludedNoCostHistory` نفس
 ///   فلسفة الاستبعاد (بلا تاريخ شراء = مستبعد، لا تكلفة صفر).
+/// - ComplimentaryCostValue: قرار صاحب المشروع (29/9/2026، "اكيد تنحسب وضروري مشان الكشف يكون واضح") -
+///   الضيافة/الاستهلاك الداخلي (`MovementType.ComplimentaryOut`) تكلفة بشهر حدوثها، بنفس تقييم التلف بالضبط،
+///   و`ComplimentaryMovementsExcludedNoCostHistory` نفس فلسفة الاستبعاد.
 /// - NetProfit = GrossProfit - TotalExpenses + StocktakeSurplusValue -
-///   StocktakeShortageValue - WasteLossValue. هذا الرقم النهائي "ربح الشهر".
+///   StocktakeShortageValue - WasteLossValue - ComplimentaryCostValue. هذا الرقم النهائي "ربح الشهر".
 /// </summary>
 public sealed class GetMonthlyProfitStatementHandler
 {
@@ -89,8 +93,9 @@ public sealed class GetMonthlyProfitStatementHandler
                 Error.NotFound("ProfitStatement.BranchNotFound", $"Branch '{query.BranchId}' was not found."));
         }
 
-        var periodStartUtc = new DateTime(query.Year, query.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-        var periodEndUtc = periodStartUtc.AddMonths(1);
+        // الشهر بتوقيت المحل (29/9/2026) - بيعة الساعة 1 الصبح بأول الشهر (محلي) من الشهر الجديد، مش القديم.
+        var businessTime = await BusinessTime.LoadAsync(_context, cancellationToken);
+        var (periodStartUtc, periodEndUtc) = businessTime.MonthRangeUtc(query.Year, query.Month);
 
         var invoices = _context.SaleInvoices.AsNoTracking()
             .Where(s => s.BranchId == query.BranchId && s.Status != SaleInvoiceStatus.Voided
@@ -150,7 +155,8 @@ public sealed class GetMonthlyProfitStatementHandler
         var inventory = await GetInventoryVarianceAndWasteAsync(query.BranchId, periodStartUtc, periodEndUtc, cancellationToken);
 
         var netProfit = grossProfit - totalExpenses
-            + inventory.StocktakeSurplusValue - inventory.StocktakeShortageValue - inventory.WasteLossValue;
+            + inventory.StocktakeSurplusValue - inventory.StocktakeShortageValue - inventory.WasteLossValue
+            - inventory.ComplimentaryCostValue;
 
         return Result.Success(new GetMonthlyProfitStatementResponse(
             query.BranchId, query.Year, query.Month,
@@ -159,12 +165,17 @@ public sealed class GetMonthlyProfitStatementHandler
             totalExpenses, expensesByCategory,
             inventory.StocktakeSurplusValue, inventory.StocktakeShortageValue, inventory.StocktakeExcludedNoCostHistory,
             inventory.WasteLossValue, inventory.WasteExcludedNoCostHistory,
-            netProfit, expensesByType));
+            netProfit, expensesByType)
+        {
+            ComplimentaryCostValue = inventory.ComplimentaryCostValue,
+            ComplimentaryMovementsExcludedNoCostHistory = inventory.ComplimentaryExcludedNoCostHistory
+        });
     }
 
     private sealed record InventoryValuation(
         decimal StocktakeSurplusValue, decimal StocktakeShortageValue, int StocktakeExcludedNoCostHistory,
-        decimal WasteLossValue, int WasteExcludedNoCostHistory);
+        decimal WasteLossValue, int WasteExcludedNoCostHistory,
+        decimal ComplimentaryCostValue, int ComplimentaryExcludedNoCostHistory);
 
     private async Task<InventoryValuation> GetInventoryVarianceAndWasteAsync(
         Guid branchId, DateTime periodStartUtc, DateTime periodEndUtc, CancellationToken cancellationToken)
@@ -173,14 +184,15 @@ public sealed class GetMonthlyProfitStatementHandler
             .Where(m => m.BranchId == branchId
                         && (m.MovementType == MovementType.StocktakeCorrectionIncrease
                             || m.MovementType == MovementType.StocktakeCorrectionDecrease
-                            || (m.MovementType == MovementType.WasteOut && !m.IsReplacedBySupplier))
+                            || (m.MovementType == MovementType.WasteOut && !m.IsReplacedBySupplier)
+                            || m.MovementType == MovementType.ComplimentaryOut)
                         && m.OccurredAtUtc >= periodStartUtc && m.OccurredAtUtc < periodEndUtc)
             .Select(m => new { m.MovementType, m.ProductId, m.ProductBatchId, m.QuantityBase })
             .ToListAsync(cancellationToken);
 
         if (movements.Count == 0)
         {
-            return new InventoryValuation(0m, 0m, 0, 0m, 0);
+            return new InventoryValuation(0m, 0m, 0, 0m, 0, 0m, 0);
         }
 
         var batchIds = movements.Where(m => m.ProductBatchId is not null)
@@ -203,6 +215,8 @@ public sealed class GetMonthlyProfitStatementHandler
         var stocktakeExcludedCount = 0;
         var wasteLossValue = 0m;
         var wasteExcludedCount = 0;
+        var complimentaryValue = 0m;
+        var complimentaryExcludedCount = 0;
 
         foreach (var movement in movements)
         {
@@ -211,12 +225,17 @@ public sealed class GetMonthlyProfitStatementHandler
                 : (weightedAverageCosts.TryGetValue(movement.ProductId, out var avgCost) ? avgCost : null);
 
             var isWaste = movement.MovementType == MovementType.WasteOut;
+            var isComplimentary = movement.MovementType == MovementType.ComplimentaryOut;
 
             if (unitCost is null)
             {
                 if (isWaste)
                 {
                     wasteExcludedCount++;
+                }
+                else if (isComplimentary)
+                {
+                    complimentaryExcludedCount++;
                 }
                 else
                 {
@@ -230,6 +249,10 @@ public sealed class GetMonthlyProfitStatementHandler
             {
                 wasteLossValue += value;
             }
+            else if (isComplimentary)
+            {
+                complimentaryValue += value;
+            }
             else if (movement.MovementType == MovementType.StocktakeCorrectionIncrease)
             {
                 surplusValue += value;
@@ -240,7 +263,8 @@ public sealed class GetMonthlyProfitStatementHandler
             }
         }
 
-        return new InventoryValuation(surplusValue, shortageValue, stocktakeExcludedCount, wasteLossValue, wasteExcludedCount);
+        return new InventoryValuation(surplusValue, shortageValue, stocktakeExcludedCount, wasteLossValue, wasteExcludedCount,
+            complimentaryValue, complimentaryExcludedCount);
     }
 }
 
@@ -262,4 +286,9 @@ public sealed record GetMonthlyProfitStatementResponse(
     decimal WasteLossValue,
     int WasteMovementsExcludedNoCostHistory,
     decimal NetProfit,
-    IReadOnlyList<ExpenseByTypeDto> ExpensesByType);
+    IReadOnlyList<ExpenseByTypeDto> ExpensesByType)
+{
+    /// <summary>تكلفة الضيافة/الاستهلاك الداخلي بالشهر (29/9/2026) - بتنطرح من صافي الربح.</summary>
+    public decimal ComplimentaryCostValue { get; init; }
+    public int ComplimentaryMovementsExcludedNoCostHistory { get; init; }
+}
