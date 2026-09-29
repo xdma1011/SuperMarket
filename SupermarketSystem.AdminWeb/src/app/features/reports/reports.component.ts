@@ -21,6 +21,7 @@ interface SalesSummaryPeriodDto {
   invoiceCount: number;
   totalSales: number;
   totalDiscounts: number;
+  totalPromotionDiscounts?: number;
   totalReturnedAmount: number;
   netRevenue: number;
 }

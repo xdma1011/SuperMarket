@@ -13,7 +13,14 @@ public sealed record SupplierPriceComparisonItemDto(
     decimal UnitCost,
     decimal Quantity,
     DateTime PurchasedAtUtc,
-    string PurchaseInvoiceNumber);
+    string PurchaseInvoiceNumber)
+{
+    /// <summary>وحدة الشراء (حبة/كرتونة) - UnitCost وQuantity فيها.</summary>
+    public string? UnitName { get; init; }
+
+    /// <summary>تكلفة الحبة (الوحدة الأساسية) - المقارنة الصحيحة بين مورد باع بالكرتونة وتاني بالحبة (29/9/2026).</summary>
+    public decimal BaseUnitCost { get; init; }
+}
 
 /// <summary>
 /// كل سطر شراء لمنتج معيّن عبر مختلف الموردين والفواتير — بلا حساب أو
@@ -51,7 +58,8 @@ public sealed class GetSupplierPriceComparisonHandler
 
         var lines = _context.PurchaseInvoiceItems.AsNoTracking()
             .Where(i => i.ProductId == query.ProductId)
-            .Join(invoices, i => i.PurchaseInvoiceId, pi => pi.Id, (i, pi) => new { i, pi });
+            .Join(invoices, i => i.PurchaseInvoiceId, pi => pi.Id, (i, pi) => new { i, pi })
+            .Join(_context.ProductUnits.AsNoTracking(), x => x.i.ProductUnitId, u => u.Id, (x, u) => new { x.i, x.pi, u });
 
         var totalCount = await lines.CountAsync(cancellationToken);
 
@@ -62,7 +70,11 @@ public sealed class GetSupplierPriceComparisonHandler
             .Join(_context.Suppliers.AsNoTracking(),
                 x => x.pi.SupplierId, s => s.Id,
                 (x, s) => new SupplierPriceComparisonItemDto(
-                    s.Id, s.Name, x.i.UnitCost, x.i.Quantity, x.pi.CreatedAtUtc, x.pi.InvoiceNumber))
+                    s.Id, s.Name, x.i.UnitCost, x.i.Quantity, x.pi.CreatedAtUtc, x.pi.InvoiceNumber)
+                {
+                    UnitName = x.u.UnitName,
+                    BaseUnitCost = x.u.ConversionFactorToBase > 0 ? x.i.UnitCost / x.u.ConversionFactorToBase : x.i.UnitCost
+                })
             .ToListAsync(cancellationToken);
 
         return new PagedResult<SupplierPriceComparisonItemDto>(page, totalCount, paging.PageNumber, paging.PageSize);

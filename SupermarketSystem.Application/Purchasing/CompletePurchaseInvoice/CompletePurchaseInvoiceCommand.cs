@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Domain.Notifications;
 using SupermarketSystem.Application.Common.Notifications;
+using SupermarketSystem.Application.Common.Costing;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Policies;
 using SupermarketSystem.Application.Common.Results;
@@ -258,12 +259,15 @@ public sealed class CompletePurchaseInvoiceHandler
         var averageRecentCostByProduct = new Dictionary<Guid, decimal>();
         foreach (var productId in productIds)
         {
+            // تكلفة الحبة (الوحدة الأساسية) - كانت تقارن سعر كرتونة بسعر حبة، فشراء بالكرتونة بعد الحبة كان دايمًا
+            // "أعلى من المعتاد" (إنذار كاذب + مراجعة). راجع PurchaseCostBasis.
             var recentCosts = await (
                 from item in _context.PurchaseInvoiceItems.AsNoTracking()
                 join invoice in _context.PurchaseInvoices.AsNoTracking() on item.PurchaseInvoiceId equals invoice.Id
-                where item.ProductId == productId
+                join unit in _context.ProductUnits.AsNoTracking() on item.ProductUnitId equals unit.Id
+                where item.ProductId == productId && unit.ConversionFactorToBase > 0
                 orderby invoice.CreatedAtUtc descending
-                select item.UnitCost)
+                select item.UnitCost / unit.ConversionFactorToBase)
                 .Take(5)
                 .ToListAsync(cancellationToken);
 
@@ -293,23 +297,26 @@ public sealed class CompletePurchaseInvoiceHandler
         {
             var unit = units[itemDto.ProductUnitId];
 
+            // تكلفة الحبة - ProductBatch.UnitCost بيتعامل معه بكل مكان كتكلفة وحدة أساسية (كانت تنحفظ بسعر الكرتونة).
+            var baseUnitCost = PurchaseCostBasis.ToBaseUnitCost(itemDto.UnitCost, unit.ConversionFactorToBase);
+
             Guid? productBatchId = itemDto.ExistingProductBatchId;
             if (productBatchId is null && !string.IsNullOrWhiteSpace(itemDto.NewBatchNumber))
             {
                 var newBatch = new ProductBatch(
-                    itemDto.ProductId, command.BranchId, itemDto.NewBatchNumber, itemDto.NewBatchExpiryDate, itemDto.UnitCost);
+                    itemDto.ProductId, command.BranchId, itemDto.NewBatchNumber, itemDto.NewBatchExpiryDate, baseUnitCost);
                 _context.ProductBatches.Add(newBatch);
                 productBatchId = newBatch.Id;
             }
 
             var needsReview = averageRecentCostByProduct.TryGetValue(itemDto.ProductId, out var averageRecentCost)
-                && itemDto.UnitCost > averageRecentCost * (1 + priceThresholdPercent / 100m);
+                && baseUnitCost > averageRecentCost * (1 + priceThresholdPercent / 100m);
 
             var invoiceItem = purchaseInvoice.AddItem(
                 itemDto.ProductId, itemDto.ProductUnitId, productBatchId, itemDto.Quantity, itemDto.UnitCost, needsReview);
             if (needsReview)
             {
-                highPricedItems.Add((itemDto.ProductId, itemDto.UnitCost, averageRecentCost));
+                highPricedItems.Add((itemDto.ProductId, baseUnitCost, averageRecentCost));
             }
 
             // Normalized to the product's base unit (Architecture Review
@@ -357,7 +364,7 @@ public sealed class CompletePurchaseInvoiceHandler
             foreach (var (productId, unitCost, averageCost) in highPricedItems)
             {
                 var productName = await AlertText.ProductNameAsync(_context, productId, cancellationToken);
-                lines.Add($"- {productName}: {unitCost:0.000} (المعتاد {averageCost:0.000})");
+                lines.Add($"- {productName}: {unitCost:0.000} للحبة (المعتاد {averageCost:0.000})");
             }
 
             var supplierName = await _context.Suppliers.AsNoTracking()

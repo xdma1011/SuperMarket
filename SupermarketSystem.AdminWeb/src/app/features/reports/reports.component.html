@@ -99,8 +99,12 @@
             <span class="kpi-value">{{ s.period.totalSales | number: '1.3-3' }}</span>
           </div>
           <div class="kpi-card">
-            <span class="kpi-label">إجمالي الخصومات</span>
+            <span class="kpi-label">الخصومات اليدوية</span>
             <span class="kpi-value">{{ s.period.totalDiscounts | number: '1.3-3' }}</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">توفير العروض</span>
+            <span class="kpi-value">{{ (s.period.totalPromotionDiscounts ?? 0) | number: '1.3-3' }}</span>
           </div>
           <div class="kpi-card">
             <span class="kpi-label">إجمالي المرتجعات</span>

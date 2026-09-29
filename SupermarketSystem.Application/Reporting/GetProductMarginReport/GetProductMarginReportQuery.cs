@@ -69,12 +69,18 @@ public sealed class GetProductMarginReportHandler
         var lines = _context.SaleInvoiceItems.AsNoTracking()
             .Join(invoices, i => i.SaleInvoiceId, s => s.Id, (i, s) => i);
 
+        // الكمية بالوحدة الأساسية (29/9/2026): كرتونة (×10) + 5 حبات كانت تنعدّ "6" بدل 15.
+        var baseQuantities = lines
+            .Join(_context.ProductUnits.AsNoTracking(), i => i.ProductUnitId, u => u.Id,
+                (i, u) => new { i.ProductId, BaseQuantity = (i.Quantity - i.QuantityReturned) * u.ConversionFactorToBase })
+            .GroupBy(x => x.ProductId)
+            .Select(g => new { ProductId = g.Key, QuantitySold = g.Sum(x => x.BaseQuantity) });
+
         var grouped = lines
             .GroupBy(i => i.ProductId)
             .Select(g => new
             {
                 ProductId = g.Key,
-                QuantitySold = g.Sum(i => i.Quantity - i.QuantityReturned),
                 NetRevenue = g.Sum(i => i.LineTotal - (i.QuantityReturned * i.UnitPriceSnapshot)),
                 Cost = g.Sum(i => i.UnitCostSnapshot == null ? 0m : (i.Quantity - i.QuantityReturned) * i.UnitCostSnapshot!.Value),
                 LinesExcludedNoCostHistory = g.Sum(i => i.UnitCostSnapshot == null ? 1 : 0)
@@ -87,20 +93,29 @@ public sealed class GetProductMarginReportHandler
             .Select(g => new { TotalNetRevenue = g.Sum(x => x.NetRevenue), TotalCost = g.Sum(x => x.Cost) })
             .FirstOrDefaultAsync(cancellationToken);
 
-        var page = await grouped
+        var pageRows = await grouped
             .OrderByDescending(x => x.NetRevenue)
             .Skip(paging.Skip)
             .Take(paging.PageSize)
-            .Join(_context.Products.AsNoTracking(), x => x.ProductId, p => p.Id, (x, p) => new ProductMarginItemDto(
-                p.Id,
-                p.Name,
-                x.QuantitySold,
-                x.NetRevenue,
-                x.Cost,
-                x.NetRevenue - x.Cost,
-                x.NetRevenue == 0 ? null : (decimal?)((x.NetRevenue - x.Cost) / x.NetRevenue * 100m),
-                x.LinesExcludedNoCostHistory))
+            .Join(_context.Products.AsNoTracking(), x => x.ProductId, p => p.Id,
+                (x, p) => new { x.ProductId, p.Name, x.NetRevenue, x.Cost, x.LinesExcludedNoCostHistory })
             .ToListAsync(cancellationToken);
+
+        var pageProductIds = pageRows.Select(r => r.ProductId).ToList();
+        var quantities = await baseQuantities
+            .Where(q => pageProductIds.Contains(q.ProductId))
+            .ToDictionaryAsync(q => q.ProductId, q => q.QuantitySold, cancellationToken);
+
+        var page = pageRows.Select(r => new ProductMarginItemDto(
+                r.ProductId,
+                r.Name,
+                quantities.GetValueOrDefault(r.ProductId),
+                r.NetRevenue,
+                r.Cost,
+                r.NetRevenue - r.Cost,
+                r.NetRevenue == 0 ? null : (r.NetRevenue - r.Cost) / r.NetRevenue * 100m,
+                r.LinesExcludedNoCostHistory))
+            .ToList();
 
         var pagedItems = new PagedResult<ProductMarginItemDto>(page, totalCount, paging.PageNumber, paging.PageSize);
 

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SupermarketSystem.Application.Common.Costing;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Domain.Finance;
@@ -170,18 +171,9 @@ public sealed class GetMonthlyProfitStatementHandler
 
         var nonBatchProductIds = movements.Where(m => m.ProductBatchId is null)
             .Select(m => m.ProductId).Distinct().ToList();
-        var weightedAverageCosts = nonBatchProductIds.Count == 0
-            ? new Dictionary<Guid, decimal>()
-            : await _context.PurchaseInvoiceItems.AsNoTracking()
-                .Where(i => nonBatchProductIds.Contains(i.ProductId))
-                .Join(
-                    _context.PurchaseInvoices.AsNoTracking()
-                        .Where(pi => pi.Status == PurchaseInvoiceStatus.Received && pi.CreatedAtUtc < periodEndUtc),
-                    i => i.PurchaseInvoiceId, pi => pi.Id,
-                    (i, pi) => new { i.ProductId, i.Quantity, i.UnitCost })
-                .GroupBy(x => x.ProductId)
-                .Select(g => new { ProductId = g.Key, TotalQuantity = g.Sum(x => x.Quantity), TotalCost = g.Sum(x => x.Quantity * x.UnitCost) })
-                .ToDictionaryAsync(x => x.ProductId, x => x.TotalCost / x.TotalQuantity, cancellationToken);
+        // متوسط تكلفة الحبة من المشتريات لحد نهاية الشهر، بالوحدة الأساسية - راجع PurchaseCostBasis.
+        var weightedAverageCosts = await PurchaseCostBasis.AverageBaseUnitCostsAsync(
+            _context, nonBatchProductIds, periodEndUtc, inclusive: false, cancellationToken);
 
         var surplusValue = 0m;
         var shortageValue = 0m;

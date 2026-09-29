@@ -179,7 +179,9 @@ export const REPORT_CONFIGS: ReportConfig[] = [
     requiresProduct: true,
     columns: [
       { key: 'supplierName', label: 'المورد', type: 'text' },
-      { key: 'unitCost', label: 'تكلفة الوحدة', type: 'currency' },
+      { key: 'baseUnitCost', label: 'تكلفة الحبة', type: 'currency' },
+      { key: 'unitCost', label: 'سعر وحدة الشراء', type: 'currency' },
+      { key: 'unitName', label: 'وحدة الشراء', type: 'text' },
       { key: 'quantity', label: 'الكمية', type: 'number' },
       { key: 'purchaseInvoiceNumber', label: 'رقم الفاتورة', type: 'text' },
       { key: 'purchasedAtUtc', label: 'تاريخ الشراء', type: 'date' }

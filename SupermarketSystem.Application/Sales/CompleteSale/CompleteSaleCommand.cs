@@ -184,10 +184,10 @@ public static class CompleteSaleValidator
 /// past sale's recorded cost). Both are treated as the cost of ONE BASE
 /// UNIT — same convention CapitalValue/SupplierPriceComparison already use
 /// implicitly — then scaled by the sale line's ConversionFactorToBase
-/// exactly like UnitPriceSnapshot. Known blind spot inherited from that
-/// same existing convention, not introduced here: if a product is ever
-/// purchased in more than one ProductUnit across its history, the average
-/// silently mixes them. A product with zero purchase history before this
+/// exactly like UnitPriceSnapshot. Purchase lines are normalized to the base
+/// unit first (PurchaseCostBasis, 29/9/2026 fix - buying 4 cartons at 8.000
+/// used to record a per-piece cost of 8.000 instead of 0.800, and batches
+/// stored the carton price). A product with zero purchase history before this
 /// sale (no Received purchase invoice yet for a non-batch product)
 /// snapshots null, not zero — GetMonthlyProfitStatement must exclude
 /// null-cost lines from cost totals explicitly rather than assume free

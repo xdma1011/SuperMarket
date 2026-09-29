@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SupermarketSystem.Application.Common.Costing;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Pagination;
 using SupermarketSystem.Domain.Purchasing;
@@ -70,19 +71,17 @@ public sealed class GetCurrentCapitalValueHandler
 
         // متوسط التكلفة المرجّح لكل (منتج، فرع) — من فواتير الشراء
         // المكتملة (Received) فقط؛ فواتير Draft لسه مش قرار شراء نهائي.
-        var costAverages = _context.PurchaseInvoiceItems.AsNoTracking()
-            .Join(
-                _context.PurchaseInvoices.AsNoTracking().Where(pi => pi.Status == PurchaseInvoiceStatus.Received),
-                i => i.PurchaseInvoiceId, pi => pi.Id,
-                (i, pi) => new { i.ProductId, pi.BranchId, i.Quantity, i.UnitCost })
+        var costAverages = PurchaseCostBasis.ReceivedLines(_context)
             .GroupBy(x => new { x.ProductId, x.BranchId })
             .Select(g => new
             {
                 g.Key.ProductId,
                 g.Key.BranchId,
-                TotalQuantity = g.Sum(x => x.Quantity),
-                TotalCost = g.Sum(x => x.Quantity * x.UnitCost)
-            });
+                // بالوحدة الأساسية (كرتونة = 10 حبات) - كانت كمية الكرتونة تنعدّ حبة. راجع PurchaseCostBasis.
+                TotalQuantity = g.Sum(x => x.BaseQuantity),
+                TotalCost = g.Sum(x => x.TotalCost)
+            })
+            .Where(x => x.TotalQuantity > 0);
 
         var valued = stockQuery
             .Join(costAverages,

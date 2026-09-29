@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Application.Common.Interfaces;
-using SupermarketSystem.Domain.Purchasing;
+using SupermarketSystem.Application.Common.Costing;
 
 namespace SupermarketSystem.Application.Sales.Common;
 
@@ -29,18 +29,9 @@ public static class SaleUnitCosts
 
         var nonBatchProductIds = lines.Where(l => l.ProductBatchId is null)
             .Select(l => l.ProductId).Distinct().ToList();
-        var averageCosts = nonBatchProductIds.Count == 0
-            ? new Dictionary<Guid, decimal>()
-            : await context.PurchaseInvoiceItems.AsNoTracking()
-                .Where(i => nonBatchProductIds.Contains(i.ProductId))
-                .Join(
-                    context.PurchaseInvoices.AsNoTracking()
-                        .Where(pi => pi.Status == PurchaseInvoiceStatus.Received && pi.CreatedAtUtc <= nowUtc),
-                    i => i.PurchaseInvoiceId, pi => pi.Id,
-                    (i, pi) => new { i.ProductId, i.Quantity, i.UnitCost })
-                .GroupBy(x => x.ProductId)
-                .Select(g => new { ProductId = g.Key, TotalQuantity = g.Sum(x => x.Quantity), TotalCost = g.Sum(x => x.Quantity * x.UnitCost) })
-                .ToDictionaryAsync(x => x.ProductId, x => x.TotalCost / x.TotalQuantity, cancellationToken);
+        // بالوحدة الأساسية (كرتونة = 10 حبات) - راجع PurchaseCostBasis.
+        var averageCosts = await PurchaseCostBasis.AverageBaseUnitCostsAsync(
+            context, nonBatchProductIds, nowUtc, inclusive: true, cancellationToken);
 
         return (batchCosts, averageCosts);
     }

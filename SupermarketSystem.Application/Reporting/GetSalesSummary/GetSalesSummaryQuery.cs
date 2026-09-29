@@ -23,7 +23,10 @@ public sealed record SalesSummaryPeriodDto(
     decimal TotalReturnedAmount,
     // صافي الإيراد = المبيعات - المرتجعات. لا يشمل هامش الربح (يحتاج طريقة
     // حساب تكلفة غير مبنية بعد — قرار معلّق، غير مطروق هون عمدًا).
-    decimal NetRevenue);
+    decimal NetRevenue,
+    // توفير عروض الكمية (Promotions) بالفترة - منفصل عن TotalDiscounts (خصم يدوي). الإجمالي أصلًا بعد العرض،
+    // هاد بس بيبين كم العروض أعطت (29/9/2026 - كانت "الخصومات 0" رغم إنه في عرض انطبق).
+    decimal TotalPromotionDiscounts = 0m);
 
 public sealed record GetSalesSummaryResponse(
     SalesSummaryPeriodDto Period,
@@ -95,12 +98,17 @@ public sealed class GetSalesSummaryHandler
             return new SalesSummaryPeriodDto(fromUtc, toUtc, 0, 0m, 0m, 0m, 0m);
         }
 
+        var totalPromotions = await _context.SaleInvoiceItems.AsNoTracking()
+            .Join(invoices, i => i.SaleInvoiceId, s => s.Id, (i, s) => i.PromotionAmount)
+            .SumAsync(cancellationToken);
+
         return new SalesSummaryPeriodDto(
             fromUtc, toUtc,
             aggregate.InvoiceCount,
             aggregate.TotalSales,
             aggregate.TotalDiscounts,
             aggregate.TotalReturnedAmount,
-            aggregate.TotalSales - aggregate.TotalReturnedAmount);
+            aggregate.TotalSales - aggregate.TotalReturnedAmount,
+            totalPromotions);
     }
 }
