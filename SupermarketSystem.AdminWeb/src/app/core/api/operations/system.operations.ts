@@ -3,5 +3,7 @@ export enum SystemOperation {
   GetAdminSettings = 'admin-settings',
   UpdateAdminSetting = 'admin-settings',
   GetSecretSettings = 'secrets',
-  UpdateSecretSetting = 'secrets'
+  UpdateSecretSetting = 'secrets',
+  TimeSettings = 'time-settings',
+  UpdateTimeSettings = 'time-settings'
 }

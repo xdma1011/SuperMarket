@@ -67,7 +67,8 @@ public partial class LoginWindow : Window
         }
 
         _authSession.SetSession(result.Response);
-        _apiClient.SetAccessToken(result.Response.AccessToken);
+        // مع الـrefresh token: التوكن بيتجدّد تلقائيًا كل ما يخلص (15 دقيقة) - راجع ApiClient.TokenRefreshHandler.
+        _apiClient.SetTokens(result.Response.AccessToken, result.Response.RefreshToken);
 
         // بدء المزامنة التلقائية بالخلفية - أول لحظة عندنا فيها BranchId
         // وتوكن صالح. لو المستخدم بلا فرع افتراضي (حالة استثنائية جدًا)،

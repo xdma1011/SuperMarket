@@ -14,6 +14,7 @@ import {
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
 import { BarcodeScannerComponent } from './barcode-scanner/barcode-scanner.component';
 import { AuthService } from '../../core/services/auth.service';
+import { BusinessTimeService } from '../../core/services/business-time.service';
 
 interface CategoryDto {
   id: string;
@@ -106,6 +107,7 @@ type Tab = 'products' | 'categories';
 })
 export class CatalogComponent implements OnInit {
   private readonly auth = inject(AuthService);
+  private readonly businessTime = inject(BusinessTimeService);
 
   readonly activeTab = signal<Tab>('products');
 
@@ -776,8 +778,8 @@ export class CatalogComponent implements OnInit {
     const today = new Date();
     const inMonth = new Date(today);
     inMonth.setMonth(inMonth.getMonth() + 1);
-    this.newPromotionStartDate = today.toISOString().slice(0, 10);
-    this.newPromotionEndDate = inMonth.toISOString().slice(0, 10);
+    this.newPromotionStartDate = this.businessTime.localDate(today);
+    this.newPromotionEndDate = this.businessTime.localDate(inMonth);
   }
 
   closeAddPromotionForm(): void {
@@ -813,8 +815,9 @@ export class CatalogComponent implements OnInit {
           bundleQuantity: this.newPromotionBundleQuantity,
           bundlePrice: this.newPromotionBundlePrice,
           maxQuantityPerInvoice: this.newPromotionMaxQuantityPerInvoice,
-          startAtUtc: `${this.newPromotionStartDate}T00:00:00.000Z`,
-          endAtUtc: `${this.newPromotionEndDate}T23:59:59.000Z`,
+          // أيام بتوقيت المحل (29/9/2026) - كانت نص ليل UTC (الساعة 3 الصبح بالأردن).
+          startAtUtc: this.businessTime.dayStartUtc(this.newPromotionStartDate),
+          endAtUtc: this.businessTime.dayEndUtc(this.newPromotionEndDate),
           branchIds: null
         }, { productId: this.editingProductId })
       );

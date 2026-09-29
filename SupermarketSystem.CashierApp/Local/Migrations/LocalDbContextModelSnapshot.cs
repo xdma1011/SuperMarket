@@ -219,6 +219,9 @@ namespace SupermarketSystem.CashierApp.Local.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTime?>("LastPaymentMethodsRefreshAtUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("LastSuccessfulSyncAtLocal")
                         .HasColumnType("TEXT");
 

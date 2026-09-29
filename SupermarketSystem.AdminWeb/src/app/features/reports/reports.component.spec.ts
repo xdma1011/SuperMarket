@@ -245,14 +245,14 @@ describe('ReportsComponent', () => {
       expect((reportCall?.args[3] as Record<string, unknown>)['productId']).toBe('p1');
     });
 
-    it('فترة التقرير بتشمل يوم "إلى" كامل - عمليات اليوم ما بتنقطع', () => {
+    it('فترة التقرير بتشمل يوم "إلى" كامل بتوقيت المحل (+3 افتراضيًا) - مش توقيت الجهاز', () => {
       component.fromDate = '2026-09-24';
       component.toDate = '2026-09-24';
-      const start = new Date(component.rangeStartUtc());
-      const end = new Date(component.rangeEndUtc());
-      const eveningLocal = new Date(2026, 8, 24, 21, 30);
-      expect(start <= eveningLocal && eveningLocal <= end).toBeTrue();
-      expect(end.getTime() - start.getTime()).toBe(24 * 60 * 60 * 1000 - 1);
+      expect(component.rangeStartUtc()).toBe('2026-09-23T21:00:00.000Z');
+      expect(component.rangeEndUtc()).toBe('2026-09-24T20:59:59.999Z');
+      // بيعة الساعة 11:30 بليل بتوقيت المحل (20:30 UTC) جوّا يوم 24
+      const lateEvening = new Date('2026-09-24T20:30:00Z');
+      expect(new Date(component.rangeStartUtc()) <= lateEvening && lateEvening <= new Date(component.rangeEndUtc())).toBeTrue();
     });
 
     it('يترجم القيمة المنطقية لنعم/لا', () => {
@@ -274,6 +274,21 @@ describe('ReportsComponent', () => {
 
     it('يرجّع نص عادي لأي نوع آخر (text)', () => {
       expect(component.formatCell('نص حر', { type: 'text' })).toBe('نص حر');
+    });
+  });
+
+  describe('تقسيم التقارير حسب الموضوع', () => {
+    it('كل تقرير (العادي والخاص) بيبين مرة وحدة بالزبط، وبلا "أخرى" هلق', () => {
+      const ids = component.reportNav.flatMap(g => g.items.map(i => i.id));
+      const expected = ['sales-summary', 'capital-value', 'supplier-debts', 'product-margin', 'customer-debts', ...component.standardReports.map(r => r.id)];
+      expect([...ids].sort()).toEqual([...expected].sort());
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(component.reportNav.map(g => g.title)).not.toContain('أخرى');
+    });
+
+    it('المجموعات بالعربي وأول مجموعة المبيعات', () => {
+      expect(component.reportNav[0].title).toBe('المبيعات');
+      expect(component.reportNav[0].items[0]).toEqual({ id: 'sales-summary', title: 'ملخّص المبيعات' });
     });
   });
 });

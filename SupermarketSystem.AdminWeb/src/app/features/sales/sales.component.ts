@@ -7,6 +7,7 @@ import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { SalesOperation, ReportsOperation, PaymentMethodsOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
+import { BusinessTimeService } from '../../core/services/business-time.service';
 
 interface SaleInvoiceListItemDto {
   id: string;
@@ -86,6 +87,7 @@ export class SalesComponent implements OnInit {
 
   /** اختياري: الاختبارات بلا Router. "?search=SI-12" من كبسة تنبيه بتفتح الصفحة والبحث جاهز. */
   private readonly route = inject(ActivatedRoute, { optional: true });
+  private readonly businessTime = inject(BusinessTimeService);
 
   /** فلاتر (28/9/2026): من/إلى (أيام محلية كاملة)، الكاشير، طريقة الدفع. */
   fromDate = '';
@@ -191,9 +193,9 @@ export class SalesComponent implements OnInit {
           pageNumber: this.pageNumber(),
           pageSize: this.pageSize(),
           search: this.searchQuery() || undefined,
-          // أيام محلية كاملة (نفس إصلاح التقارير 24/9: "إلى" لآخر اليوم مش أوله).
-          fromUtc: this.fromDate ? new Date(`${this.fromDate}T00:00:00`).toISOString() : undefined,
-          toUtc: this.toDate ? new Date(`${this.toDate}T23:59:59.999`).toISOString() : undefined,
+          // أيام كاملة بتوقيت المحل ("إلى" لآخر اليوم مش أوله).
+          fromUtc: this.fromDate ? this.businessTime.dayStartUtc(this.fromDate) : undefined,
+          toUtc: this.toDate ? this.businessTime.dayEndUtc(this.toDate) : undefined,
           cashierUserId: this.cashierUserId || undefined,
           paymentMethodId: this.filterPaymentMethodId || undefined
         })

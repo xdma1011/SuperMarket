@@ -27,6 +27,14 @@ public sealed class AuthSession
         BranchId = response.BranchId;
     }
 
+    /// <summary>بعد تجديد تلقائي للتوكن (ApiClient.TokensRefreshed) - الـrefresh token القديم صار ملغى.</summary>
+    public void UpdateTokens(RefreshTokenResponseDto tokens)
+    {
+        AccessToken = tokens.AccessToken;
+        AccessTokenExpiresAtUtc = tokens.AccessTokenExpiresAtUtc;
+        RefreshToken = tokens.RefreshToken;
+    }
+
     public void Clear()
     {
         AccessToken = null;

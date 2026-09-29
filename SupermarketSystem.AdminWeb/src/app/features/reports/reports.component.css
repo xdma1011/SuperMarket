@@ -39,6 +39,7 @@
 .nav-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 
 .nav-divider { height: 1px; background: var(--line); margin: 6px 4px; }
+.nav-group-title { font-size: 11px; font-weight: 700; color: var(--ink-2); padding: 6px 10px 2px; letter-spacing: .02em; }
 
 .reports-content { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 

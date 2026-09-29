@@ -7,8 +7,9 @@ import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { ReportsOperation, PurchaseInvoicesOperation, SalesOperation, BranchesOperation, ProductsOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
-import { REPORT_CONFIGS, ReportConfig } from './report-configs';
+import { REPORT_CONFIGS, ReportConfig, buildReportNav } from './report-configs';
 import { AuthService } from '../../core/services/auth.service';
+import { BusinessTimeService } from '../../core/services/business-time.service';
 
 interface PagedResult<T> {
   items: T[];
@@ -108,8 +109,11 @@ type SpecialReportId = 'sales-summary' | 'capital-value' | 'supplier-debts' | 'p
 })
 export class ReportsComponent implements OnInit {
   private readonly auth = inject(AuthService);
+  private readonly businessTime = inject(BusinessTimeService);
 
   readonly standardReports = REPORT_CONFIGS;
+  /** القائمة الجانبية مقسّمة حسب الموضوع (REPORT_GROUPS). */
+  readonly reportNav = buildReportNav();
   readonly activeReportId = signal<string>(REPORT_CONFIGS[0].id);
   private readonly SPECIAL_IDS: SpecialReportId[] = ['sales-summary', 'capital-value', 'supplier-debts', 'product-margin', 'customer-debts'];
   readonly isSpecial = computed(() => this.SPECIAL_IDS.includes(this.activeReportId() as SpecialReportId));
@@ -400,44 +404,27 @@ export class ReportsComponent implements OnInit {
       return Number(value).toLocaleString('en-US');
     }
     if (column.type === 'date') {
-      return new Date(value as string).toLocaleString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+      return this.businessTime.formatDateTime(value as string);
     }
     return String(value);
   }
 
   /**
-   * "من"/"إلى" أيام تقويم محلية (توقيت الجهاز)، والفترة بتشمل يوم "إلى" كامل. كانت
-   * new Date('yyyy-mm-dd') = منتصف ليل UTC بداية اليوم، فالافتراضي (إلى = اليوم) كان
-   * يقطع كل عمليات اليوم - إرجاع أو إلغاء صار الصبح ما كان يبين بالتقارير لحد بكرة.
+   * "من"/"إلى" أيام كاملة بتوقيت المحل (BusinessTimeService - مش توقيت الجهاز)، والفترة بتشمل يوم "إلى" كامل.
    */
   rangeStartUtc(): string {
-    return this.parseLocalDate(this.fromDate).toISOString();
+    return this.businessTime.dayStartUtc(this.fromDate);
   }
 
   rangeEndUtc(): string {
-    const end = this.parseLocalDate(this.toDate);
-    end.setDate(end.getDate() + 1);
-    end.setMilliseconds(end.getMilliseconds() - 1);
-    return end.toISOString();
-  }
-
-  private parseLocalDate(value: string): Date {
-    const [year, month, day] = value.split('-').map(Number);
-    return new Date(year, month - 1, day);
-  }
-
-  private formatLocalDate(date: Date): string {
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    return this.businessTime.dayEndUtc(this.toDate);
   }
 
   private defaultFromDate(): string {
-    const d = new Date();
-    d.setDate(d.getDate() - 30);
-    return this.formatLocalDate(d);
+    return this.businessTime.addDays(this.businessTime.localDate(), -30);
   }
 
   private defaultToDate(): string {
-    return this.formatLocalDate(new Date());
+    return this.businessTime.localDate();
   }
 }

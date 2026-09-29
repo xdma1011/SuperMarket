@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { SystemOperation } from '../../core/api/operations';
+import { TimeSettingsPanelComponent } from './time-settings-panel.component';
 
 // أسماء AdminSettingDataType بالـC# - الباك إند بيسلسل الـenums كنصوص (JsonStringEnumConverter عام).
 const AdminSettingDataType = { Boolean: 'Boolean', Decimal: 'Decimal', String: 'String' } as const;
@@ -36,7 +37,7 @@ interface EditableSetting extends AdminSettingDto {
 @Component({
   selector: 'app-admin-settings',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TimeSettingsPanelComponent],
   templateUrl: './admin-settings.component.html',
   styleUrl: './admin-settings.component.css'
 })

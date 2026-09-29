@@ -234,34 +234,26 @@ public partial class SaleWindow : Window
     /// </summary>
     private async Task LoadPaymentMethodsAsync()
     {
-        using (var db = new LocalDbContext(_dbPath))
+        // المحفوظ محليًا دايمًا (29/9/2026) - بتتحدّث مرة باليوم بالمزامنة الخلفية أو بـ"مزامنة الآن" (PaymentMethodStore).
+        // السيرفر هون بس لو الجهاز لسه ما خزّن ولا طريقة دفع (أول تشغيل)، وبنخزّن اللي بيرجع فورًا.
+        var methods = PaymentMethodStore.Load(_dbPath);
+        if (methods.Count == 0)
         {
-            var localMethods = db.PaymentMethods
-                .OrderBy(m => m.Name)
-                .Select(m => new PaymentMethodDto(m.Id, m.Name, m.RequiresExternalReference))
-                .ToList();
-
-            if (localMethods.Count > 0)
-            {
-                _paymentMethods = localMethods;
-                PaymentMethodCombo.ItemsSource = _paymentMethods;
-                PaymentMethodCombo.SelectedIndex = 0;
-            }
+            var live = await _apiClient.GetPaymentMethodsAsync(CancellationToken.None);
+            await PaymentMethodStore.SaveAsync(_dbPath, live, DateTime.UtcNow, CancellationToken.None);
+            methods = live;
         }
 
-        // محاولة تحديث حية بالخلفية - لو نجحت ولقت نتائج، تستبدل القائمة
-        // المعروضة بأحدث نسخة (نادر يتغيّر شي، بس لو صار، نعكسه فورًا).
-        var liveMethods = await _apiClient.GetPaymentMethodsAsync(CancellationToken.None);
-        if (liveMethods.Count > 0)
-        {
-            _paymentMethods = liveMethods;
-            var previousSelection = (PaymentMethodCombo.SelectedItem as PaymentMethodDto)?.Id;
-            PaymentMethodCombo.ItemsSource = _paymentMethods;
-            var matchIndex = _paymentMethods.FindIndex(m => m.Id == previousSelection);
-            PaymentMethodCombo.SelectedIndex = matchIndex >= 0 ? matchIndex : 0;
-        }
+        var previousSelection = (PaymentMethodCombo.SelectedItem as PaymentMethodDto)?.Id;
+        _paymentMethods = methods;
+        PaymentMethodCombo.ItemsSource = _paymentMethods;
+        var matchIndex = _paymentMethods.FindIndex(m => m.Id == previousSelection);
+        PaymentMethodCombo.SelectedIndex = _paymentMethods.Count == 0 ? -1 : (matchIndex >= 0 ? matchIndex : 0);
 
-        ConnectionStatusText.Text = _paymentMethods.Count > 0 ? "متصل" : "بلا اتصال وبلا طرق دفع محفوظة - لازم اتصال أول مرة";
+        if (_paymentMethods.Count == 0)
+        {
+            ConnectionStatusText.Text = "ما في طرق دفع محفوظة لسه - لازم اتصال أول مرة";
+        }
     }
 
     /// <summary>
@@ -1116,6 +1108,9 @@ public partial class SaleWindow : Window
         HeldSalesButton.Content = $"📋 المعلّقة ({count})";
         HeldSalesButton.FontWeight = count > 0 ? FontWeights.Bold : FontWeights.Normal;
     }
+
+    /// <summary>الجلسة انتهت من السيرفر (29/9/2026) - السلة المفتوحة بتنحفظ بالمعلّقة قبل ما ترجع شاشة الدخول، فما بتضيع.</summary>
+    public bool HoldCartForSessionEnd() => HoldCurrentCart();
 
     /// <summary>بيحط السلة الحالية بملف المعلّقة وبيفضّي الشاشة للزبون اللي بعده - false لو السلة فاضية.</summary>
     private bool HoldCurrentCart()

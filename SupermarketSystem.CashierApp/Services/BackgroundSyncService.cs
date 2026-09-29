@@ -98,7 +98,8 @@ public sealed class BackgroundSyncService
 
         try
         {
-            await RunOneCycleAsync(cts.Token);
+            // "مزامنة الآن" بتحدّث طرق الدفع دايمًا (مش بس مرة باليوم).
+            await RunOneCycleAsync(cts.Token, forcePaymentMethodsRefresh: true);
 
             // ApiClient بيبلع كل استثناء (حتى OperationCanceledException) ويرجّع
             // null/فشل هادئ - نفس فلسفة "لا نفجّر لأجل نت مقطوع" (راجع تعليقات
@@ -131,7 +132,7 @@ public sealed class BackgroundSyncService
         _manualSyncCts?.Cancel();
     }
 
-    private async Task RunOneCycleAsync(CancellationToken cancellationToken)
+    private async Task RunOneCycleAsync(CancellationToken cancellationToken, bool forcePaymentMethodsRefresh = false)
     {
         if (_isRunning || _branchId is null)
         {
@@ -148,7 +149,7 @@ public sealed class BackgroundSyncService
             // فتحات الصندوق المحفوظة بلا نت (28/9/2026) - نفس طابور البيعات المعلّقة بفكرته.
             await DrawerOpenQueue.FlushAsync(System.IO.Path.GetDirectoryName(_dbPath) ?? "", _apiClient, cancellationToken);
 
-            await RefreshPaymentMethodsAsync(cancellationToken);
+            await RefreshPaymentMethodsAsync(forcePaymentMethodsRefresh, cancellationToken);
 
             var catalogSync = new CatalogSyncService(_dbPath, _apiClient, _catalogPageSize);
             var result = await catalogSync.SyncIfNeededAsync(_branchId.Value, cancellationToken);
@@ -178,30 +179,17 @@ public sealed class BackgroundSyncService
     }
 
     /// <summary>
-    /// نادرًا ما تتغيّر — استبدال كامل بسيط بدل مقارنة تفصيلية (نفس
-    /// فلسفة CatalogSyncService.ApplyPageToLocalDb: أبسط من تعديل جزئي،
-    /// وصحيح دائمًا). لو فشل الاتصال، الجدول المحلي القديم يضل كما هو،
-    /// لا يُمسح — تخريب جزئي (مسح بلا استبدال) أسوأ من بيانات قديمة شوي.
+    /// طرق الدفع نادرًا ما تتغيّر (29/9/2026): التحديث التلقائي مرة كل 24 ساعة (أو لو الجدول فاضي)، و"مزامنة الآن"
+    /// بتحدّثها دايمًا. لو فشل الاتصال، المحفوظ محليًا بيضل زي ما هو - راجع PaymentMethodStore.
     /// </summary>
-    private async Task RefreshPaymentMethodsAsync(CancellationToken cancellationToken)
+    private async Task RefreshPaymentMethodsAsync(bool force, CancellationToken cancellationToken)
     {
-        var methods = await _apiClient.GetPaymentMethodsAsync(cancellationToken);
-        if (methods.Count == 0)
+        if (!force && !PaymentMethodStore.NeedsRefresh(_dbPath, DateTime.UtcNow))
         {
             return;
         }
 
-        using var db = new Local.LocalDbContext(_dbPath);
-        db.PaymentMethods.RemoveRange(db.PaymentMethods);
-        foreach (var method in methods)
-        {
-            db.PaymentMethods.Add(new Local.LocalPaymentMethod
-            {
-                Id = method.Id,
-                Name = method.Name,
-                RequiresExternalReference = method.RequiresExternalReference
-            });
-        }
-        await db.SaveChangesAsync(cancellationToken);
+        var methods = await _apiClient.GetPaymentMethodsAsync(cancellationToken);
+        await PaymentMethodStore.SaveAsync(_dbPath, methods, DateTime.UtcNow, cancellationToken);
     }
 }

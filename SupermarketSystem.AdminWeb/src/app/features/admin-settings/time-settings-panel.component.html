@@ -1,0 +1,49 @@
+<section class="time-panel">
+  <div class="time-head">
+    <div>
+      <h2>توقيت المحل</h2>
+      <p class="hint">
+        كل الأوقات بتنخزن UTC، وبتنعرض وبتنحسب (أيام التقارير، أشهر كشف الربح) بتوقيت المحل.
+        @if (current(); as c) {
+          هلق: <strong class="mono">{{ storeTime() }}</strong> ({{ offsetLabel(c.currentOffsetMinutes) }})
+        }
+      </p>
+    </div>
+  </div>
+
+  @if (message()) { <div class="alert-banner success">{{ message() }}</div> }
+  @if (error()) { <div class="alert-banner">{{ error() }}</div> }
+
+  <div class="time-grid">
+    <label class="radio-row">
+      <input type="radio" name="timeMode" value="zone" [(ngModel)]="mode" />
+      <span>حسب المنطقة <small>(بيتبع التوقيت الصيفي/الشتوي للمنطقة تلقائيًا)</small></span>
+    </label>
+    <div class="zone-row" [class.disabled]="mode !== 'zone'">
+      <select [(ngModel)]="zoneId" [disabled]="mode !== 'zone'" aria-label="المنطقة الزمنية">
+        @for (z of zones; track z) {
+          <option [value]="z">{{ z }}</option>
+        }
+      </select>
+      @if (deviceZone) {
+        <button type="button" class="btn-ghost" [disabled]="mode !== 'zone'" (click)="useDeviceZone()">📍 من هالجهاز ({{ deviceZone }})</button>
+      }
+    </div>
+
+    <label class="radio-row">
+      <input type="radio" name="timeMode" value="fixed" [(ngModel)]="mode" />
+      <span>فرق يدوي ثابت عن UTC <small>(لما قرار التوقيت الشتوي بالأردن يختلف عن المنطقة - مثلًا +2 أو +3)</small></span>
+    </label>
+    <div class="zone-row" [class.disabled]="mode !== 'fixed'">
+      <select [(ngModel)]="fixedOffset" [disabled]="mode !== 'fixed'" aria-label="الفرق عن UTC">
+        @for (o of offsetOptions; track o) {
+          <option [ngValue]="o">{{ offsetLabel(o) }}</option>
+        }
+      </select>
+    </div>
+  </div>
+
+  <div class="time-actions">
+    <button type="button" class="btn-primary" [disabled]="saving()" (click)="save()">{{ saving() ? 'جارٍ الحفظ…' : 'حفظ التوقيت' }}</button>
+  </div>
+</section>

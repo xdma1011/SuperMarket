@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -71,6 +72,10 @@ public sealed record LoginResponseDto(
     Guid UserId, string FullName, Guid? BranchId, bool PreviousSessionRevoked);
 
 public sealed record LoginResult(bool Success, LoginResponseDto? Response, string? ErrorMessage);
+
+/// <summary>مطابق حرفيًا لـRefreshTokenResponse بالباك إند.</summary>
+public sealed record RefreshTokenResponseDto(
+    string AccessToken, DateTime AccessTokenExpiresAtUtc, string RefreshToken, DateTime RefreshTokenExpiresAtUtc);
 
 /// <summary>مطابق حرفيًا لـPaymentMethodDto بالباك إند.</summary>
 public sealed record PaymentMethodDto(Guid Id, string Name, bool RequiresExternalReference);
@@ -221,19 +226,176 @@ public sealed class ApiClient
         Converters = { new JsonStringEnumConverter() }
     };
 
+    private readonly Uri _baseAddress;
+
     public ApiClient(AppConfig config)
     {
-        _http = new HttpClient { BaseAddress = new Uri(config.ApiBaseUrl.TrimEnd('/') + "/") };
+        _baseAddress = new Uri(config.ApiBaseUrl.TrimEnd('/') + "/");
+        _http = new HttpClient(new TokenRefreshHandler(this) { InnerHandler = new HttpClientHandler() }) { BaseAddress = _baseAddress };
         if (!string.IsNullOrWhiteSpace(config.AccessToken))
         {
-            _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", config.AccessToken);
+            SetAccessToken(config.AccessToken);
         }
     }
 
-    /// <summary>يُستدعى بعد نجاح تسجيل الدخول - كل طلب بعد هيك بيحمل التوكن تلقائيًا.</summary>
-    public void SetAccessToken(string accessToken)
+    // ===== التوكن وتجديده (29/9/2026) =====
+    // توكن الوصول عمره 15 دقيقة، والكاشير ما كان يجدّده أبدًا: بعد ربع ساعة من الدخول كل بيعة/مزامنة بتاخد 401
+    // (البيعات بتضل بالطابور بس ما بتوصل). هلق: أي 401 على طلب عادي = تجديد بالـrefresh token وإعادة الطلب مرة؛
+    // لو السيرفر رفض التجديد نفسه (الجلسة انلغت من الإدارة، المستخدم انوقف، أو الـrefresh خلص) = SessionEnded،
+    // والتطبيق بيرجع لشاشة الدخول. انقطاع نت وقت التجديد ما بيطلّع حدا - بنرجّع الـ401 وبنجرّب المرة الجاية.
+
+    public string? AccessToken { get; private set; }
+    public string? RefreshToken { get; private set; }
+
+    /// <summary>بعد كل تجديد ناجح - AuthSession بتتحدّث منها (عشان الخروج يبعت الـrefresh token الجديد).</summary>
+    public event EventHandler<RefreshTokenResponseDto>? TokensRefreshed;
+
+    /// <summary>السيرفر رفض تجديد الجلسة - مرة وحدة لكل جلسة.</summary>
+    public event EventHandler? SessionEnded;
+
+    private readonly SemaphoreSlim _refreshGate = new(1, 1);
+    private bool _sessionEndedRaised;
+
+    /// <summary>يُستدعى بعد نجاح تسجيل الدخول - كل طلب بعد هيك بيحمل التوكن تلقائيًا (بلا تجديد تلقائي).</summary>
+    public void SetAccessToken(string accessToken) => SetTokens(accessToken, RefreshToken);
+
+    /// <summary>بعد الدخول: التوكن + الـrefresh token (للتجديد التلقائي).</summary>
+    public void SetTokens(string accessToken, string? refreshToken)
     {
+        AccessToken = accessToken;
+        RefreshToken = refreshToken;
+        _sessionEndedRaised = false;
         _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+    }
+
+    public void ClearTokens()
+    {
+        AccessToken = null;
+        RefreshToken = null;
+        _http.DefaultRequestHeaders.Authorization = null;
+    }
+
+    internal enum RefreshOutcome { Refreshed, AlreadyRefreshed, Rejected, Unavailable }
+
+    /// <summary>تجديد واحد بنفس اللحظة - طلبات متوازية أخدت 401 بنفس التوكن بتستنى نفس التجديد.</summary>
+    internal async Task<RefreshOutcome> RefreshAfterUnauthorizedAsync(string? tokenUsed, CancellationToken cancellationToken)
+    {
+        await _refreshGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (AccessToken is not null && tokenUsed is not null && AccessToken != tokenUsed)
+            {
+                return RefreshOutcome.AlreadyRefreshed;
+            }
+
+            if (RefreshToken is not { } refreshToken)
+            {
+                return RefreshOutcome.Unavailable;
+            }
+
+            HttpResponseMessage response;
+            try
+            {
+                // HttpClient منفصل بلا معالج التجديد - ما بدنا تجديد جوّا تجديد.
+                using var raw = new HttpClient { BaseAddress = _baseAddress };
+                response = await raw.PostAsJsonAsync("auth/refresh", new LogoutRequestDto(refreshToken), cancellationToken);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                return RefreshOutcome.Unavailable;
+            }
+
+            using (response)
+            {
+                if (response.IsSuccessStatusCode)
+                {
+                    var tokens = await response.Content.ReadFromJsonAsync<RefreshTokenResponseDto>(cancellationToken: cancellationToken);
+                    if (tokens is null)
+                    {
+                        return RefreshOutcome.Unavailable;
+                    }
+
+                    AccessToken = tokens.AccessToken;
+                    RefreshToken = tokens.RefreshToken;
+                    _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.AccessToken);
+                    TokensRefreshed?.Invoke(this, tokens);
+                    return RefreshOutcome.Refreshed;
+                }
+
+                if ((int)response.StatusCode is 400 or 401 or 403)
+                {
+                    if (!_sessionEndedRaised)
+                    {
+                        _sessionEndedRaised = true;
+                        SessionEnded?.Invoke(this, EventArgs.Empty);
+                    }
+
+                    return RefreshOutcome.Rejected;
+                }
+
+                return RefreshOutcome.Unavailable;
+            }
+        }
+        finally
+        {
+            _refreshGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// 401 على طلب عادي = تجديد وإعادة الطلب مرة وحدة بالتوكن الجديد. طلبات الدخول/التجديد/الخروج نفسها برّا.
+    /// المحتوى بينحفظ بالذاكرة قبل الإرسال عشان يتبعت مرة تانية.
+    /// </summary>
+    private sealed class TokenRefreshHandler : DelegatingHandler
+    {
+        private readonly ApiClient _owner;
+
+        public TokenRefreshHandler(ApiClient owner) => _owner = owner;
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var path = request.RequestUri?.AbsolutePath ?? "";
+            var isAuthCall = path.Contains("/auth/login", StringComparison.OrdinalIgnoreCase)
+                             || path.Contains("/auth/refresh", StringComparison.OrdinalIgnoreCase)
+                             || path.Contains("/auth/logout", StringComparison.OrdinalIgnoreCase);
+
+            if (request.Content is not null && !isAuthCall)
+            {
+                await request.Content.LoadIntoBufferAsync();
+            }
+
+            var response = await base.SendAsync(request, cancellationToken);
+            if (response.StatusCode != HttpStatusCode.Unauthorized || isAuthCall || _owner.RefreshToken is null)
+            {
+                return response;
+            }
+
+            var outcome = await _owner.RefreshAfterUnauthorizedAsync(request.Headers.Authorization?.Parameter, cancellationToken);
+            if (outcome is not (RefreshOutcome.Refreshed or RefreshOutcome.AlreadyRefreshed) || _owner.AccessToken is null)
+            {
+                return response;
+            }
+
+            var retry = new HttpRequestMessage(request.Method, request.RequestUri) { Version = request.Version };
+            foreach (var header in request.Headers.Where(h => !h.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase)))
+            {
+                retry.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+
+            retry.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _owner.AccessToken);
+            if (request.Content is not null)
+            {
+                var bytes = await request.Content.ReadAsByteArrayAsync(cancellationToken);
+                retry.Content = new ByteArrayContent(bytes);
+                foreach (var header in request.Content.Headers)
+                {
+                    retry.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+                }
+            }
+
+            response.Dispose();
+            return await base.SendAsync(retry, cancellationToken);
+        }
     }
 
     /// <summary>

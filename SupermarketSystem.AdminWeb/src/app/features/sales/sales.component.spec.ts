@@ -199,8 +199,9 @@ describe('SalesComponent', () => {
 
       const query = apiClientSpy.get.calls.mostRecent().args[3] as Record<string, unknown>;
       expect(component.pageNumber()).toBe(1);
-      expect(query['fromUtc']).toBe(new Date('2026-09-01T00:00:00').toISOString());
-      expect(query['toUtc']).toBe(new Date('2026-09-28T23:59:59.999').toISOString());
+      // أيام كاملة بتوقيت المحل (+3 افتراضيًا)، مش توقيت الجهاز.
+      expect(query['fromUtc']).toBe('2026-08-31T21:00:00.000Z');
+      expect(query['toUtc']).toBe('2026-09-28T20:59:59.999Z');
       expect(query['cashierUserId']).toBe('u1');
       expect(query['paymentMethodId']).toBe('pm1');
       expect(component.hasFilters).toBeTrue();

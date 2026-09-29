@@ -271,3 +271,46 @@ export const REPORT_CONFIGS: ReportConfig[] = [
     ]
   }
 ];
+
+/** التقارير الخاصة (شكلها مختلف، معالجة بقوالب منفصلة بالصفحة). */
+export const SPECIAL_REPORT_TITLES: Record<string, string> = {
+  'sales-summary': 'ملخّص المبيعات',
+  'capital-value': 'رأس المال الحالي',
+  'supplier-debts': 'ديون الموردين',
+  'product-margin': 'هامش الربح لكل منتج',
+  'customer-debts': 'ديون الزبائن'
+};
+
+export interface ReportGroup {
+  title: string;
+  ids: string[];
+}
+
+/**
+ * تقسيم التقارير حسب الموضوع (29/9/2026، طلب صاحب المشروع - كانت 21 تقرير بقائمة وحدة). أي تقرير جديد مش بمجموعة
+ * بيبين تحت "أخرى" تلقائيًا (ما بيختفي) - وفي اختبار بيتأكد إن كل تقرير بمكان واحد بالزبط.
+ */
+export const REPORT_GROUPS: ReportGroup[] = [
+  { title: 'المبيعات', ids: ['sales-summary', 'voided-sales', 'manual-discounts', 'best-customers'] },
+  { title: 'الأرباح والمال', ids: ['product-margin', 'capital-value', 'customer-debts'] },
+  { title: 'الإرجاعات', ids: ['recent-returns', 'recent-returned-items', 'return-frequency'] },
+  { title: 'المخزون', ids: ['reorder-needed', 'stagnant-products', 'consumption-levels', 'expiring-batches', 'negative-stock', 'waste-log'] },
+  { title: 'الموردين', ids: ['supplier-debts', 'supplier-payment-due', 'supplier-price-comparison'] },
+  { title: 'الكاشير والصندوق', ids: ['cashier-variance', 'best-cashiers', 'drawer-opens'] }
+];
+
+/** المجموعات بعناوين التقارير، و"أخرى" لأي تقرير مش مصنّف. */
+export function buildReportNav(): { title: string; items: { id: string; title: string }[] }[] {
+  const titleOf = (id: string) => SPECIAL_REPORT_TITLES[id] ?? REPORT_CONFIGS.find(r => r.id === id)?.title ?? id;
+  const allIds = [...Object.keys(SPECIAL_REPORT_TITLES), ...REPORT_CONFIGS.map(r => r.id)];
+  const grouped = new Set(REPORT_GROUPS.flatMap(g => g.ids));
+  const nav = REPORT_GROUPS.map(g => ({
+    title: g.title,
+    items: g.ids.filter(id => allIds.includes(id)).map(id => ({ id, title: titleOf(id) }))
+  }));
+  const others = allIds.filter(id => !grouped.has(id));
+  if (others.length > 0) {
+    nav.push({ title: 'أخرى', items: others.map(id => ({ id, title: titleOf(id) })) });
+  }
+  return nav;
+}

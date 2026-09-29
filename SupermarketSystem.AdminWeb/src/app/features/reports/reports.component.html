@@ -2,32 +2,22 @@
   <div class="head-text">
     <span class="crumb">التقارير</span>
     <h1>مركز التقارير</h1>
-    <span class="subtitle">21 تقريرًا — مبيعات، مخزون، موردين، زبائن، وأداء.</span>
+    <span class="subtitle">مقسّمة حسب الموضوع — مبيعات، أرباح، إرجاعات، مخزون، موردين، وكاشير.</span>
   </div>
 </div>
 
 <div class="reports-layout">
   <nav class="reports-nav">
-    <button type="button" class="nav-item" [class.active]="activeReportId() === 'sales-summary'" (click)="selectReport('sales-summary')">
-      ملخّص المبيعات
-    </button>
-    <button type="button" class="nav-item" [class.active]="activeReportId() === 'capital-value'" (click)="selectReport('capital-value')">
-      رأس المال الحالي
-    </button>
-    <button type="button" class="nav-item" [class.active]="activeReportId() === 'supplier-debts'" (click)="selectReport('supplier-debts')">
-      ديون الموردين
-    </button>
-    <button type="button" class="nav-item" [class.active]="activeReportId() === 'product-margin'" (click)="selectReport('product-margin')">
-      هامش الربح لكل منتج
-    </button>
-    <button type="button" class="nav-item" [class.active]="activeReportId() === 'customer-debts'" (click)="selectReport('customer-debts')">
-      ديون الزبائن
-    </button>
-    <div class="nav-divider"></div>
-    @for (r of standardReports; track r.id) {
-      <button type="button" class="nav-item" [class.active]="activeReportId() === r.id" (click)="selectReport(r.id)">
-        {{ r.title }}
-      </button>
+    @for (group of reportNav; track group.title; let first = $first) {
+      @if (!first) {
+        <div class="nav-divider"></div>
+      }
+      <span class="nav-group-title">{{ group.title }}</span>
+      @for (r of group.items; track r.id) {
+        <button type="button" class="nav-item" [class.active]="activeReportId() === r.id" (click)="selectReport(r.id)">
+          {{ r.title }}
+        </button>
+      }
     }
   </nav>
 

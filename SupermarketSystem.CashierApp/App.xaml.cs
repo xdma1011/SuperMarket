@@ -50,8 +50,54 @@ public partial class App : Application
         _ = RefreshStoreBrandingCacheAsync(apiClient, dataDir);
         _ = RefreshPaymentSettingsCacheAsync(apiClient, dataDir);
 
+        // التوكن بيتجدّد تلقائيًا (ApiClient) - الجلسة المحلية لازم تمشي معه (الخروج بيبعت الـrefresh token الجديد).
+        apiClient.TokensRefreshed += (_, tokens) => authSession.UpdateTokens(tokens);
+
+        // السيرفر رفض تجديد الجلسة: انلغت من الإدارة، أو المستخدم انوقف، أو الـrefresh خلص - رجوع لشاشة الدخول.
+        apiClient.SessionEnded += (_, _) => Dispatcher.InvokeAsync(() =>
+            ReturnToLoginAfterSessionEnded(apiClient, authSession, dbPath, backgroundSync, receiptPrinter, config.AdminScreenPassword));
+
         var loginWindow = new LoginWindow(apiClient, authSession, dbPath, backgroundSync, receiptPrinter, config.AdminScreenPassword);
         loginWindow.Show();
+    }
+
+    /// <summary>
+    /// الكاشير المطرود (29/9/2026): السلة المفتوحة بتنحفظ بالمعلّقة، المزامنة بتوقف، وبترجع شاشة دخول نظيفة. البيعات
+    /// المعلّقة بطابور local.db ما بتنلمس - بتنبعت بعد أول دخول. شاشة الدخول بتنفتح قبل ما تتسكر الباقي (غير هيك
+    /// التطبيق بيطفي مع آخر نافذة).
+    /// </summary>
+    private void ReturnToLoginAfterSessionEnded(
+        ApiClient apiClient, AuthSession authSession, string dbPath, BackgroundSyncService backgroundSync,
+        Services.Printing.ReceiptPrinterService receiptPrinter, string adminScreenPassword)
+    {
+        if (!authSession.IsLoggedIn)
+        {
+            return; // خرج أصلًا
+        }
+
+        var heldCart = false;
+        foreach (var saleWindow in Windows.OfType<SaleWindow>().ToList())
+        {
+            heldCart |= saleWindow.HoldCartForSessionEnd();
+        }
+
+        backgroundSync.Stop();
+        authSession.Clear();
+        apiClient.ClearTokens();
+
+        var openWindows = Windows.Cast<Window>().ToList();
+        var loginWindow = new LoginWindow(apiClient, authSession, dbPath, backgroundSync, receiptPrinter, adminScreenPassword);
+        loginWindow.Show();
+        foreach (var window in openWindows)
+        {
+            window.Close();
+        }
+
+        MessageBox.Show(loginWindow,
+            "انتهت جلستك من السيرفر (انلغت من الإدارة أو الحساب انوقف) - ادخل من جديد.\n" +
+            "البيعات اللي ما انبعتت محفوظة وبتنبعت بعد الدخول." +
+            (heldCart ? "\nالفاتورة اللي كانت مفتوحة انحفظت بـ\"المعلّقة\"." : ""),
+            "انتهت الجلسة", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     // local.db انعملت بـEnsureCreated() (قبل ما تنضاف الـMigrations) فيها

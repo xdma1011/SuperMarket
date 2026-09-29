@@ -85,4 +85,7 @@ public sealed class SyncState
     public int Id { get; set; }
     public long LastSyncedCatalogVersion { get; set; }
     public DateTime? LastSuccessfulSyncAtLocal { get; set; }
+
+    /// <summary>آخر تحديث لطرق الدفع من السيرفر (29/9/2026) - التحديث التلقائي مرة كل 24 ساعة (PaymentMethodStore).</summary>
+    public DateTime? LastPaymentMethodsRefreshAtUtc { get; set; }
 }

@@ -7,6 +7,7 @@ import { ApiController } from '../../core/api/api-controller.enum';
 import { CashClosingsOperation, BranchesOperation, PaymentMethodsOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
 import { AuthService } from '../../core/services/auth.service';
+import { BusinessTimeService } from '../../core/services/business-time.service';
 
 interface BranchDto {
   id: string;
@@ -51,6 +52,7 @@ interface CountedDetailRow {
 })
 export class CashClosingsComponent implements OnInit {
   private readonly auth = inject(AuthService);
+  private readonly businessTime = inject(BusinessTimeService);
 
   readonly closings = signal<CashClosingListItemDto[]>([]);
   readonly totalCount = signal(0);
@@ -69,7 +71,7 @@ export class CashClosingsComponent implements OnInit {
 
   selectedBranchId = '';
   filterBranchId = '';
-  businessDate = new Date().toISOString().slice(0, 10);
+  businessDate = this.businessTime.localDate();
   shiftNumber = 1;
   countedCash: number | null = null;
 
@@ -133,7 +135,7 @@ export class CashClosingsComponent implements OnInit {
   openForm(): void {
     this.formOpen.set(true);
     this.formError.set(null);
-    this.businessDate = new Date().toISOString().slice(0, 10);
+    this.businessDate = this.businessTime.localDate();
     this.shiftNumber = 1;
     this.countedCash = null;
     this.countedDetails.set(this.paymentMethods().map(pm => ({ paymentMethodId: pm.id, paymentMethodName: pm.name, countedAmount: null })));

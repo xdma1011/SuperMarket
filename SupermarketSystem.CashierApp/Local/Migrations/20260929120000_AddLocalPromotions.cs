@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace SupermarketSystem.CashierApp.Local.Migrations
 {
     /// <summary>
-    /// عروض الكمية محليًا (29/9/2026) - جدول جديد بس. وبعدين رقم نسخة الكتالوج المحلي بيصير -1، عشان أول مزامنة
+    /// عروض الكمية محليًا (29/9/2026) - جدول جديد، وعمود وقت آخر تحديث لطرق الدفع. وبعدين رقم نسخة الكتالوج المحلي بيصير -1، عشان أول مزامنة
     /// بعد التحديث تسحب الكتالوج كامل ومعه العروض (بلا هيك الجدول بيضل فاضي لحد أول تغيير بالكتالوج).
     /// </summary>
     [DbContext(typeof(LocalDbContext))]
@@ -41,6 +41,13 @@ namespace SupermarketSystem.CashierApp.Local.Migrations
                 table: "Promotions",
                 column: "ProductId");
 
+            // طرق الدفع بتتحدّث مرة كل 24 ساعة (PaymentMethodStore) - null = أول دورة بتحدّثها.
+            migrationBuilder.AddColumn<DateTime>(
+                name: "LastPaymentMethodsRefreshAtUtc",
+                table: "SyncStates",
+                type: "TEXT",
+                nullable: true);
+
             // -1 مش 0: سيرفر جديد رقم نسخته 0، فـ0 محليًا كان رح يبين "محدَّث" وما يسحب إشي.
             migrationBuilder.Sql("UPDATE SyncStates SET LastSyncedCatalogVersion = -1;");
         }
@@ -50,6 +57,10 @@ namespace SupermarketSystem.CashierApp.Local.Migrations
         {
             migrationBuilder.DropTable(
                 name: "Promotions");
+
+            migrationBuilder.DropColumn(
+                name: "LastPaymentMethodsRefreshAtUtc",
+                table: "SyncStates");
         }
     }
 }

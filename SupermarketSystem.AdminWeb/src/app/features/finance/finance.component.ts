@@ -7,6 +7,7 @@ import { ApiController } from '../../core/api/api-controller.enum';
 import { BranchesOperation, FinanceOperation, PartnersOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
 import { AuthService } from '../../core/services/auth.service';
+import { BusinessTimeService } from '../../core/services/business-time.service';
 
 interface BranchDto {
   id: string;
@@ -139,6 +140,7 @@ const MONTH_NAMES = [
 })
 export class FinanceComponent implements OnInit {
   private readonly auth = inject(AuthService);
+  private readonly businessTime = inject(BusinessTimeService);
 
   readonly branches = signal<BranchDto[]>([]);
   readonly errorMessage = signal<string | null>(null);
@@ -150,8 +152,8 @@ export class FinanceComponent implements OnInit {
   readonly statementLoading = signal(false);
   readonly statementError = signal<string | null>(null);
   statementBranchId = '';
-  statementYear = new Date().getFullYear();
-  statementMonth = new Date().getMonth() + 1;
+  statementYear = this.businessTime.localYearMonth().year;
+  statementMonth = this.businessTime.localYearMonth().month;
 
   // --- المصاريف ---
   readonly expenses = signal<ExpenseListItemDto[]>([]);
@@ -179,9 +181,9 @@ export class FinanceComponent implements OnInit {
   newExpenseTypeId = '';
   newExpensePaidFromDrawer = false;
   newExpenseAmount: number | null = null;
-  newExpensePaymentDate = new Date().toISOString().slice(0, 10);
-  newExpensePeriodYear = new Date().getFullYear();
-  newExpensePeriodMonth = new Date().getMonth() + 1;
+  newExpensePaymentDate = this.businessTime.localDate();
+  newExpensePeriodYear = this.businessTime.localYearMonth().year;
+  newExpensePeriodMonth = this.businessTime.localYearMonth().month;
   newExpenseNotes = '';
 
   // --- حركات رأس المال ---
@@ -198,7 +200,7 @@ export class FinanceComponent implements OnInit {
   newCapitalBranchId = '';
   newCapitalType: CapitalTransactionType = 1;
   newCapitalAmount: number | null = null;
-  newCapitalOccurredAt = new Date().toISOString().slice(0, 10);
+  newCapitalOccurredAt = this.businessTime.localDate();
   newCapitalNotes = '';
   /** شركاء رأس المال بفرع النموذج - اختياري (فاضي = حركة عامة للفرع). */
   readonly capitalPartners = signal<CapitalPartnerOption[]>([]);
@@ -307,9 +309,9 @@ export class FinanceComponent implements OnInit {
     this.newExpenseTypeId = '';
     this.newExpensePaidFromDrawer = false;
     this.newExpenseAmount = null;
-    this.newExpensePaymentDate = new Date().toISOString().slice(0, 10);
-    this.newExpensePeriodYear = new Date().getFullYear();
-    this.newExpensePeriodMonth = new Date().getMonth() + 1;
+    this.newExpensePaymentDate = this.businessTime.localDate();
+    this.newExpensePeriodYear = this.businessTime.localYearMonth().year;
+    this.newExpensePeriodMonth = this.businessTime.localYearMonth().month;
     this.newExpenseNotes = '';
   }
 
@@ -476,7 +478,7 @@ export class FinanceComponent implements OnInit {
     this.newCapitalBranchId ||= this.branches()[0]?.id ?? '';
     this.newCapitalType = 1;
     this.newCapitalAmount = null;
-    this.newCapitalOccurredAt = new Date().toISOString().slice(0, 10);
+    this.newCapitalOccurredAt = this.businessTime.localDate();
     this.newCapitalNotes = '';
     this.newCapitalPartnerId = '';
     void this.loadCapitalPartners();
