@@ -1,0 +1,4 @@
+# ملفات تشغيل ويندوز لازم تنزل بنهايات أسطر CRLF مهما كان إعداد git بالجهاز -
+# ملف .bat بنهايات LF ممكن يخرب goto/call :label بـcmd.
+*.bat text eol=crlf
+*.cmd text eol=crlf
