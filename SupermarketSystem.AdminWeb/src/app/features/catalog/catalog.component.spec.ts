@@ -63,7 +63,7 @@ describe('CatalogComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
-    expect(component.errorMessage()).toBe('تعذّر تحميل الكتالوج.');
+    expect(component.errorMessage()).toBe('تعذّر تحميل دليل الأصناف.');
   });
 
   describe('setTab', () => {

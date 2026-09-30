@@ -423,7 +423,7 @@ export class ShellComponent {
         )
       );
       return result.items.map(p => ({
-        type: 'product' as const, typeLabel: 'منتج', id: p.id, label: p.name, sublabel: 'الكتالوج', route: '/catalog'
+        type: 'product' as const, typeLabel: 'منتج', id: p.id, label: p.name, sublabel: 'دليل الأصناف', route: '/catalog'
       }));
     } catch {
       return [];

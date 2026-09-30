@@ -90,7 +90,7 @@ public sealed class RecordComplimentaryIssueHandler
         if (!isAllowed)
         {
             return Result.Failure<RecordComplimentaryIssueResponse>(
-                Error.BusinessRule("Complimentary.NotAllowedForProduct", "هذا المنتج غير مُفعَّل للضيافة — فعّله من الكتالوج أولًا."));
+                Error.BusinessRule("Complimentary.NotAllowedForProduct", "هذا المنتج غير مُفعَّل للضيافة — فعّله من دليل الأصناف أولًا."));
         }
 
         var userId = _currentUser.UserId

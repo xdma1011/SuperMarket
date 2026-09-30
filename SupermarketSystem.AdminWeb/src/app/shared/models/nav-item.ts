@@ -21,7 +21,7 @@ export interface NavGroup {
 export const NAV_GROUPS: NavGroup[] = [
   { id: 'main', label: null },
   { id: 'sales', label: 'البيع' },
-  { id: 'inventory', label: 'المخزون والكتالوج' },
+  { id: 'inventory', label: 'المخزون والأصناف' },
   { id: 'purchasing', label: 'المشتريات' },
   { id: 'finance', label: 'المالية والرقابة' },
   { id: 'system', label: 'النظام' }
@@ -40,7 +40,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'coupons', label: 'كوبونات الخصم', route: '/coupons', group: 'sales', icon: 'tag', requiredPermission: 'Customers.Manage' },
   { id: 'driver', label: 'طلباتي (توصيل)', route: '/driver', group: 'sales', icon: 'truck', requiredPermission: 'Orders.Deliver' },
 
-  { id: 'catalog', label: 'الكتالوج', route: '/catalog', group: 'inventory', icon: 'tag', requiredPermission: 'Catalog.Manage' },
+  { id: 'catalog', label: 'دليل الأصناف', route: '/catalog', group: 'inventory', icon: 'tag', requiredPermission: 'Catalog.Manage' },
   { id: 'current-stock', label: 'المخزون الحالي', route: '/current-stock', group: 'inventory', icon: 'boxes', requiredPermission: 'Reports.View' },
   { id: 'stocktake', label: 'الجرد', route: '/stocktakes', group: 'inventory', icon: 'clipboard', requiredPermission: 'Stocktake.Manage' },
   { id: 'stock-transfers', label: 'نقل المخزون', route: '/stock-transfers', group: 'inventory', icon: 'transfer', requiredPermission: 'StockTransfer.Manage' },

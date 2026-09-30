@@ -32,7 +32,7 @@ interface ProductDto {
   expectedShelfLifeDays: number | null;
   isComplimentaryAllowed: boolean;
   createdAtUtc: string;
-  // 28/9/2026: بقائمة الكتالوج - أول باركود، وسعر الفرع الفعلي والرصيد للفرع المختار (null = مش مربوط بالفرع).
+  // 28/9/2026: بقائمة دليل الأصناف - أول باركود، وسعر الفرع الفعلي والرصيد للفرع المختار (null = مش مربوط بالفرع).
   primaryBarcode?: string | null;
   barcodeCount?: number;
   branchSellingPrice?: number | null;
@@ -202,7 +202,7 @@ export class CatalogComponent implements OnInit {
     void this.loadProducts();
   }
 
-  /** بحث الكتالوج (بالاسم أو الباركود) - بعد ما يوقف كتابة 300ms، من أول صفحة. */
+  /** بحث دليل الأصناف (بالاسم أو الباركود) - بعد ما يوقف كتابة 300ms، من أول صفحة. */
   onProductSearchChanged(): void {
     if (this.productSearchHandle) clearTimeout(this.productSearchHandle);
     this.productSearchHandle = setTimeout(() => {
@@ -272,7 +272,7 @@ export class CatalogComponent implements OnInit {
       }
       await this.loadProducts();
     } catch {
-      this.errorMessage.set('تعذّر تحميل الكتالوج.');
+      this.errorMessage.set('تعذّر تحميل دليل الأصناف.');
     } finally {
       this.loading.set(false);
     }
