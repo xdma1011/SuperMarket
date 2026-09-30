@@ -311,6 +311,7 @@ public static class DependencyInjection
         services.AddScoped<CompleteCashClosingHandler>();
         services.AddScoped<RecordDrawerOpenHandler>();
         services.AddScoped<GetComplimentaryLogHandler>();
+        services.AddScoped<SupermarketSystem.Application.Inventory.GetComplimentaryMonthlySummary.GetComplimentaryMonthlySummaryHandler>();
         services.AddScoped<CreatePreparedOrderHandler>();
         services.AddScoped<GetOpenPreparedOrdersHandler>();
         services.AddScoped<CancelPreparedOrderHandler>();

@@ -13,6 +13,147 @@
   <div class="alert-banner">{{ errorMessage() }}</div>
 }
 
+<!-- كم انصرف ضيافة بالشهر (30/9/2026) - بالتكلفة = نفس بند "الضيافة" بكشف الربح -->
+<section class="summary-panel" aria-labelledby="comp-summary-title">
+  <div class="summary-head">
+    <h2 id="comp-summary-title">مصروف الضيافة الشهري</h2>
+    <div class="month-pick">
+      <label>
+        <span>الشهر</span>
+        <select [(ngModel)]="summaryMonthNumber" (ngModelChange)="loadSummary()" data-no-filter>
+          @for (m of monthOptions; track m.value) {
+            <option [ngValue]="m.value">{{ m.name }}</option>
+          }
+        </select>
+      </label>
+      <label>
+        <span>السنة</span>
+        <select [(ngModel)]="summaryYear" (ngModelChange)="loadSummary()" data-no-filter>
+          @for (y of yearOptions; track y) {
+            <option [ngValue]="y">{{ y }}</option>
+          }
+        </select>
+      </label>
+    </div>
+  </div>
+
+  @if (summaryError()) {
+    <div class="data-empty">{{ summaryError() }}</div>
+  } @else {
+  @if (summary(); as s) {
+    <div class="stat-row">
+      <div class="stat-tile primary">
+        <span class="stat-label">انصرف ضيافة {{ monthName(s.year, s.month) }} (بالتكلفة)</span>
+        <span class="stat-value">{{ s.totalCostValue | number: '1.3-3' }} <small>د.أ</small></span>
+        @if (changeVsPrevious(s); as change) {
+          <span class="stat-sub">{{ change > 0 ? '▲' : '▼' }} {{ change > 0 ? change : -change }}% عن الشهر اللي قبله ({{ s.previousMonthCostValue | number: '1.3-3' }})</span>
+        } @else if (s.previousMonthCostValue === 0 && previousMonthIssueCount(s) > 0) {
+          <span class="stat-sub">الشهر اللي قبله: {{ previousMonthIssueCount(s) }} ضيافة بلا تكلفة معروفة (ما في فاتورة شراء قبلها)</span>
+        } @else if (s.previousMonthCostValue === 0 && s.totalCostValue > 0) {
+          <span class="stat-sub">الشهر اللي قبله ما كان فيه ضيافة</span>
+        } @else if (changeVsPrevious(s) === 0) {
+          <span class="stat-sub">نفس الشهر اللي قبله</span>
+        }
+      </div>
+      <div class="stat-tile">
+        <span class="stat-label">لو انباعت (بسعر البيع الحالي)</span>
+        <span class="stat-value">{{ s.totalSellingValue | number: '1.3-3' }} <small>د.أ</small></span>
+        <span class="stat-sub">للعلم بس - الكشف بيحسب التكلفة</span>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-label">عدد المرات</span>
+        <span class="stat-value">{{ s.issueCount }}</span>
+        @if (s.needsReviewCount > 0) { <span class="stat-sub warn-text">{{ s.needsReviewCount }} فوق الحد اليومي (للمراجعة)</span> }
+      </div>
+    </div>
+
+    @if (s.excludedNoCostHistory > 0) {
+      <div class="alert-banner warn">
+        {{ s.excludedNoCostHistory }} ضيافة لأصناف ما إلها فاتورة شراء لسه - ما انحسبت بالمبلغ (نفس كشف الربح).
+      </div>
+    }
+
+    <div class="trend">
+      <div class="trend-head">
+        <h3>آخر 12 شهر (بالتكلفة)</h3>
+        <button type="button" class="link-btn" (click)="showTrendTable.set(!showTrendTable())">
+          {{ showTrendTable() ? 'عرض كرسم' : 'عرض كجدول' }}
+        </button>
+      </div>
+      @if (!showTrendTable()) {
+        <div class="bars" role="img" [attr.aria-label]="'مصروف الضيافة لآخر 12 شهر، آخرها ' + monthName(s.year, s.month)">
+          @for (m of s.last12Months; track m.year * 100 + m.month; let last = $last) {
+            <button type="button" class="bar-slot" [class.selected]="last" [class.no-cost]="m.issueCount > 0 && m.costValue === 0"
+                    (click)="selectTrendMonth(m.year, m.month)"
+                    [attr.aria-label]="monthName(m.year, m.month) + ': ' + (m.costValue | number: '1.3-3') + ' د.أ، ' + m.issueCount + ' مرة'">
+              <span class="bar-tip">{{ monthName(m.year, m.month) }}<br />{{ m.costValue | number: '1.3-3' }} د.أ · {{ m.issueCount }} مرة
+                @if (m.issueCount > 0 && m.costValue === 0) { <br />بلا تكلفة معروفة }</span>
+              <span class="bar-track">
+                @if (last && m.costValue > 0) { <span class="bar-value">{{ m.costValue | number: '1.0-3' }}</span> }
+                <span class="bar" [style.height.%]="barHeight(m.costValue, s)"></span>
+                @if (m.issueCount > 0 && m.costValue === 0) { <span class="bar-nocost" aria-hidden="true">؟</span> }
+              </span>
+              <span class="bar-label">{{ shortMonthName(m.month) }}</span>
+            </button>
+          }
+        </div>
+      } @else {
+        <div class="data-scroll">
+          <table class="data-table">
+            <thead><tr><th>الشهر</th><th>بالتكلفة (د.أ)</th><th>عدد المرات</th></tr></thead>
+            <tbody>
+              @for (m of s.last12Months; track m.year * 100 + m.month) {
+                <tr><td>{{ monthName(m.year, m.month) }}</td><td class="mono">{{ m.costValue | number: '1.3-3' }}</td><td class="mono">{{ m.issueCount }}</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+
+    @if (s.byProduct.length > 0) {
+      <div class="breakdown">
+        <div>
+          <h3>حسب الصنف</h3>
+          <div class="data-scroll">
+            <table class="data-table">
+              <thead><tr><th>الصنف</th><th>الكمية</th><th>بالتكلفة</th><th>بسعر البيع</th></tr></thead>
+              <tbody>
+                @for (p of s.byProduct; track p.productId) {
+                  <tr>
+                    <td>{{ p.productName }}</td>
+                    <td class="mono">{{ p.quantityBase | number: '1.0-3' }}</td>
+                    <td class="mono">{{ p.costValue === null ? '—' : (p.costValue | number: '1.3-3') }}</td>
+                    <td class="mono">{{ p.sellingValue === null ? '—' : (p.sellingValue | number: '1.3-3') }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <h3>مين سجّل</h3>
+          <div class="data-scroll">
+            <table class="data-table">
+              <thead><tr><th>الشخص</th><th>مرات</th><th>بالتكلفة</th></tr></thead>
+              <tbody>
+                @for (u of s.byUser; track u.userId) {
+                  <tr><td>{{ u.fullName }}</td><td class="mono">{{ u.issueCount }}</td><td class="mono">{{ u.costValue | number: '1.3-3' }}</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    } @else {
+      <div class="data-empty">ما في ضيافة مسجّلة بهالشهر بهالفرع.</div>
+    }
+  } @else if (loadingSummary()) {
+    <div class="data-empty">جارٍ التحميل…</div>
+  }
+  }
+</section>
+
 <section class="form-panel">
   <div class="form-fields">
     <label class="field">

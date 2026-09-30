@@ -1,7 +1,18 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
-import { ComplimentaryComponent } from './complimentary.component';
+import { ComplimentaryComponent, ComplimentaryMonthlySummary } from './complimentary.component';
 import { ApiClient } from '../../core/api/api-client.service';
+
+const SUMMARY: ComplimentaryMonthlySummary = {
+  year: 2026, month: 9, issueCount: 3, needsReviewCount: 1, totalCostValue: 2.4, totalSellingValue: 3.75,
+  excludedNoCostHistory: 0, excludedNoSellingPrice: 0, previousMonthCostValue: 1.6,
+  byProduct: [{ productId: 'p1', productName: 'سكر', quantityBase: 3, issueCount: 3, costValue: 2.4, sellingValue: 3.75 }],
+  byUser: [{ userId: 'u1', fullName: 'أبو سامي', issueCount: 3, costValue: 2.4 }],
+  last12Months: Array.from({ length: 12 }, (_, i) => ({
+    year: i < 3 ? 2025 : 2026, month: ((i + 9) % 12) + 1, issueCount: i === 11 ? 3 : i === 10 ? 2 : 0,
+    costValue: i === 11 ? 2.4 : i === 10 ? 1.6 : 0
+  }))
+};
 
 describe('ComplimentaryComponent', () => {
   let fixture: ComponentFixture<ComplimentaryComponent>;
@@ -13,6 +24,8 @@ describe('ComplimentaryComponent', () => {
       if (controller === 'products' && operation === '') return of({ items: [{ id: 'p1', name: 'سكر' }], totalCount: 1 });
       if (controller === 'branches') return of({ items: [{ id: 'b1', name: 'الرئيسي' }], totalCount: 1 });
       if (operation === '{productId}/units') return of([{ id: 'u1', unitName: 'كيلو', isBaseUnit: true }]);
+      if (operation === 'complimentary-issues/monthly-summary') return of(SUMMARY);
+      if (operation === 'complimentary-issues') return of({ items: [], totalCount: 0 });
       return of([]);
     }) as unknown as typeof apiClientSpy.get);
   }
@@ -32,6 +45,29 @@ describe('ComplimentaryComponent', () => {
 
   it('يُنشأ المكوّن بنجاح', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('لوحة مصروف الضيافة الشهري: المجموع بالتكلفة، التغيّر عن الشهر اللي قبله، وأعمدة 12 شهر', async () => {
+    mockLoadAllSuccess();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const call = apiClientSpy.get.calls.allArgs().find(a => a[1] === 'complimentary-issues/monthly-summary');
+    expect(call?.[3]).toEqual(jasmine.objectContaining({ branchId: 'b1' }));
+    expect(component.summary()?.totalCostValue).toBe(2.4);
+    expect(component.changeVsPrevious(SUMMARY)).toBe(50);
+    expect(component.barHeight(2.4, SUMMARY)).toBe(100);
+    expect(component.barHeight(0, SUMMARY)).toBe(0);
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelectorAll('.bar-slot').length).toBe(12);
+    expect(el.textContent).toContain('2.400');
+    expect(el.textContent).toContain('أبو سامي');
+
+    component.showTrendTable.set(true);
+    fixture.detectChanges();
+    expect(el.querySelectorAll('.bar-slot').length).toBe(0);
+    expect(el.textContent).toContain('أيلول 2026');
   });
 
   it('يحمّل المنتجات والفروع، ويختار أول عنصر من كل، ويجلب وحدات أول منتج تلقائيًا', async () => {

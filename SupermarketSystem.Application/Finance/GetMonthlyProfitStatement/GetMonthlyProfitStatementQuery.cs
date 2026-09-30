@@ -195,20 +195,9 @@ public sealed class GetMonthlyProfitStatementHandler
             return new InventoryValuation(0m, 0m, 0, 0m, 0, 0m, 0);
         }
 
-        var batchIds = movements.Where(m => m.ProductBatchId is not null)
-            .Select(m => m.ProductBatchId!.Value).Distinct().ToList();
-        var batchUnitCosts = batchIds.Count == 0
-            ? new Dictionary<Guid, decimal>()
-            : await _context.ProductBatches.AsNoTracking()
-                .Where(b => batchIds.Contains(b.Id))
-                .Select(b => new { b.Id, b.UnitCost })
-                .ToDictionaryAsync(b => b.Id, b => b.UnitCost, cancellationToken);
-
-        var nonBatchProductIds = movements.Where(m => m.ProductBatchId is null)
-            .Select(m => m.ProductId).Distinct().ToList();
-        // متوسط تكلفة الحبة من المشتريات لحد نهاية الشهر، بالوحدة الأساسية - راجع PurchaseCostBasis.
-        var weightedAverageCosts = await PurchaseCostBasis.AverageBaseUnitCostsAsync(
-            _context, nonBatchProductIds, periodEndUtc, inclusive: false, cancellationToken);
+        // تكلفة الحبة (دفعة أو متوسط مرجّح لحد نهاية الشهر) - نفس مصدر ملخّص الضيافة الشهري.
+        var unitCostOf = await MovementUnitCosts.LoadAsync(
+            _context, movements.Select(m => (m.ProductId, m.ProductBatchId)).ToList(), periodEndUtc, cancellationToken);
 
         var surplusValue = 0m;
         var shortageValue = 0m;
@@ -220,9 +209,7 @@ public sealed class GetMonthlyProfitStatementHandler
 
         foreach (var movement in movements)
         {
-            decimal? unitCost = movement.ProductBatchId is { } batchId
-                ? (batchUnitCosts.TryGetValue(batchId, out var batchCost) ? batchCost : null)
-                : (weightedAverageCosts.TryGetValue(movement.ProductId, out var avgCost) ? avgCost : null);
+            var unitCost = unitCostOf(movement.ProductId, movement.ProductBatchId);
 
             var isWaste = movement.MovementType == MovementType.WasteOut;
             var isComplimentary = movement.MovementType == MovementType.ComplimentaryOut;

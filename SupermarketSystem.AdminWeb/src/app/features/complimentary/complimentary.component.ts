@@ -6,6 +6,7 @@ import { ApiClient } from '../../core/api/api-client.service';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { ProductsOperation, BranchesOperation, InventoryOperation } from '../../core/api/operations';
 import { AuthService } from '../../core/services/auth.service';
+import { BusinessTimeService } from '../../core/services/business-time.service';
 
 interface ProductDto {
   id: string;
@@ -38,7 +39,24 @@ interface ComplimentaryLogItem {
   username: string;
 }
 
+export interface ComplimentaryMonthlySummary {
+  year: number;
+  month: number;
+  issueCount: number;
+  needsReviewCount: number;
+  totalCostValue: number;
+  totalSellingValue: number;
+  excludedNoCostHistory: number;
+  excludedNoSellingPrice: number;
+  previousMonthCostValue: number;
+  byProduct: { productId: string; productName: string; quantityBase: number; issueCount: number; costValue: number | null; sellingValue: number | null }[];
+  byUser: { userId: string; fullName: string; issueCount: number; costValue: number }[];
+  last12Months: { year: number; month: number; issueCount: number; costValue: number }[];
+}
+
 const LOG_PAGE_SIZE = 20;
+
+const ARABIC_MONTHS = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
 
 /**
  * تسجيل خروج بضاعة كضيافة بسرعة (بلا أي قيد مالي)، وتحته جدول بكل الضيافات المسجّلة بالفرع (شو، قديش،
@@ -53,6 +71,17 @@ const LOG_PAGE_SIZE = 20;
 })
 export class ComplimentaryComponent implements OnInit {
   private readonly auth = inject(AuthService);
+  private readonly businessTime = inject(BusinessTimeService);
+
+  // لوحة مجموع الضيافة الشهرية كمال (30/9/2026) - نفس رقم "الضيافة" بكشف الربح.
+  summaryYear = 0;
+  summaryMonthNumber = 0;
+  readonly monthOptions = ARABIC_MONTHS.map((name, i) => ({ value: i + 1, name }));
+  yearOptions: number[] = [];
+  readonly summary = signal<ComplimentaryMonthlySummary | null>(null);
+  readonly loadingSummary = signal(false);
+  readonly summaryError = signal<string | null>(null);
+  readonly showTrendTable = signal(false);
 
   readonly products = signal<ProductDto[]>([]);
   readonly branches = signal<BranchDto[]>([]);
@@ -84,6 +113,10 @@ export class ComplimentaryComponent implements OnInit {
   constructor(private readonly apiClient: ApiClient) {}
 
   ngOnInit(): void {
+    const { year, month } = this.businessTime.localYearMonth();
+    this.summaryYear = year;
+    this.summaryMonthNumber = month;
+    this.yearOptions = [year - 2, year - 1, year];
     this.loadAll();
   }
 
@@ -105,7 +138,7 @@ export class ComplimentaryComponent implements OnInit {
         this.selectedProductId = productsResult.items[0].id;
         await this.onProductChange();
       }
-      await this.loadLog(1);
+      await Promise.all([this.loadLog(1), this.loadSummary()]);
     } catch {
       this.errorMessage.set('تعذّر تحميل البيانات الأساسية.');
     } finally {
@@ -161,7 +194,7 @@ export class ComplimentaryComponent implements OnInit {
       this.successMessage.set('تم تسجيل الضيافة بنجاح، ونقص المخزون فورًا.');
       this.quantity = null;
       this.reason = '';
-      await this.loadLog(1);
+      await Promise.all([this.loadLog(1), this.loadSummary()]);
     } catch (err: unknown) {
       const message =
         err && typeof err === 'object' && 'error' in err
@@ -174,7 +207,63 @@ export class ComplimentaryComponent implements OnInit {
   }
 
   async onBranchChange(): Promise<void> {
-    await this.loadLog(1);
+    await Promise.all([this.loadLog(1), this.loadSummary()]);
+  }
+
+  async loadSummary(): Promise<void> {
+    const year = Number(this.summaryYear);
+    const month = Number(this.summaryMonthNumber);
+    if (!this.selectedBranchId || !year || !month) {
+      return;
+    }
+
+    this.loadingSummary.set(true);
+    this.summaryError.set(null);
+    try {
+      this.summary.set(await firstValueFrom(
+        this.apiClient.get<ComplimentaryMonthlySummary>(ApiController.Inventory, InventoryOperation.ComplimentaryMonthlySummary, undefined, {
+          branchId: this.selectedBranchId, year, month
+        })
+      ));
+    } catch {
+      this.summaryError.set('تعذّر تحميل مجموع الضيافة الشهري.');
+    } finally {
+      this.loadingSummary.set(false);
+    }
+  }
+
+  monthName(year: number, month: number): string {
+    return `${ARABIC_MONTHS[month - 1]} ${year}`;
+  }
+
+  shortMonthName(month: number): string {
+    return ARABIC_MONTHS[month - 1];
+  }
+
+  /** نسبة التغيّر عن الشهر اللي قبله - null لو الشهر اللي قبله صفر (ما في أساس للمقارنة). */
+  changeVsPrevious(s: ComplimentaryMonthlySummary): number | null {
+    return s.previousMonthCostValue > 0
+      ? Math.round(((s.totalCostValue - s.previousMonthCostValue) / s.previousMonthCostValue) * 100)
+      : null;
+  }
+
+  /** ارتفاع العمود كنسبة من أعلى شهر (أقل ارتفاع مرئي 2% عشان الشهر اللي فيه ضيافة ما يختفي). */
+  barHeight(value: number, s: ComplimentaryMonthlySummary): number {
+    const max = Math.max(...s.last12Months.map(m => m.costValue));
+    if (max <= 0 || value <= 0) return 0;
+    return Math.max(2, (value / max) * 100);
+  }
+
+  async selectTrendMonth(year: number, month: number): Promise<void> {
+    this.summaryYear = year;
+    this.summaryMonthNumber = month;
+    if (!this.yearOptions.includes(year)) this.yearOptions = [year, ...this.yearOptions];
+    await this.loadSummary();
+  }
+
+  /** عدد مرات ضيافة الشهر اللي قبل المختار (من الاتجاه) - للتمييز بين "ما في ضيافة" و"ضيافة بلا تكلفة معروفة". */
+  previousMonthIssueCount(s: ComplimentaryMonthlySummary): number {
+    return s.last12Months.length >= 2 ? s.last12Months[s.last12Months.length - 2].issueCount : 0;
   }
 
   async loadLog(page: number): Promise<void> {

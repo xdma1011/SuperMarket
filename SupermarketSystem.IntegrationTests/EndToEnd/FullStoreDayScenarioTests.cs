@@ -287,6 +287,22 @@ public sealed class FullStoreDayScenarioTests : IntegrationTestBase
         // 3.150 − 1.000 مصاريف − 0.800 تلف − 0.800 ضيافة
         Check("الربح: صافي ربح الشهر", 0.550m, profit.GetProperty("netProfit").GetDecimal());
 
+        // --- مجموع الضيافة الشهرية كمال (30/9/2026) - لازم يطابق بند الضيافة بكشف الربح بالضبط ---
+        var compSummary = await GetJsonAsync(admin,
+            $"/api/v1/inventory/complimentary-issues/monthly-summary?branchId={branchId}&year={DateTime.UtcNow.Year}&month={DateTime.UtcNow.Month}");
+        Check("ملخّص الضيافة: عدد المرات", 1, compSummary.GetProperty("issueCount").GetInt32());
+        Check("ملخّص الضيافة: بالتكلفة = بند كشف الربح", profit.GetProperty("complimentaryCostValue").GetDecimal(),
+            compSummary.GetProperty("totalCostValue").GetDecimal());
+        Check("ملخّص الضيافة: بالتكلفة", 0.800m, compSummary.GetProperty("totalCostValue").GetDecimal());
+        Check("ملخّص الضيافة: بسعر البيع (حليب 1 × 1.250)", 1.250m, compSummary.GetProperty("totalSellingValue").GetDecimal());
+        var compMilk = compSummary.GetProperty("byProduct").EnumerateArray().FirstOrDefault();
+        Check("ملخّص الضيافة: الصنف حليب", milkId.ToString(), compMilk.ValueKind == JsonValueKind.Undefined ? null : compMilk.GetProperty("productId").GetGuid().ToString());
+        var compTrend = compSummary.GetProperty("last12Months").EnumerateArray().ToList();
+        Check("ملخّص الضيافة: اتجاه 12 شهر", 12, compTrend.Count);
+        Check("ملخّص الضيافة: آخر شهر بالاتجاه = الشهر الحالي", 0.800m, compTrend[^1].GetProperty("costValue").GetDecimal());
+        Check("ملخّص الضيافة: الشهر اللي قبل فاضي", 0.000m, compSummary.GetProperty("previousMonthCostValue").GetDecimal());
+        Check("ملخّص الضيافة: لكل شخص", 0.800m, compSummary.GetProperty("byUser").EnumerateArray().Sum(u => u.GetProperty("costValue").GetDecimal()));
+
         // --- هامش الربح لكل منتج ---
         var margin = await GetJsonAsync(admin, $"/api/v1/reports/product-margin?branchId={branchId}&fromUtc={Uri.EscapeDataString(from)}&toUtc={Uri.EscapeDataString(to)}");
         var marginItems = Items(margin.GetProperty("items")).ToList();

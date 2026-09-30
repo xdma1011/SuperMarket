@@ -1,3 +1,4 @@
+using SupermarketSystem.Application.Inventory.GetComplimentaryMonthlySummary;
 using SupermarketSystem.API.Common;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Pagination;
@@ -44,6 +45,17 @@ public static class InventoryAdjustmentEndpoints
         .WithName("GetComplimentaryLog")
         .WithSummary("سجل الضيافة/الاستهلاك الداخلي - الأحدث أولًا.")
         .Produces<PagedResult<ComplimentaryLogItemDto>>(StatusCodes.Status200OK);
+
+        // مجموع الضيافة الشهرية كمال (30/9/2026) - نفس صلاحية المجموعة.
+        group.MapGet("/complimentary-issues/monthly-summary", async (
+            Guid branchId, int year, int month,
+            GetComplimentaryMonthlySummaryHandler handler,
+            CancellationToken cancellationToken) =>
+            (await handler.HandleAsync(new GetComplimentaryMonthlySummaryQuery(branchId, year, month), cancellationToken)).ToHttpResult())
+        .WithName("GetComplimentaryMonthlySummary")
+        .WithSummary("مجموع ضيافة الشهر بالتكلفة (نفس رقم كشف الربح) وبسعر البيع، لكل صنف ولكل شخص، ومقارنة بالشهر اللي قبله.")
+        .Produces<ComplimentaryMonthlySummaryDto>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status400BadRequest);
 
         // خارج المجموعة عمدًا (لا group.MapPost) — نفس الفخ الموثَّق بـ
         // CLAUDE.md §3.4: المجموعة مقفولة بصلاحية الضيافة (ComplimentaryIssue)،
