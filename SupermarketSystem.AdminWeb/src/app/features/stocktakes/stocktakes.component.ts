@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { StocktakesOperation, BranchesOperation, ProductsOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
@@ -68,6 +69,9 @@ interface CreateStocktakeResponse {
   styleUrl: './stocktakes.component.css'
 })
 export class StocktakesComponent implements OnInit {
+  private readonly listRequest = latestRequest();
+  private readonly productSearchRequest = latestRequest();
+  private readonly returnedPendingRequest = latestRequest();
   private readonly auth = inject(AuthService);
 
   readonly stocktakes = signal<StocktakeListItemDto[]>([]);
@@ -124,10 +128,11 @@ export class StocktakesComponent implements OnInit {
     try {
       const params: Record<string, string> = {};
       if (this.selectedBranchId) params['branchId'] = this.selectedBranchId;
-      const items = await firstValueFrom(this.apiClient.get<ReturnedPendingItemDto[]>(
+      const items = await this.returnedPendingRequest.run(this.apiClient.get<ReturnedPendingItemDto[]>(
         ApiController.Stocktakes, StocktakesOperation.ReturnedPending, undefined, params));
       this.returnedPending.set(Array.isArray(items) ? items : []);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.returnedPending.set([]);
     }
   }
@@ -159,11 +164,12 @@ export class StocktakesComponent implements OnInit {
 
   async searchProducts(term: string): Promise<void> {
     try {
-      const result = await firstValueFrom(this.apiClient.get<PagedResult<ProductOption>>(
+      const result = await this.productSearchRequest.run(this.apiClient.get<PagedResult<ProductOption>>(
         ApiController.Products, ProductsOperation.List, undefined, { search: term, pageSize: 8 }));
       const chosen = new Set(this.selectedProducts().map(p => p.id));
       this.productResults.set(result.items.filter(p => !chosen.has(p.id)).map(p => ({ id: p.id, name: p.name })));
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.productResults.set([]);
     }
   }
@@ -185,7 +191,7 @@ export class StocktakesComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.listRequest.run(
         this.apiClient.get<PagedResult<StocktakeListItemDto>>(ApiController.Stocktakes, StocktakesOperation.List, undefined, {
           pageNumber: this.pageNumber(),
           pageSize: this.pageSize()
@@ -193,7 +199,8 @@ export class StocktakesComponent implements OnInit {
       );
       this.stocktakes.set(result.items);
       this.totalCount.set(result.totalCount);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل عمليات الجرد.');
     } finally {
       this.loading.set(false);

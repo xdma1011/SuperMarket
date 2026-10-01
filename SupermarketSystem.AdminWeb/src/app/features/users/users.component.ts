@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { BranchesOperation, UsersOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
@@ -55,6 +56,7 @@ interface CreateUserResponse {
   styleUrl: './users.component.css'
 })
 export class UsersComponent implements OnInit {
+  private readonly listRequest = latestRequest();
   readonly users = signal<UserItemDto[]>([]);
   readonly totalCount = signal(0);
   readonly pageNumber = signal(1);
@@ -91,7 +93,7 @@ export class UsersComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.listRequest.run(
         this.apiClient.get<PagedResult<UserItemDto>>(ApiController.Users, UsersOperation.List, undefined, {
           pageNumber: this.pageNumber(),
           pageSize: this.pageSize()
@@ -99,7 +101,8 @@ export class UsersComponent implements OnInit {
       );
       this.users.set(result.items);
       this.totalCount.set(result.totalCount);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل قائمة المستخدمين.');
     } finally {
       this.loading.set(false);

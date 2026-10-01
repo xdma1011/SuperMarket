@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { UnitsOfMeasureOperation } from '../../core/api/operations';
 
@@ -22,6 +23,7 @@ interface UnitOfMeasureDto {
   styleUrl: './units-of-measure.component.css'
 })
 export class UnitsOfMeasureComponent implements OnInit {
+  private readonly listRequest = latestRequest();
   readonly units = signal<UnitOfMeasureDto[]>([]);
   readonly loading = signal(true);
   readonly errorMessage = signal<string | null>(null);
@@ -44,11 +46,12 @@ export class UnitsOfMeasureComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.listRequest.run(
         this.apiClient.get<UnitOfMeasureDto[]>(ApiController.UnitsOfMeasure, UnitsOfMeasureOperation.List)
       );
       this.units.set(result);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل وحدات القياس.');
     } finally {
       this.loading.set(false);

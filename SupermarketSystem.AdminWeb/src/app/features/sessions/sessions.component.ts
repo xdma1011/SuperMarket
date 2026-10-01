@@ -2,6 +2,7 @@ import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { AuthSessionsOperation } from '../../core/api/operations';
 
@@ -35,6 +36,7 @@ interface PagedResult<T> {
   styleUrl: './sessions.component.css'
 })
 export class SessionsComponent implements OnInit {
+  private readonly listRequest = latestRequest();
   readonly sessions = signal<ActiveSessionItemDto[]>([]);
   readonly loading = signal(true);
   readonly errorMessage = signal<string | null>(null);
@@ -51,11 +53,12 @@ export class SessionsComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.listRequest.run(
         this.apiClient.get<PagedResult<ActiveSessionItemDto>>(ApiController.AuthSessions, AuthSessionsOperation.List)
       );
       this.sessions.set(result.items);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل الجلسات النشطة.');
     } finally {
       this.loading.set(false);

@@ -1,8 +1,9 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, forkJoin } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { OrdersOperation, PaymentMethodsOperation } from '../../core/api/operations';
 
@@ -53,6 +54,7 @@ interface PaymentMethodDto {
   styleUrl: './orders.component.css'
 })
 export class OrdersComponent implements OnInit {
+  private readonly loadRequest = latestRequest();
   readonly orders = signal<OrderListItemDto[]>([]);
   readonly paymentMethods = signal<PaymentMethodDto[]>([]);
   readonly drivers = signal<DriverDto[]>([]);
@@ -81,19 +83,18 @@ export class OrdersComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const [ordersResult, paymentMethodsResult, driversResult] = await Promise.all([
-        firstValueFrom(
-          this.apiClient.get<PagedResult<OrderListItemDto>>(ApiController.Orders, OrdersOperation.List, undefined, { pageSize: 100 })
-        ),
-        firstValueFrom(this.apiClient.get<PaymentMethodDto[]>(ApiController.PaymentMethods, PaymentMethodsOperation.List)),
-        firstValueFrom(this.apiClient.get<DriverDto[]>(ApiController.Orders, OrdersOperation.GetDrivers))
-      ]);
+      const [ordersResult, paymentMethodsResult, driversResult] = await this.loadRequest.run(forkJoin([
+        this.apiClient.get<PagedResult<OrderListItemDto>>(ApiController.Orders, OrdersOperation.List, undefined, { pageSize: 100 }),
+        this.apiClient.get<PaymentMethodDto[]>(ApiController.PaymentMethods, PaymentMethodsOperation.List),
+        this.apiClient.get<DriverDto[]>(ApiController.Orders, OrdersOperation.GetDrivers)
+      ]));
 
       this.orders.set(ordersResult.items);
       this.paymentMethods.set(paymentMethodsResult);
       this.drivers.set(driversResult);
       if (paymentMethodsResult.length > 0) this.completePaymentMethodId = paymentMethodsResult[0].id;
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل الطلبات.');
     } finally {
       this.loading.set(false);

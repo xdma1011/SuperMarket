@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { BranchesOperation, FinanceOperation, PartnersOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
@@ -139,6 +140,9 @@ const MONTH_NAMES = [
   styleUrl: './finance.component.css'
 })
 export class FinanceComponent implements OnInit {
+  private readonly statementRequest = latestRequest();
+  private readonly expensesRequest = latestRequest();
+  private readonly capitalRequest = latestRequest();
   private readonly auth = inject(AuthService);
   private readonly businessTime = inject(BusinessTimeService);
 
@@ -252,7 +256,7 @@ export class FinanceComponent implements OnInit {
     this.statementError.set(null);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.statementRequest.run(
         this.apiClient.get<GetMonthlyProfitStatementResponse>(ApiController.Finance, FinanceOperation.GetProfitStatement, undefined, {
           branchId: this.statementBranchId,
           year: this.statementYear,
@@ -261,6 +265,7 @@ export class FinanceComponent implements OnInit {
       );
       this.statement.set(result);
     } catch (err: unknown) {
+      if (isRequestCancelled(err)) return;
       this.statement.set(null);
       this.statementError.set(this.extractErrorMessage(err) ?? 'تعذّر جلب كشف الربح لهذه الفترة.');
     } finally {
@@ -274,7 +279,7 @@ export class FinanceComponent implements OnInit {
     this.expensesLoading.set(true);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.expensesRequest.run(
         this.apiClient.get<PagedResult<ExpenseListItemDto>>(ApiController.Finance, FinanceOperation.GetExpenses, undefined, {
           pageNumber: this.expensesPageNumber(),
           pageSize: this.expensesPageSize(),
@@ -284,7 +289,8 @@ export class FinanceComponent implements OnInit {
       );
       this.expenses.set(result.items);
       this.expensesTotalCount.set(result.totalCount);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل قائمة المصاريف.');
     } finally {
       this.expensesLoading.set(false);
@@ -440,7 +446,7 @@ export class FinanceComponent implements OnInit {
     this.capitalLoading.set(true);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.capitalRequest.run(
         this.apiClient.get<PagedResult<CapitalTransactionListItemDto>>(
           ApiController.Finance,
           FinanceOperation.GetCapitalTransactions,
@@ -454,7 +460,8 @@ export class FinanceComponent implements OnInit {
       );
       this.capitalTransactions.set(result.items);
       this.capitalTotalCount.set(result.totalCount);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل سجل حركات رأس المال.');
     } finally {
       this.capitalLoading.set(false);

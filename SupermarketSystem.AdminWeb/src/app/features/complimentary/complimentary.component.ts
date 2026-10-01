@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { ProductsOperation, BranchesOperation, InventoryOperation } from '../../core/api/operations';
 import { AuthService } from '../../core/services/auth.service';
@@ -70,6 +71,9 @@ const ARABIC_MONTHS = ['كانون الثاني', 'شباط', 'آذار', 'ني�
   styleUrl: './complimentary.component.css'
 })
 export class ComplimentaryComponent implements OnInit {
+  private readonly unitsRequest = latestRequest();
+  private readonly summaryRequest = latestRequest();
+  private readonly logRequest = latestRequest();
   private readonly auth = inject(AuthService);
   private readonly businessTime = inject(BusinessTimeService);
 
@@ -157,13 +161,14 @@ export class ComplimentaryComponent implements OnInit {
     this.selectedUnitId = '';
 
     try {
-      const units = await firstValueFrom(
+      const units = await this.unitsRequest.run(
         this.apiClient.get<ProductUnitDto[]>(ApiController.Products, ProductsOperation.GetUnits, { productId: this.selectedProductId })
       );
       this.units.set(units);
       const baseUnit = units.find(u => u.isBaseUnit) ?? units[0];
       if (baseUnit) this.selectedUnitId = baseUnit.id;
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر جلب وحدات هذا المنتج.');
     } finally {
       this.loadingUnits.set(false);
@@ -220,12 +225,13 @@ export class ComplimentaryComponent implements OnInit {
     this.loadingSummary.set(true);
     this.summaryError.set(null);
     try {
-      this.summary.set(await firstValueFrom(
+      this.summary.set(await this.summaryRequest.run(
         this.apiClient.get<ComplimentaryMonthlySummary>(ApiController.Inventory, InventoryOperation.ComplimentaryMonthlySummary, undefined, {
           branchId: this.selectedBranchId, year, month
         })
       ));
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.summaryError.set('تعذّر تحميل مجموع الضيافة الشهري.');
     } finally {
       this.loadingSummary.set(false);
@@ -274,7 +280,7 @@ export class ComplimentaryComponent implements OnInit {
     this.loadingLog.set(true);
     this.logError.set(null);
     try {
-      const result = await firstValueFrom(
+      const result = await this.logRequest.run(
         this.apiClient.get<PagedResult<ComplimentaryLogItem>>(ApiController.Inventory, InventoryOperation.ComplimentaryLog, undefined, {
           branchId: this.selectedBranchId, pageNumber: page, pageSize: LOG_PAGE_SIZE
         })
@@ -282,7 +288,8 @@ export class ComplimentaryComponent implements OnInit {
       this.log.set(result.items);
       this.logTotal.set(result.totalCount);
       this.logPage.set(page);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.logError.set('تعذّر تحميل سجل الضيافة.');
     } finally {
       this.loadingLog.set(false);

@@ -2,6 +2,7 @@ import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { BackupsOperation } from '../../core/api/operations';
 import { environment } from '../../../environments/environment';
@@ -40,6 +41,7 @@ interface GetBackupsResponse {
   styleUrl: './backup.component.css'
 })
 export class BackupComponent implements OnInit {
+  private readonly listRequest = latestRequest();
   readonly backups = signal<BackupItemDto[]>([]);
   readonly stats = signal<BackupStatsDto>({ totalCount: 0, totalSizeBytes: 0 });
   readonly loading = signal(true);
@@ -65,12 +67,13 @@ export class BackupComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.listRequest.run(
         this.apiClient.get<GetBackupsResponse>(ApiController.Backups, BackupsOperation.List)
       );
       this.backups.set(result.items.items);
       this.stats.set(result.stats);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل قائمة النسخ الاحتياطية.');
     } finally {
       this.loading.set(false);

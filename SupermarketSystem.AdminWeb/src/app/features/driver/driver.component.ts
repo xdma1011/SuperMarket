@@ -1,8 +1,9 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, forkJoin } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { DriverOperation, PaymentMethodsOperation } from '../../core/api/operations';
 
@@ -37,6 +38,7 @@ interface PaymentMethodDto {
   styleUrl: './driver.component.css'
 })
 export class DriverComponent implements OnInit {
+  private readonly loadRequest = latestRequest();
   readonly deliveries = signal<MyDeliveryDto[]>([]);
   readonly paymentMethods = signal<PaymentMethodDto[]>([]);
   readonly loading = signal(true);
@@ -60,15 +62,16 @@ export class DriverComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const [deliveriesResult, paymentMethodsResult] = await Promise.all([
-        firstValueFrom(this.apiClient.get<MyDeliveryDto[]>(ApiController.Driver, DriverOperation.MyDeliveries)),
-        firstValueFrom(this.apiClient.get<PaymentMethodDto[]>(ApiController.PaymentMethods, PaymentMethodsOperation.List))
-      ]);
+      const [deliveriesResult, paymentMethodsResult] = await this.loadRequest.run(forkJoin([
+        this.apiClient.get<MyDeliveryDto[]>(ApiController.Driver, DriverOperation.MyDeliveries),
+        this.apiClient.get<PaymentMethodDto[]>(ApiController.PaymentMethods, PaymentMethodsOperation.List)
+      ]));
 
       this.deliveries.set(deliveriesResult);
       this.paymentMethods.set(paymentMethodsResult);
       if (paymentMethodsResult.length > 0) this.payPaymentMethodId = paymentMethodsResult[0].id;
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل طلباتك.');
     } finally {
       this.loading.set(false);

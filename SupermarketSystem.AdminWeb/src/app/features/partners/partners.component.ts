@@ -5,6 +5,7 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { PartnersOperation, UsersOperation } from '../../core/api/operations';
 import { AuthService, PublicBranchDto } from '../../core/services/auth.service';
@@ -117,6 +118,8 @@ interface UserOption {
   styleUrl: './partners.component.css'
 })
 export class PartnersComponent implements OnInit {
+  private readonly ledgerRequest = latestRequest();
+  private readonly statementRequest = latestRequest();
   private readonly apiClient = inject(ApiClient);
   private readonly auth = inject(AuthService);
   /** اختياري: "?tab=withdrawals" من كبسة تنبيه سحب شريك. */
@@ -311,10 +314,11 @@ export class PartnersComponent implements OnInit {
   async openLedger(partner: PartnerDto): Promise<void> {
     this.clearMessages();
     try {
-      this.ledger.set(await firstValueFrom(
+      this.ledger.set(await this.ledgerRequest.run(
         this.apiClient.get<PartnerLedgerDto>(ApiController.Partners, PartnersOperation.Ledger, { id: partner.id })
       ));
     } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set(this.errorDetail(err) ?? 'تعذّر جلب كشف الحساب.');
     }
   }
@@ -409,10 +413,11 @@ export class PartnersComponent implements OnInit {
   async openStatement(summary: PartnerStatementSummaryDto): Promise<void> {
     this.clearMessages();
     try {
-      this.selectedStatement.set(await firstValueFrom(
+      this.selectedStatement.set(await this.statementRequest.run(
         this.apiClient.get<PartnerStatementDto>(ApiController.Partners, PartnersOperation.StatementById, { id: summary.id })
       ));
     } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set(this.errorDetail(err) ?? 'تعذّر جلب الكشف.');
     }
   }

@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { PaymentMethodsOperation, PreparedOrdersOperation, SaleAssistOperation } from '../../core/api/operations';
 import { AuthService, PublicBranchDto } from '../../core/services/auth.service';
@@ -99,6 +100,7 @@ const CAMERA_REPEAT_MS = 1800;
   styleUrl: './quick-scan.component.css'
 })
 export class QuickScanComponent implements OnInit, OnDestroy {
+  private readonly openOrdersRequest = latestRequest();
   private readonly apiClient = inject(ApiClient);
   private readonly auth = inject(AuthService);
   private readonly permissions = inject(PermissionsService);
@@ -297,13 +299,14 @@ export class QuickScanComponent implements OnInit, OnDestroy {
   async loadOpenOrders(): Promise<void> {
     if (!this.branchId) return;
     try {
-      const orders = await firstValueFrom(
+      const orders = await this.openOrdersRequest.run(
         this.apiClient.get<OpenPreparedOrder[]>(ApiController.PreparedOrders, PreparedOrdersOperation.ListOpen, undefined, {
           branchId: this.branchId
         })
       );
       this.openOrders.set(orders);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.openOrders.set([]);
     }
   }

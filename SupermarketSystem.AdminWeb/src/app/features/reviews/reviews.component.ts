@@ -2,6 +2,7 @@ import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { ReviewsOperation, ReturnsOperation } from '../../core/api/operations';
 
@@ -52,6 +53,7 @@ interface GetPendingReviewsResponse {
   styleUrl: './reviews.component.css'
 })
 export class ReviewsComponent implements OnInit {
+  private readonly listRequest = latestRequest();
   readonly items = signal<PendingReviewItemDto[]>([]);
   readonly voidedSales = signal<VoidedSaleReviewDto[]>([]);
   readonly loading = signal(true);
@@ -69,12 +71,13 @@ export class ReviewsComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.listRequest.run(
         this.apiClient.get<GetPendingReviewsResponse>(ApiController.Reviews, ReviewsOperation.List)
       );
       this.items.set(result.items);
       this.voidedSales.set(result.voidedSales);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل قائمة المراجعات.');
     } finally {
       this.loading.set(false);

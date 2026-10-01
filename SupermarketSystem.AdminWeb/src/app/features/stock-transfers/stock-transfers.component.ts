@@ -1,8 +1,9 @@
 import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, forkJoin } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { StockTransfersOperation, BranchesOperation, ProductsOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
@@ -86,6 +87,8 @@ interface TransferLine {
   styleUrl: './stock-transfers.component.css'
 })
 export class StockTransfersComponent implements OnInit {
+  private readonly loadRequest = latestRequest();
+  private readonly receiveDetailRequest = latestRequest();
   private readonly auth = inject(AuthService);
 
   readonly transfers = signal<StockTransferListItemDto[]>([]);
@@ -124,13 +127,13 @@ export class StockTransfersComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const [transfersResult, branchesResult, productsResult] = await Promise.all([
-        firstValueFrom(this.apiClient.get<PagedResult<StockTransferListItemDto>>(
+      const [transfersResult, branchesResult, productsResult] = await this.loadRequest.run(forkJoin([
+        this.apiClient.get<PagedResult<StockTransferListItemDto>>(
           ApiController.StockTransfers, StockTransfersOperation.List, undefined,
-          { pageNumber: this.pageNumber(), pageSize: this.pageSize(), sortDirection: 'desc' })),
-        firstValueFrom(this.apiClient.get<PagedResult<BranchDto>>(ApiController.Branches, BranchesOperation.List, undefined, { pageSize: 500 })),
-        firstValueFrom(this.apiClient.get<PagedResult<ProductDto>>(ApiController.Products, ProductsOperation.List, undefined, { pageSize: 500 }))
-      ]);
+          { pageNumber: this.pageNumber(), pageSize: this.pageSize(), sortDirection: 'desc' }),
+        this.apiClient.get<PagedResult<BranchDto>>(ApiController.Branches, BranchesOperation.List, undefined, { pageSize: 500 }),
+        this.apiClient.get<PagedResult<ProductDto>>(ApiController.Products, ProductsOperation.List, undefined, { pageSize: 500 })
+      ]));
 
       this.transfers.set(transfersResult.items);
       this.totalCount.set(transfersResult.totalCount);
@@ -144,7 +147,8 @@ export class StockTransfersComponent implements OnInit {
       if (productsResult.items.length > 0) {
         this.newLineProductId = productsResult.items[0].id;
       }
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل عمليات النقل.');
     } finally {
       this.loading.set(false);
@@ -282,11 +286,12 @@ export class StockTransfersComponent implements OnInit {
     this.receiveDetail.set(null);
 
     try {
-      const detail = await firstValueFrom(
+      const detail = await this.receiveDetailRequest.run(
         this.apiClient.get<StockTransferDetailDto>(ApiController.StockTransfers, StockTransfersOperation.Detail, { stockTransferId: transfer.id })
       );
       this.receiveDetail.set(detail);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.receiveError.set('تعذّر تحميل تفاصيل عملية النقل.');
     }
   }

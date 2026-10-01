@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { PriceChangeRequestsOperation } from '../../core/api/operations';
 
@@ -27,6 +28,7 @@ interface PriceChangeRequestListItemDto {
   styleUrl: './price-change-requests.component.css'
 })
 export class PriceChangeRequestsComponent implements OnInit {
+  private readonly listRequest = latestRequest();
   readonly requests = signal<PriceChangeRequestListItemDto[]>([]);
   readonly loading = signal(true);
   readonly errorMessage = signal<string | null>(null);
@@ -43,11 +45,12 @@ export class PriceChangeRequestsComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.listRequest.run(
         this.apiClient.get<PriceChangeRequestListItemDto[]>(ApiController.PriceChangeRequests, PriceChangeRequestsOperation.List)
       );
       this.requests.set(result);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل طلبات تعديل السعر.');
     } finally {
       this.loading.set(false);

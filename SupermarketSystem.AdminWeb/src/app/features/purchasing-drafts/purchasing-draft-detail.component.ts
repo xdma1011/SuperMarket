@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { LatestRequest, isRequestCancelled } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { PurchaseInvoiceDraftsOperation, SuppliersOperation, ProductsOperation, PaymentMethodsOperation } from '../../core/api/operations';
 import { environment } from '../../../environments/environment';
@@ -88,6 +89,7 @@ interface EditableItem extends PurchaseInvoiceDraftItemDto {
   styleUrl: './purchasing-draft-detail.component.css'
 })
 export class PurchasingDraftDetailComponent implements OnInit {
+  private readonly searchRequests = new WeakMap<EditableItem, LatestRequest>();
   readonly draft = signal<PurchaseInvoiceDraftDetailDto | null>(null);
   readonly suppliers = signal<SupplierDto[]>([]);
   readonly paymentMethods = signal<PaymentMethodDto[]>([]);
@@ -187,13 +189,20 @@ export class PurchasingDraftDetailComponent implements OnInit {
     }
 
     item.searching = true;
+    // بحث لكل سطر لحاله: كتابة سريعة بتقطع البحث السابق لنفس السطر، فنتيجة حرف قديم ما بتغطّي نتيجة الكلمة الكاملة
+    let searchRequest = this.searchRequests.get(item);
+    if (!searchRequest) {
+      searchRequest = new LatestRequest();
+      this.searchRequests.set(item, searchRequest);
+    }
     try {
-      const result = await firstValueFrom(
+      const result = await searchRequest.run(
         this.apiClient.get<{ items: ProductSearchResultDto[] }>(
           ApiController.Products, ProductsOperation.List, undefined, { search: item.searchTerm.trim(), pageSize: 8 })
       );
       item.searchResults = result.items;
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       item.searchResults = [];
     } finally {
       item.searching = false;

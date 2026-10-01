@@ -1,8 +1,9 @@
 import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, forkJoin } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import {
   ProductCategoriesOperation,
@@ -106,6 +107,11 @@ type Tab = 'products' | 'categories';
   styleUrl: './catalog.component.css'
 })
 export class CatalogComponent implements OnInit {
+  private readonly lookupsRequest = latestRequest();
+  private readonly listRequest = latestRequest();
+  private readonly promotionsRequest = latestRequest();
+  private readonly branchesRequest = latestRequest();
+  private readonly unitsRequest = latestRequest();
   private readonly auth = inject(AuthService);
   private readonly businessTime = inject(BusinessTimeService);
 
@@ -233,11 +239,12 @@ export class CatalogComponent implements OnInit {
     if (this.productSearch.trim()) params['search'] = this.productSearch.trim();
     if (this.listBranchId) params['branchId'] = this.listBranchId;
     try {
-      const result = await firstValueFrom(this.apiClient.get<PagedResult<ProductDto>>(
+      const result = await this.listRequest.run(this.apiClient.get<PagedResult<ProductDto>>(
         ApiController.Products, ProductsOperation.List, undefined, params));
       this.products.set(result.items);
       this.productsTotalCount.set(result.totalCount);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل المنتجات.');
     }
   }
@@ -251,11 +258,11 @@ export class CatalogComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const [categoriesResult, branchesResult, unitsOfMeasureResult] = await Promise.all([
-        firstValueFrom(this.apiClient.get<PagedResult<CategoryDto>>(ApiController.ProductCategories, ProductCategoriesOperation.List)),
-        firstValueFrom(this.apiClient.get<PagedResult<BranchDto>>(ApiController.Branches, BranchesOperation.List, undefined, { pageSize: 500 })),
-        firstValueFrom(this.apiClient.get<UnitOfMeasureDto[]>(ApiController.UnitsOfMeasure, UnitsOfMeasureOperation.List, undefined, { activeOnly: true }))
-      ]);
+      const [categoriesResult, branchesResult, unitsOfMeasureResult] = await this.lookupsRequest.run(forkJoin([
+        this.apiClient.get<PagedResult<CategoryDto>>(ApiController.ProductCategories, ProductCategoriesOperation.List),
+        this.apiClient.get<PagedResult<BranchDto>>(ApiController.Branches, BranchesOperation.List, undefined, { pageSize: 500 }),
+        this.apiClient.get<UnitOfMeasureDto[]>(ApiController.UnitsOfMeasure, UnitsOfMeasureOperation.List, undefined, { activeOnly: true })
+      ]));
 
       this.categories.set(categoriesResult.items);
       this.branches.set(branchesResult.items);
@@ -271,7 +278,8 @@ export class CatalogComponent implements OnInit {
         this.listBranchId = this.auth.defaultBranchId(branchesResult.items);
       }
       await this.loadProducts();
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل دليل الأصناف.');
     } finally {
       this.loading.set(false);
@@ -304,33 +312,36 @@ export class CatalogComponent implements OnInit {
 
   private async loadProductPromotions(productId: string): Promise<void> {
     try {
-      const promotions = await firstValueFrom(
+      const promotions = await this.promotionsRequest.run(
         this.apiClient.get<ProductPromotionDto[]>(ApiController.Products, ProductsOperation.GetPromotions, { productId })
       );
       this.productPromotions.set(promotions);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.productPromotions.set([]);
     }
   }
 
   private async loadProductBranches(productId: string): Promise<void> {
     try {
-      const branches = await firstValueFrom(
+      const branches = await this.branchesRequest.run(
         this.apiClient.get<ProductBranchItemDto[]>(ApiController.Products, ProductsOperation.GetBranches, { productId })
       );
       this.productBranches.set(branches);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.productBranches.set([]);
     }
   }
 
   private async loadProductUnits(productId: string): Promise<void> {
     try {
-      const units = await firstValueFrom(
+      const units = await this.unitsRequest.run(
         this.apiClient.get<ProductUnitDto[]>(ApiController.Products, ProductsOperation.GetUnits, { productId })
       );
       this.productUnits.set(units);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.productUnits.set([]);
     }
   }

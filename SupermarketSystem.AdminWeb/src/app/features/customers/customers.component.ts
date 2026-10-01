@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { CustomersOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
@@ -32,6 +33,7 @@ let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined;
   styleUrl: './customers.component.css'
 })
 export class CustomersComponent implements OnInit {
+  private readonly listRequest = latestRequest();
   readonly customers = signal<CustomerListItemDto[]>([]);
   readonly totalCount = signal(0);
   readonly pageNumber = signal(1);
@@ -52,7 +54,7 @@ export class CustomersComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.listRequest.run(
         this.apiClient.get<PagedResult<CustomerListItemDto>>(ApiController.Customers, CustomersOperation.List, undefined, {
           pageNumber: this.pageNumber(),
           pageSize: this.pageSize(),
@@ -61,7 +63,8 @@ export class CustomersComponent implements OnInit {
       );
       this.customers.set(result.items);
       this.totalCount.set(result.totalCount);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل قائمة الزبائن.');
     } finally {
       this.loading.set(false);

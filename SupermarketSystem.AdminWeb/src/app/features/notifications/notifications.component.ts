@@ -1,8 +1,9 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { catchError, firstValueFrom, forkJoin, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { NotificationsOperation } from '../../core/api/operations';
 import { PermissionsService } from '../../core/services/permissions.service';
@@ -56,6 +57,7 @@ interface PagedResult<T> {
   styleUrl: './notifications.component.css'
 })
 export class NotificationsComponent implements OnInit {
+  private readonly listRequest = latestRequest();
   private readonly router = inject(Router, { optional: true });
   /** "?tab=Warning" (من الرئيسية) بيفتح التبويب مباشرة. اختياري: الاختبارات بلا Router. */
   private readonly route = inject(ActivatedRoute, { optional: true });
@@ -109,15 +111,17 @@ export class NotificationsComponent implements OnInit {
     if (this.unreadOnly()) params['unreadOnly'] = true;
 
     try {
-      const [list, summary] = await Promise.all([
-        firstValueFrom(this.apiClient.get<PagedResult<NotificationItemDto>>(
-          ApiController.Notifications, NotificationsOperation.List, undefined, params)),
-        firstValueFrom(this.apiClient.get<NotificationSummaryDto>(
-          ApiController.Notifications, NotificationsOperation.Summary)).catch(() => this.summary())
-      ]);
+      // تبديل التبويب بسرعة: الطلب السابق بينقطع، فقائمة تبويب قديم ما بتنعرض تحت التبويب الحالي
+      const [list, summary] = await this.listRequest.run(forkJoin([
+        this.apiClient.get<PagedResult<NotificationItemDto>>(
+          ApiController.Notifications, NotificationsOperation.List, undefined, params),
+        this.apiClient.get<NotificationSummaryDto>(
+          ApiController.Notifications, NotificationsOperation.Summary).pipe(catchError(() => of(this.summary())))
+      ]));
       this.notifications.set(list.items);
       this.summary.set(summary);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل الإشعارات.');
     } finally {
       this.loading.set(false);

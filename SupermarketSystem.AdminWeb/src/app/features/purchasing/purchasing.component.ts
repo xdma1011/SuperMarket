@@ -1,8 +1,9 @@
 import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, forkJoin } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { PurchaseInvoicesOperation, ProductsOperation, SuppliersOperation, BranchesOperation, PaymentMethodsOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
@@ -79,6 +80,7 @@ interface PagedResult<T> {
   styleUrl: './purchasing.component.css'
 })
 export class PurchasingComponent implements OnInit {
+  private readonly loadRequest = latestRequest();
   private readonly auth = inject(AuthService);
 
   readonly invoices = signal<PurchaseInvoiceListItemDto[]>([]);
@@ -123,18 +125,18 @@ export class PurchasingComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const [invoicesResult, suppliersResult, branchesResult, productsResult, paymentMethodsResult] = await Promise.all([
-        firstValueFrom(this.apiClient.get<PagedResult<PurchaseInvoiceListItemDto>>(
+      const [invoicesResult, suppliersResult, branchesResult, productsResult, paymentMethodsResult] = await this.loadRequest.run(forkJoin([
+        this.apiClient.get<PagedResult<PurchaseInvoiceListItemDto>>(
           ApiController.PurchaseInvoices, PurchaseInvoicesOperation.List, undefined,
-          { pageNumber: this.pageNumber(), pageSize: this.pageSize() })),
+          { pageNumber: this.pageNumber(), pageSize: this.pageSize() }),
         // pageSize كبير عمدًا هون — هاي قوائم تعبئة Dropdown بالنموذج،
         // لا جداول معروضة، فالقصّ الافتراضي (20) كان رح يخفي موردين/فروع/
         // منتجات موجودة فعليًا بلا أي مؤشر للمستخدم إنها ناقصة.
-        firstValueFrom(this.apiClient.get<PagedResult<SupplierDto>>(ApiController.Suppliers, SuppliersOperation.List, undefined, { pageSize: 500 })),
-        firstValueFrom(this.apiClient.get<PagedResult<BranchDto>>(ApiController.Branches, BranchesOperation.List, undefined, { pageSize: 500 })),
-        firstValueFrom(this.apiClient.get<PagedResult<ProductDto>>(ApiController.Products, ProductsOperation.List, undefined, { pageSize: 500 })),
-        firstValueFrom(this.apiClient.get<PaymentMethodDto[]>(ApiController.PaymentMethods, PaymentMethodsOperation.List))
-      ]);
+        this.apiClient.get<PagedResult<SupplierDto>>(ApiController.Suppliers, SuppliersOperation.List, undefined, { pageSize: 500 }),
+        this.apiClient.get<PagedResult<BranchDto>>(ApiController.Branches, BranchesOperation.List, undefined, { pageSize: 500 }),
+        this.apiClient.get<PagedResult<ProductDto>>(ApiController.Products, ProductsOperation.List, undefined, { pageSize: 500 }),
+        this.apiClient.get<PaymentMethodDto[]>(ApiController.PaymentMethods, PaymentMethodsOperation.List)
+      ]));
 
       this.invoices.set(invoicesResult.items);
       this.totalCount.set(invoicesResult.totalCount);
@@ -147,7 +149,8 @@ export class PurchasingComponent implements OnInit {
       if (suppliersResult.items.length > 0) this.selectedSupplierId = suppliersResult.items[0].id;
       if (branchesResult.items.length > 0) this.selectedBranchId = this.auth.defaultBranchId(branchesResult.items);
       if (productsResult.items.length > 0) this.newLineProductId = productsResult.items[0].id;
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل بيانات المشتريات.');
     } finally {
       this.loading.set(false);

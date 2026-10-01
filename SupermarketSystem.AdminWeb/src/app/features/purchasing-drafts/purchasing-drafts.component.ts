@@ -2,8 +2,9 @@ import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, forkJoin } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { PurchaseInvoiceDraftsOperation, BranchesOperation, PaymentMethodsOperation } from '../../core/api/operations';
 import { AuthService } from '../../core/services/auth.service';
@@ -51,6 +52,7 @@ interface PagedResult<T> {
   styleUrl: './purchasing-drafts.component.css'
 })
 export class PurchasingDraftsComponent implements OnInit {
+  private readonly loadRequest = latestRequest();
   private readonly auth = inject(AuthService);
 
   readonly drafts = signal<PurchaseInvoiceDraftListItemDto[]>([]);
@@ -80,16 +82,12 @@ export class PurchasingDraftsComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const [draftsResult, branchesResult, paymentMethodsResult] = await Promise.all([
-        firstValueFrom(
-          this.apiClient.get<PagedResult<PurchaseInvoiceDraftListItemDto>>(
-            ApiController.PurchaseInvoices, PurchaseInvoiceDraftsOperation.List, undefined, { pageSize: 100 })
-        ),
-        firstValueFrom(
-          this.apiClient.get<PagedResult<BranchDto>>(ApiController.Branches, BranchesOperation.List, undefined, { pageSize: 500 })
-        ),
-        firstValueFrom(this.apiClient.get<PaymentMethodDto[]>(ApiController.PaymentMethods, PaymentMethodsOperation.List))
-      ]);
+      const [draftsResult, branchesResult, paymentMethodsResult] = await this.loadRequest.run(forkJoin([
+        this.apiClient.get<PagedResult<PurchaseInvoiceDraftListItemDto>>(
+          ApiController.PurchaseInvoices, PurchaseInvoiceDraftsOperation.List, undefined, { pageSize: 100 }),
+        this.apiClient.get<PagedResult<BranchDto>>(ApiController.Branches, BranchesOperation.List, undefined, { pageSize: 500 }),
+        this.apiClient.get<PaymentMethodDto[]>(ApiController.PaymentMethods, PaymentMethodsOperation.List)
+      ]));
 
       this.drafts.set(draftsResult.items);
       this.branches.set(branchesResult.items);
@@ -100,7 +98,8 @@ export class PurchasingDraftsComponent implements OnInit {
       if (paymentMethodsResult.length > 0 && !this.paidNowPaymentMethodId) {
         this.paidNowPaymentMethodId = paymentMethodsResult[0].id;
       }
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل مسودات فواتير الشراء.');
     } finally {
       this.loading.set(false);

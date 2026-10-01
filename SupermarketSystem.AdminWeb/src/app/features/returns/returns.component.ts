@@ -4,6 +4,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { SalesOperation, ReturnsOperation, PaymentMethodsOperation } from '../../core/api/operations';
 
@@ -94,6 +95,9 @@ interface ReturnLine {
   styleUrl: './returns.component.css'
 })
 export class ReturnsComponent {
+  private readonly returnsListRequest = latestRequest();
+  private readonly searchRequest = latestRequest();
+  private readonly invoiceRequest = latestRequest();
   readonly searchQuery = signal('');
   readonly searchResults = signal<SaleInvoiceListItemDto[]>([]);
   readonly searching = signal(false);
@@ -142,7 +146,7 @@ export class ReturnsComponent {
     this.loadingReturns.set(true);
     this.returnsError.set(null);
     try {
-      const result = await firstValueFrom(
+      const result = await this.returnsListRequest.run(
         this.apiClient.get<PagedResult<ReturnInvoiceListItem>>(ApiController.Returns, ReturnsOperation.List, undefined, {
           pageNumber: page, pageSize: RETURNS_PAGE_SIZE
         })
@@ -150,7 +154,8 @@ export class ReturnsComponent {
       this.returnInvoices.set(result.items);
       this.returnsTotal.set(result.totalCount);
       this.returnsPage.set(page);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.returnsError.set('تعذّر تحميل فواتير الإرجاع.');
     } finally {
       this.loadingReturns.set(false);
@@ -180,7 +185,7 @@ export class ReturnsComponent {
     this.selectedInvoice.set(null);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.searchRequest.run(
         this.apiClient.get<PagedResult<SaleInvoiceListItemDto>>(
           ApiController.Sales, SalesOperation.List, undefined, { search: query, pageSize: 10 }
         )
@@ -189,7 +194,8 @@ export class ReturnsComponent {
       if (result.items.length === 0) {
         this.errorMessage.set('لا توجد فاتورة بهذا الرقم.');
       }
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر البحث عن الفاتورة.');
     } finally {
       this.searching.set(false);
@@ -201,7 +207,7 @@ export class ReturnsComponent {
     this.successMessage.set(null);
 
     try {
-      const invoice = await firstValueFrom(
+      const invoice = await this.invoiceRequest.run(
         this.apiClient.get<SaleInvoiceDetailDto>(ApiController.Sales, SalesOperation.GetById, { id: invoiceId })
       );
 
@@ -219,7 +225,8 @@ export class ReturnsComponent {
             quantity: 0
           }))
       );
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل تفاصيل الفاتورة.');
     }
   }

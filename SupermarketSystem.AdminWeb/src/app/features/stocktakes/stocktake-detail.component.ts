@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { StocktakesOperation } from '../../core/api/operations';
 import { PermissionsService } from '../../core/services/permissions.service';
@@ -59,6 +60,7 @@ const STATUS_CANCELLED: StocktakeStatus = 'Cancelled';
   styleUrl: './stocktake-detail.component.css'
 })
 export class StocktakeDetailComponent implements OnInit {
+  private readonly loadRequest = latestRequest();
   readonly stocktake = signal<StocktakeDetailResponse | null>(null);
   readonly loading = signal(true);
   readonly errorMessage = signal<string | null>(null);
@@ -92,11 +94,12 @@ export class StocktakeDetailComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.loadRequest.run(
         this.apiClient.get<StocktakeDetailResponse>(ApiController.Stocktakes, StocktakesOperation.GetById, { id: this.stocktakeId })
       );
       this.stocktake.set(result);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل الجرد - تأكد إنه موجود.');
     } finally {
       this.loading.set(false);

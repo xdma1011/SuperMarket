@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { ProductsOperation, BranchesOperation, InventoryOperation } from '../../core/api/operations';
 import { AuthService } from '../../core/services/auth.service';
@@ -50,6 +51,7 @@ const WASTE_REASONS: ReadonlyArray<{ value: number; label: string }> = [
   styleUrl: './waste.component.css'
 })
 export class WasteComponent implements OnInit {
+  private readonly unitsRequest = latestRequest();
   private readonly auth = inject(AuthService);
 
   readonly products = signal<ProductDto[]>([]);
@@ -115,13 +117,14 @@ export class WasteComponent implements OnInit {
     this.selectedUnitId = '';
 
     try {
-      const units = await firstValueFrom(
+      const units = await this.unitsRequest.run(
         this.apiClient.get<ProductUnitDto[]>(ApiController.Products, ProductsOperation.GetUnits, { productId: this.selectedProductId })
       );
       this.units.set(units);
       const baseUnit = units.find(u => u.isBaseUnit) ?? units[0];
       if (baseUnit) this.selectedUnitId = baseUnit.id;
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر جلب وحدات هذا المنتج.');
     } finally {
       this.loadingUnits.set(false);

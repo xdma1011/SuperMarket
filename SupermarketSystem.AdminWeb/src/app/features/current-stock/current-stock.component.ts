@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { InventoryOperation, BranchesOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
@@ -35,6 +36,7 @@ interface PagedResult<T> {
   styleUrl: './current-stock.component.css'
 })
 export class CurrentStockComponent implements OnInit {
+  private readonly listRequest = latestRequest();
   readonly items = signal<CurrentStockItemDto[]>([]);
   readonly totalCount = signal(0);
   readonly pageNumber = signal(1);
@@ -70,7 +72,7 @@ export class CurrentStockComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.listRequest.run(
         this.apiClient.get<PagedResult<CurrentStockItemDto>>(ApiController.Inventory, InventoryOperation.GetCurrentStock, undefined, {
           pageNumber: this.pageNumber(),
           pageSize: this.pageSize(),
@@ -80,7 +82,8 @@ export class CurrentStockComponent implements OnInit {
       );
       this.items.set(result.items);
       this.totalCount.set(result.totalCount);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل المخزون الحالي.');
     } finally {
       this.loading.set(false);

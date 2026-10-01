@@ -4,6 +4,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { ReportsOperation, PurchaseInvoicesOperation, SalesOperation, BranchesOperation, ProductsOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
@@ -108,6 +109,7 @@ type SpecialReportId = 'sales-summary' | 'capital-value' | 'supplier-debts' | 'p
   styleUrl: './reports.component.css'
 })
 export class ReportsComponent implements OnInit {
+  private readonly reportRequest = latestRequest();
   private readonly auth = inject(AuthService);
   private readonly businessTime = inject(BusinessTimeService);
 
@@ -208,6 +210,8 @@ export class ReportsComponent implements OnInit {
       }
       if (config.requiresProduct) {
         if (!this.selectedProductId) {
+          // تقرير بلا طلب: أي تقرير قبله لسه بيحمّل ما لازم يكتب فوق هالشاشة
+          this.reportRequest.cancel();
           await this.ensureProductsLoaded();
           this.errorMessage.set('اختر منتجًا لعرض مقارنة أسعار الموردين.');
           this.rows.set([]);
@@ -219,6 +223,7 @@ export class ReportsComponent implements OnInit {
       }
       if (config.requiresBranch) {
         if (!this.selectedBranchId) {
+          this.reportRequest.cancel();
           this.errorMessage.set('هذا التقرير يحتاج تحديد فرع أولًا.');
           this.rows.set([]);
           this.totalCount.set(0);
@@ -228,7 +233,7 @@ export class ReportsComponent implements OnInit {
         queryParams['branchId'] = this.selectedBranchId;
       }
 
-      const result = await firstValueFrom(
+      const result = await this.reportRequest.run(
         this.apiClient.get<PagedResult<Record<string, unknown>>>(
           ApiController.Reports, config.operation, undefined, queryParams
         )
@@ -236,7 +241,8 @@ export class ReportsComponent implements OnInit {
 
       this.rows.set(result.items);
       this.totalCount.set(result.totalCount);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل التقرير.');
       this.rows.set([]);
       this.totalCount.set(0);
@@ -250,14 +256,15 @@ export class ReportsComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.reportRequest.run(
         this.apiClient.get<GetSalesSummaryResponse>(ApiController.Reports, ReportsOperation.SalesSummary, undefined, {
           fromUtc: this.rangeStartUtc(),
           toUtc: this.rangeEndUtc()
         })
       );
       this.salesSummary.set(result);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل ملخّص المبيعات.');
       this.salesSummary.set(null);
     } finally {
@@ -270,14 +277,15 @@ export class ReportsComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.reportRequest.run(
         this.apiClient.get<GetCurrentCapitalValueResponse>(
           ApiController.Reports, ReportsOperation.CurrentCapitalValue, undefined,
           { pageNumber: this.pageNumber(), pageSize: this.pageSize() }
         )
       );
       this.capitalValue.set(result);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل تقرير رأس المال.');
       this.capitalValue.set(null);
     } finally {
@@ -287,6 +295,7 @@ export class ReportsComponent implements OnInit {
 
   private async loadProductMargin(): Promise<void> {
     if (!this.selectedBranchId) {
+      this.reportRequest.cancel();
       this.errorMessage.set('هذا التقرير يحتاج تحديد فرع أولًا.');
       this.productMargin.set(null);
       return;
@@ -296,7 +305,7 @@ export class ReportsComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.reportRequest.run(
         this.apiClient.get<GetProductMarginReportResponse>(
           ApiController.Reports, ReportsOperation.ProductMargin, undefined,
           {
@@ -309,7 +318,8 @@ export class ReportsComponent implements OnInit {
         )
       );
       this.productMargin.set(result);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل تقرير هامش الربح لكل منتج.');
       this.productMargin.set(null);
     } finally {
@@ -322,13 +332,14 @@ export class ReportsComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.reportRequest.run(
         this.apiClient.get<GetSupplierDebtsResponse>(
           ApiController.PurchaseInvoices, PurchaseInvoicesOperation.SupplierDebts
         )
       );
       this.supplierDebts.set(result);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل تقرير ديون الموردين.');
       this.supplierDebts.set(null);
     } finally {
@@ -341,13 +352,14 @@ export class ReportsComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.reportRequest.run(
         this.apiClient.get<GetCustomerDebtsResponse>(
           ApiController.Sales, SalesOperation.CustomerDebts
         )
       );
       this.customerDebts.set(result);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل تقرير ديون الزبائن.');
       this.customerDebts.set(null);
     } finally {

@@ -1,8 +1,9 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, forkJoin } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { EmployeesOperation } from '../../core/api/operations';
 import { AuthService, PublicBranchDto } from '../../core/services/auth.service';
@@ -66,6 +67,7 @@ const MONTH_NAMES = [
   styleUrl: './employees.component.css'
 })
 export class EmployeesComponent implements OnInit {
+  private readonly loadRequest = latestRequest();
   private readonly apiClient = inject(ApiClient);
   private readonly auth = inject(AuthService);
 
@@ -129,15 +131,16 @@ export class EmployeesComponent implements OnInit {
     if (!this.branchId) return;
     this.loading.set(true);
     try {
-      const [employees, history] = await Promise.all([
-        firstValueFrom(this.apiClient.get<EmployeeDto[]>(ApiController.Employees, EmployeesOperation.List, undefined,
-          { branchId: this.branchId, includeInactive: this.showInactive })),
-        firstValueFrom(this.apiClient.get<EmployeePaymentDto[]>(ApiController.Employees, EmployeesOperation.Payments, undefined,
-          { branchId: this.branchId, employeeId: this.historyEmployee()?.id }))
-      ]);
+      const [employees, history] = await this.loadRequest.run(forkJoin([
+        this.apiClient.get<EmployeeDto[]>(ApiController.Employees, EmployeesOperation.List, undefined,
+          { branchId: this.branchId, includeInactive: this.showInactive }),
+        this.apiClient.get<EmployeePaymentDto[]>(ApiController.Employees, EmployeesOperation.Payments, undefined,
+          { branchId: this.branchId, employeeId: this.historyEmployee()?.id })
+      ]));
       this.employees.set(employees);
       this.history.set(history);
     } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set(this.errorDetail(err) ?? 'تعذّر تحميل الموظفين.');
     } finally {
       this.loading.set(false);

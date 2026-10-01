@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { BranchesOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
@@ -29,6 +30,7 @@ interface PagedResult<T> {
   styleUrl: './branches.component.css'
 })
 export class BranchesComponent implements OnInit {
+  private readonly listRequest = latestRequest();
   readonly branches = signal<BranchListItemDto[]>([]);
   readonly totalCount = signal(0);
   readonly pageNumber = signal(1);
@@ -58,7 +60,7 @@ export class BranchesComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.listRequest.run(
         this.apiClient.get<PagedResult<BranchListItemDto>>(ApiController.Branches, BranchesOperation.List, undefined, {
           pageNumber: this.pageNumber(),
           pageSize: this.pageSize()
@@ -66,7 +68,8 @@ export class BranchesComponent implements OnInit {
       );
       this.branches.set(result.items);
       this.totalCount.set(result.totalCount);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل قائمة الفروع.');
     } finally {
       this.loading.set(false);

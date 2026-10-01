@@ -7,6 +7,7 @@ import { ThemeService } from '../../core/theme/theme.service';
 import { AuthService } from '../../core/services/auth.service';
 import { PermissionsService } from '../../core/services/permissions.service';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { CashierSyncOperation, NotificationsOperation, ProductsOperation, SuppliersOperation, PurchaseInvoicesOperation } from '../../core/api/operations';
 import { NAV_GROUPS, NAV_ICONS, NAV_ITEMS, NavGroupId, NavItem } from '../../shared/models/nav-item';
@@ -59,6 +60,12 @@ interface SearchResultItem {
   styleUrl: './shell.component.css'
 })
 export class ShellComponent {
+  // آخر طلب بس: تنقّل سريع بين الصفحات (عدّاد الجرس) أو كتابة بعد ما البحث انطلق ما بيخلّي رد قديم يغطّي الجديد
+  private readonly alertsRequest = latestRequest();
+  private readonly productSearchRequest = latestRequest();
+  private readonly supplierSearchRequest = latestRequest();
+  private readonly invoiceSearchRequest = latestRequest();
+
   readonly navItems = computed(() =>
     NAV_ITEMS.filter(item => !item.requiredPermission || this.permissionsService.has(item.requiredPermission))
   );
@@ -156,10 +163,11 @@ export class ShellComponent {
       return;
     }
     try {
-      const s = await firstValueFrom(this.apiClient.get<{ unreadCritical: number; unreadWarning: number; unreadInfo: number }>(
+      const s = await this.alertsRequest.run(this.apiClient.get<{ unreadCritical: number; unreadWarning: number; unreadInfo: number }>(
         ApiController.Notifications, NotificationsOperation.Summary));
       this.unreadAlerts.set({ count: (s?.unreadCritical ?? 0) + (s?.unreadWarning ?? 0), critical: (s?.unreadCritical ?? 0) > 0 });
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.unreadAlerts.set({ count: 0, critical: false });
     }
   }
@@ -234,6 +242,13 @@ export class ShellComponent {
   }
 
   clearQuery(): void {
+    if (this.searchDebounceHandle) {
+      clearTimeout(this.searchDebounceHandle);
+    }
+    // بحث لسه بالطريق ما يرجّع النتائج بعد ما المستخدم مسح
+    this.productSearchRequest.cancel();
+    this.supplierSearchRequest.cancel();
+    this.invoiceSearchRequest.cancel();
     this.searchQuery.set('');
     this.searchResults.set([]);
     this.pageResults.set([]);
@@ -388,6 +403,9 @@ export class ShellComponent {
     }
 
     if (trimmed.length < 2) {
+      this.productSearchRequest.cancel();
+      this.supplierSearchRequest.cancel();
+      this.invoiceSearchRequest.cancel();
       this.searchResults.set([]);
       this.searchOpen.set(this.pageResults().length > 0);
       return;
@@ -415,7 +433,8 @@ export class ShellComponent {
     try {
       const resultGroups = await Promise.all(tasks);
       this.searchResults.set(resultGroups.flat());
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.searchResults.set([]);
     } finally {
       this.searching.set(false);
@@ -424,7 +443,7 @@ export class ShellComponent {
 
   private async searchProducts(query: string): Promise<SearchResultItem[]> {
     try {
-      const result = await firstValueFrom(
+      const result = await this.productSearchRequest.run(
         this.apiClient.get<{ items: { id: string; name: string }[] }>(
           ApiController.Products, ProductsOperation.List, undefined, { search: query, pageSize: 5 }
         )
@@ -432,14 +451,16 @@ export class ShellComponent {
       return result.items.map(p => ({
         type: 'product' as const, typeLabel: 'منتج', id: p.id, label: p.name, sublabel: 'دليل الأصناف', route: '/catalog'
       }));
-    } catch {
+    } catch (err) {
+      // إلغاء = بحث أحدث مكانه: لازم يوصل لـrunSearch عشان ما يكتب نتائج ناقصة
+      if (isRequestCancelled(err)) throw err;
       return [];
     }
   }
 
   private async searchSuppliers(query: string): Promise<SearchResultItem[]> {
     try {
-      const result = await firstValueFrom(
+      const result = await this.supplierSearchRequest.run(
         this.apiClient.get<{ items: { id: string; name: string }[] }>(
           ApiController.Suppliers, SuppliersOperation.List, undefined, { search: query, pageSize: 5 }
         )
@@ -447,14 +468,16 @@ export class ShellComponent {
       return result.items.map(s => ({
         type: 'supplier' as const, typeLabel: 'مورد', id: s.id, label: s.name, sublabel: 'الموردين', route: '/suppliers'
       }));
-    } catch {
+    } catch (err) {
+      // إلغاء = بحث أحدث مكانه: لازم يوصل لـrunSearch عشان ما يكتب نتائج ناقصة
+      if (isRequestCancelled(err)) throw err;
       return [];
     }
   }
 
   private async searchPurchaseInvoices(query: string): Promise<SearchResultItem[]> {
     try {
-      const result = await firstValueFrom(
+      const result = await this.invoiceSearchRequest.run(
         this.apiClient.get<{ items: { id: string; invoiceNumber: string; supplierName: string }[] }>(
           ApiController.PurchaseInvoices, PurchaseInvoicesOperation.List, undefined, { search: query, pageSize: 5 }
         )
@@ -462,7 +485,9 @@ export class ShellComponent {
       return result.items.map(i => ({
         type: 'invoice' as const, typeLabel: 'فاتورة شراء', id: i.id, label: i.invoiceNumber, sublabel: i.supplierName, route: '/purchases'
       }));
-    } catch {
+    } catch (err) {
+      // إلغاء = بحث أحدث مكانه: لازم يوصل لـrunSearch عشان ما يكتب نتائج ناقصة
+      if (isRequestCancelled(err)) throw err;
       return [];
     }
   }

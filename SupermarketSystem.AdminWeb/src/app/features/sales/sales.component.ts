@@ -4,6 +4,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { SalesOperation, ReportsOperation, PaymentMethodsOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
@@ -67,6 +68,8 @@ interface GetSalesSummaryResponse {
   styleUrl: './sales.component.css'
 })
 export class SalesComponent implements OnInit {
+  private readonly listRequest = latestRequest();
+  private readonly detailsRequest = latestRequest();
   readonly invoices = signal<SaleInvoiceListItemDto[]>([]);
   readonly totalCount = signal(0);
   readonly pageNumber = signal(1);
@@ -146,9 +149,10 @@ export class SalesComponent implements OnInit {
     this.expandedId.set(row.id);
     this.expandedItems.set(null);
     try {
-      const detail = await firstValueFrom(this.apiClient.get<SaleInvoiceDetailDto>(ApiController.Sales, SalesOperation.GetById, { id: row.id }));
+      const detail = await this.detailsRequest.run(this.apiClient.get<SaleInvoiceDetailDto>(ApiController.Sales, SalesOperation.GetById, { id: row.id }));
       if (this.expandedId() === row.id) this.expandedItems.set(detail.items);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       if (this.expandedId() === row.id) this.expandedItems.set([]);
     }
   }
@@ -188,7 +192,7 @@ export class SalesComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.listRequest.run(
         this.apiClient.get<PagedResult<SaleInvoiceListItemDto>>(ApiController.Sales, SalesOperation.List, undefined, {
           pageNumber: this.pageNumber(),
           pageSize: this.pageSize(),
@@ -202,7 +206,8 @@ export class SalesComponent implements OnInit {
       );
       this.invoices.set(result.items);
       this.totalCount.set(result.totalCount);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل الفواتير.');
     } finally {
       this.loading.set(false);

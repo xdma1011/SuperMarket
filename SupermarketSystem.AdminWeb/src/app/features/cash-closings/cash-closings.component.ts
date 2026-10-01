@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { CashClosingsOperation, BranchesOperation, PaymentMethodsOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
@@ -51,6 +52,7 @@ interface CountedDetailRow {
   styleUrl: './cash-closings.component.css'
 })
 export class CashClosingsComponent implements OnInit {
+  private readonly listRequest = latestRequest();
   private readonly auth = inject(AuthService);
   private readonly businessTime = inject(BusinessTimeService);
 
@@ -104,7 +106,7 @@ export class CashClosingsComponent implements OnInit {
     this.errorMessage.set(null);
 
     try {
-      const result = await firstValueFrom(
+      const result = await this.listRequest.run(
         this.apiClient.get<PagedResult<CashClosingListItemDto>>(ApiController.CashClosings, CashClosingsOperation.List, undefined, {
           pageNumber: this.pageNumber(),
           pageSize: this.pageSize(),
@@ -114,7 +116,8 @@ export class CashClosingsComponent implements OnInit {
       );
       this.closings.set(result.items);
       this.totalCount.set(result.totalCount);
-    } catch {
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set('تعذّر تحميل قائمة تقفيلات الصندوق.');
     } finally {
       this.loading.set(false);

@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
+import { isRequestCancelled, latestRequest } from '../../core/api/latest-request';
 import { ApiController } from '../../core/api/api-controller.enum';
 import { CouponsOperation, CustomersOperation } from '../../core/api/operations';
 import { BusinessTimeService } from '../../core/services/business-time.service';
@@ -50,6 +51,7 @@ interface CustomerOption {
   styleUrl: './coupons.component.css'
 })
 export class CouponsComponent implements OnInit {
+  private readonly listRequest = latestRequest();
   private readonly apiClient = inject(ApiClient);
   private readonly businessTime = inject(BusinessTimeService);
 
@@ -87,8 +89,9 @@ export class CouponsComponent implements OnInit {
   async load(): Promise<void> {
     this.loading.set(true);
     try {
-      this.coupons.set(await firstValueFrom(this.apiClient.get<CouponDto[]>(ApiController.Coupons, CouponsOperation.List)));
+      this.coupons.set(await this.listRequest.run(this.apiClient.get<CouponDto[]>(ApiController.Coupons, CouponsOperation.List)));
     } catch (err) {
+      if (isRequestCancelled(err)) return;
       this.errorMessage.set(this.errorDetail(err) ?? 'تعذّر تحميل الكوبونات.');
     } finally {
       this.loading.set(false);
