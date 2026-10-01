@@ -63,6 +63,9 @@ export class ShellComponent {
     NAV_ITEMS.filter(item => !item.requiredPermission || this.permissionsService.has(item.requiredPermission))
   );
 
+  /** الجرس بس لمين عنده Notifications.View (الكاشير بلا تنبيهات - قرار صاحب المشروع 1/10/2026 "الكاشير ما يشوف اشي"). */
+  readonly canSeeAlerts = computed(() => this.permissionsService.loaded() && this.permissionsService.has('Notifications.View'));
+
   /** ترتيب شخصي من المستخدم (زر "ترتيب القائمة")؛ null = الترتيب الافتراضي. */
   readonly navOrder = signal<NavOrder | null>(this.readNavOrder());
 
@@ -148,6 +151,10 @@ export class ShellComponent {
 
   /** بلا صلاحية Notifications.View (403) أو خطأ شبكة = الجرس بلا عدّاد، بصمت. */
   async refreshUnreadAlerts(): Promise<void> {
+    if (this.permissionsService.loaded() && !this.permissionsService.has('Notifications.View')) {
+      this.unreadAlerts.set({ count: 0, critical: false });
+      return;
+    }
     try {
       const s = await firstValueFrom(this.apiClient.get<{ unreadCritical: number; unreadWarning: number; unreadInfo: number }>(
         ApiController.Notifications, NotificationsOperation.Summary));

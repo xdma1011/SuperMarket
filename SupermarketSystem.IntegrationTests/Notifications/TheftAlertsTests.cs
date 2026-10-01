@@ -234,9 +234,10 @@ public sealed class TheftAlertsTests : IntegrationTestBase
         await OkJsonAsync(await admin.PostAsync("/api/v1/notifications/read-all", null), "تعليم الكل");
         Assert.Equal((0, 0, 0), await SummaryAsync());
 
-        // الكاشير بيشوف (Notifications.View من CashierDefaults) بس ما بيعلّم - القراءة مشتركة، فكان رح يقدر يخفي
-        // تنبيه عجز صندوقه عن صاحب المحل (Notifications.Manage: Master Admin + مساعد أدمن بس).
-        Assert.Equal(HttpStatusCode.OK, (await cashier.GetAsync("/api/v1/notifications/summary")).StatusCode);
+        // الكاشير ما بيشوف ولا تنبيه (1/10/2026، "الكاشير ما يشوف اشي" - Notifications.View انشالت من CashierDefaults)،
+        // ولا بيعلّم (Notifications.Manage: Master Admin + مساعد أدمن بس) - كان رح يقدر يخفي تنبيه عجز صندوقه.
+        Assert.Equal(HttpStatusCode.Forbidden, (await cashier.GetAsync("/api/v1/notifications/summary")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await cashier.GetAsync("/api/v1/notifications?pageNumber=1&pageSize=20")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await cashier.PostAsync($"/api/v1/notifications/{lockAlert.Id}/read", null)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await cashier.PostAsync("/api/v1/notifications/read-all", null)).StatusCode);
     }

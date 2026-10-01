@@ -178,16 +178,18 @@
         <span>{{ themeLabel }}</span>
       </button>
 
-      <button type="button" class="icon-square" routerLink="/notifications" aria-label="الإشعارات">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M4 6.6a4 4 0 0 1 8 0v3l1.2 2H2.8L4 9.6z"></path>
-          <path d="M6.4 12.2a1.7 1.7 0 0 0 3.2 0"></path>
-        </svg>
-        @if (unreadAlerts().count > 0) {
-          <span class="notif-badge" [class.critical]="unreadAlerts().critical"
-                [attr.title]="unreadAlerts().count + ' تنبيه غير مقروء'">{{ unreadAlerts().count > 99 ? '99+' : unreadAlerts().count }}</span>
-        }
-      </button>
+      @if (canSeeAlerts()) {
+        <button type="button" class="icon-square" routerLink="/notifications" aria-label="الإشعارات">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M4 6.6a4 4 0 0 1 8 0v3l1.2 2H2.8L4 9.6z"></path>
+            <path d="M6.4 12.2a1.7 1.7 0 0 0 3.2 0"></path>
+          </svg>
+          @if (unreadAlerts().count > 0) {
+            <span class="notif-badge" [class.critical]="unreadAlerts().critical"
+                  [attr.title]="unreadAlerts().count + ' تنبيه غير مقروء'">{{ unreadAlerts().count > 99 ? '99+' : unreadAlerts().count }}</span>
+          }
+        </button>
+      }
 
       <div class="user-chip">
         <div class="user-text">

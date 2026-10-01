@@ -279,4 +279,26 @@ describe('ShellComponent', () => {
       expect(localStorage.getItem('nav.sidebarCollapsed')).toBe('true');
     });
   });
+
+  describe('جرس التنبيهات (الكاشير ما بيشوف ولا تنبيه)', () => {
+    it('بلا Notifications.View: الجرس مخفي وما في طلب للملخّص', async () => {
+      apiClientSpy.get.calls.reset();
+
+      await component.refreshUnreadAlerts();
+
+      expect(component.canSeeAlerts()).toBeFalse();
+      expect(apiClientSpy.get.calls.allArgs().some(a => a[1] === 'summary')).toBeFalse();
+    });
+
+    it('مع Notifications.View: الجرس ظاهر وبيجيب الملخّص', async () => {
+      permissionsSpy.has.and.callFake((code: string) => code === 'Notifications.View');
+      apiClientSpy.get.calls.reset();
+      apiClientSpy.get.and.returnValue(of({ unreadCritical: 1, unreadWarning: 2, unreadInfo: 0 }));
+
+      await component.refreshUnreadAlerts();
+
+      expect(component.canSeeAlerts()).toBeTrue();
+      expect(component.unreadAlerts()).toEqual({ count: 3, critical: true });
+    });
+  });
 });

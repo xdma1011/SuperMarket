@@ -604,12 +604,7 @@ public class RolePermissionConfiguration : IEntityTypeConfiguration<RolePermissi
             RoleId = Guid.Parse("f3b401c7-84f6-4a0f-9f17-b689979c5d8c"),
             PermissionId = Guid.Parse("92cfde3f-6a23-48a9-ada8-27adb926af76")
         });
-        builder.HasData(new
-        {
-            Id = Guid.Parse("a1196dff-6fd2-4dfd-b3be-7da022bb309d"),
-            RoleId = Guid.Parse("f3b401c7-84f6-4a0f-9f17-b689979c5d8c"),
-            PermissionId = Guid.Parse("526311ff-3ca8-4533-b4f4-5ae6f375c14c")
-        });
+        // (كاشير -> Notifications.View انشال 1/10/2026 - "الكاشير ما يشوف اشي"، Migration RemoveNotificationsViewFromCashier.)
         builder.HasData(new
         {
             Id = Guid.Parse("1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f"),

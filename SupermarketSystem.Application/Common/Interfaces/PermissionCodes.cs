@@ -49,8 +49,8 @@ public static class PermissionCodes
     /// <summary>وحدة الشركاء: الشركاء، الكشوف الشهرية، السحوبات، المستحق لصاحب المحل - Master Admin حصرًا (28/9/2026).</summary>
     public const string PartnersManage = "Partners.Manage";
 
-    /// <summary>تعليم التنبيهات كمقروءة (28/9/2026) - منفصلة عن NotificationsView عمدًا: الكاشير بيشوف التنبيهات، بس القراءة
-    /// مشتركة للكل، فلو قدر يعلّم كان رح يخفي تنبيه عجز صندوقه عن صاحب المحل. Master Admin + مساعد أدمن.</summary>
+    /// <summary>تعليم التنبيهات كمقروءة (28/9/2026) - منفصلة عن NotificationsView عمدًا: القراءة مشتركة للكل، فأي دور بيشوف
+    /// بس ما لازم يخفي (مثلًا لو انضافت View لكاشير يدويًا) ما بياخدها. Master Admin + مساعد أدمن.</summary>
     public const string NotificationsManage = "Notifications.Manage";
 
     /// <summary>كل الرموز دفعة وحدة — يخدم seed دور "Master Admin" (كل الصلاحيات مربوطة فيه) بلا سرد يدوي معرَّض للنسيان عند إضافة رمز جديد لاحقًا.</summary>
@@ -69,11 +69,12 @@ public static class PermissionCodes
     /// صلاحيات دور "كاشير" — شغل البيع اليومي بس، بلا أي إدارة. PurchasingCreateDraft
     /// مضافة عمدًا: الكاشير يقدر يرفع صورة فاتورة ويحفظها كمسودة بانتظار
     /// مراجعة، بس ما يقدر يعتمدها فعليًا (PurchasingCreate) إلا لو انضافت
-    /// له صراحة.
+    /// له صراحة. NotificationsView مش موجودة عمدًا (1/10/2026، صاحب المشروع: "الكاشير ما يشوف اشي") - التنبيهات
+    /// أغلبها إشارات سرقة/عجز (تبعه وتبع غيره)، فالكاشير ما بيشوف ولا تنبيه.
     /// </summary>
     public static readonly IReadOnlyList<string> CashierDefaults = new[]
     {
-        SalesCreate, SalesVoid, ReturnsProcess, NotificationsView, PurchasingCreateDraft, CashClosingManage
+        SalesCreate, SalesVoid, ReturnsProcess, PurchasingCreateDraft, CashClosingManage
     };
 
     /// <summary>
