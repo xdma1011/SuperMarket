@@ -83,11 +83,20 @@ public sealed class GetCurrentCapitalValueHandler
             })
             .Where(x => x.TotalQuantity > 0);
 
-        var valued = stockQuery
+        // صنف عادي: متوسط مرجّح. صنف بدفعات: كل صف رصيد بتكلفة دفعته هو (ProductBatch.UnitCost) - نفس تكلفة البيع
+        // (UnitCostSnapshot) والتلف/الجرد بكشف الربح. (4/10/2026، انمسك بالمحاكاة العشوائية: كانت الدفعات تنقيّم بمتوسط كل
+        // الدفعات اللي انشرت عبر التاريخ - حتى اللي خلصت - فقيمة الرصيد الباقي كانت غلط لما الدفعات تكلفتها مختلفة.)
+        var nonBatchValued = stockQuery.Where(s => s.ProductBatchId == null)
             .Join(costAverages,
                 s => new { s.ProductId, s.BranchId },
                 c => new { c.ProductId, c.BranchId },
                 (s, c) => new { s.ProductId, s.BranchId, s.QuantityOnHand, AverageCost = c.TotalCost / c.TotalQuantity });
+        var batchValued = stockQuery.Where(s => s.ProductBatchId != null)
+            .Join(_context.ProductBatches.IgnoreQueryFilters().AsNoTracking(),
+                s => s.ProductBatchId,
+                b => (Guid?)b.Id,
+                (s, b) => new { s.ProductId, s.BranchId, s.QuantityOnHand, AverageCost = b.UnitCost });
+        var valued = nonBatchValued.Concat(batchValued);
 
         // الإجمالي والعدد المُستبعَد يُحسبان على المجموعة الكاملة، لا الصفحة.
         var totalCapitalValue = await valued.SumAsync(x => x.QuantityOnHand * x.AverageCost, cancellationToken);

@@ -16,3 +16,6 @@ obj/
 # مساحات عمل git worktree مؤقتة لوكلاء Claude الخلفية (كل واحدة checkout
 # كامل لـgit لحاله) - أدوات تشغيل الجلسة، لا محتوى مشروع.
 .claude/worktrees/
+
+# نتائج المحاكاة العشوائية (run\8-simulation.bat) - بتنكتب كل تشغيلة على جهاز صاحب المشروع.
+run/simulation-results/

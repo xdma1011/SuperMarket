@@ -509,6 +509,59 @@ public sealed class MonthlyProfitReflectionScenarioTests : IntegrationTestBase
         Assert.True(_failures.Count == 0, $"{_failures.Count} من {_checks} فحص غلط:\n" + string.Join("\n", _failures));
     }
 
+    /// <summary>
+    /// قيمة رصيد صنف بدفعات = كل دفعة بتكلفتها (4/10/2026، انمسك بالمحاكاة العشوائية): دفعة رخيصة خلصت بالبيع ودفعة غالية
+    /// باقية - الباقي بينقيّم بتكلفة الغالية، مش بمتوسط كل الدفعات اللي انشرت عبر التاريخ.
+    /// </summary>
+    [Fact]
+    public async Task قيمة_رصيد_صنف_بدفعات_بتكلفة_كل_دفعة_مش_متوسط_الدفعات_اللي_خلصت()
+    {
+        var branchId = Fixture.TestBranchId;
+        using (var scope = CreateScope())
+        {
+            await TestDataBuilder.EnsureDocumentSequencesProvisionedAsync(CreateDbContext(scope), branchId);
+        }
+
+        var admin = await CreateAuthenticatedClientAsync();
+        var categoryId = (await PostAsync(admin, "/api/v1/product-categories", new { name = "دفعات", parentCategoryId = (Guid?)null }, "تصنيف"))
+            .GetProperty("categoryId").GetGuid();
+        var yogurt = await CreateProductAsync(admin, categoryId, "لبنة دفعات", 3.000m, batchTracked: true);
+        var supplier = (await PostAsync(admin, "/api/v1/suppliers", new
+        {
+            name = "مورد الدفعات", contactName = (string?)null, phone = "0790000003", email = (string?)null,
+            street = (string?)null, city = (string?)null, postalCode = (string?)null, country = (string?)null
+        }, "مورد")).GetProperty("supplierId").GetGuid();
+        foreach (var (batch, cost) in new[] { ("Y-1", 1.000m), ("Y-2", 2.000m) })
+        {
+            await PostAsync(admin, "/api/v1/purchase-invoices", new
+            {
+                branchId, supplierId = supplier, supplierInvoiceReference = (string?)null,
+                items = new[] { new { productId = yogurt.Id, productUnitId = yogurt.BaseUnit, quantity = 10m, unitCost = cost, existingProductBatchId = (Guid?)null,
+                    newBatchNumber = batch, newBatchExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30)) } },
+                imageReferences = (string[]?)null, dueDate = (DateOnly?)null
+            }, $"شراء {batch}");
+        }
+
+        Guid cheapBatch;
+        using (var scope = CreateScope())
+        {
+            cheapBatch = await CreateDbContext(scope).ProductBatches.IgnoreQueryFilters()
+                .Where(b => b.ProductId == yogurt.Id && b.BatchNumber == "Y-1").Select(b => b.Id).SingleAsync();
+        }
+
+        await SellAsync(admin, "بيع الدفعة الرخيصة كلها", new[] { Line(yogurt.Id, yogurt.BaseUnit, 10m, cheapBatch) },
+            new[] { Pay(TestDataBuilder.CashPaymentMethodId, 30.000m) });
+
+        var capital = await GetAsync(admin, $"/api/v1/reports/inventory/capital-value?pageSize=50&branchId={branchId}", "قيمة رأس المال");
+        var value = capital.GetProperty("items").GetProperty("items").EnumerateArray()
+            .Where(r => r.GetProperty("productId").GetGuid() == yogurt.Id).Sum(r => D(r, "totalValue"));
+        Check("قيمة الباقي = 10 من الدفعة الغالية × 2.000 (مش متوسط 1.500)", 20.000m, value);
+        Check("إجمالي قيمة رأس المال", 20.000m, D(capital, "totalCapitalValue"));
+
+        _output.WriteLine($"\n{_checks - _failures.Count}/{_checks} فحص صح");
+        Assert.True(_failures.Count == 0, $"{_failures.Count} من {_checks} فحص غلط:\n" + string.Join("\n", _failures));
+    }
+
     /// <summary>كشف الربح الشهري للشهر المطلوب لازم يطلع نفس الأرقام المحسوبة باليد.</summary>
     private async Task VerifyMonthAsync(HttpClient admin, int year, int month, string label)
     {
