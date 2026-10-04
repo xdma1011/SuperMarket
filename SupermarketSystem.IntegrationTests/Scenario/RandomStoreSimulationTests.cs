@@ -1042,6 +1042,7 @@ public sealed class RandomStoreSimulationTests : IntegrationTestBase
             partner.Shares = Math.Round(remaining * partner.Capital / totalCapital, 3, MidpointRounding.AwayFromZero);
         }
 
+        // التعادل برأس المال: الأقدم (أحمد انضاف أول) - نفس ترتيب السيرفر الثابت
         capitalPartners.OrderByDescending(p => p.Capital).First().Shares += remaining - capitalPartners.Sum(p => p.Shares);
 
         var statement = await PostAsync(_admin, "/api/v1/partners/statements", new { branchId = _branchId, year = previous.Year, month = previous.Month }, "كشف الشركاء");

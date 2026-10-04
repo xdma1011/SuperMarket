@@ -152,6 +152,9 @@ public sealed class PartnerStatementGenerator
 
         var partners = await _context.Partners.IgnoreQueryFilters().AsNoTracking()
             .Where(p => p.BranchId == branchId && p.IsActive)
+            // ترتيب ثابت (الأقدم أول): لو شريكين رأس مالهم متساوي، فلس التقريب بيروح دايمًا للأقدم - كان بيعتمد على ترتيب
+            // القاعدة فإعادة إصدار نفس الكشف ممكن تنقل فلس من شريك لشريك (4/10/2026، انمسك بالمحاكاة العشوائية).
+            .OrderBy(p => p.CreatedAtUtc).ThenBy(p => p.Id)
             .Select(p => new { p.Id, p.Type, p.SpeculativeProfitPercent })
             .ToListAsync(cancellationToken);
 
@@ -206,7 +209,7 @@ public sealed class PartnerStatementGenerator
             var roundingDiff = remaining - shares.Values.Sum();
             if (roundingDiff != 0)
             {
-                var largest = positive.OrderByDescending(id => capital[id]).First();
+                var largest = positive.OrderByDescending(id => capital[id]).First(); // OrderBy ثابت: التعادل للأقدم
                 shares[largest] += roundingDiff;
             }
 
