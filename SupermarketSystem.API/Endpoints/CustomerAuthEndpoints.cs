@@ -33,6 +33,7 @@ public static class CustomerAuthEndpoints
         .WithName("RequestCustomerOtp")
         .WithTags("CustomerAuth")
         .AllowAnonymous()
+        .RequireRateLimiting(RateLimitingExtensions.Otp)
         .WithSummary("يرسل كود تحقق عبر تلغرام لرقم مربوط مسبقًا، وإلا يرجّع رابط ربط البوت.")
         .Produces<RequestCustomerOtpResponse>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status400BadRequest);
@@ -48,6 +49,7 @@ public static class CustomerAuthEndpoints
         .WithName("VerifyCustomerOtp")
         .WithTags("CustomerAuth")
         .AllowAnonymous()
+        .RequireRateLimiting(RateLimitingExtensions.Otp)
         .WithSummary("يتحقق من كود OTP ويصدر توكن هوية الزبون (30 يوم).")
         .Produces<VerifyCustomerOtpResponse>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status400BadRequest)

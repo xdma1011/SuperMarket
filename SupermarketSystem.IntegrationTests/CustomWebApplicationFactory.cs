@@ -34,6 +34,10 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
         // بالمستودع)، والنظام يرفض يشتغل بلاها (fail-fast مقصود).
         Environment.SetEnvironmentVariable(
             "Jwt__SigningKey", "test-only-signing-key-never-used-in-production-1234567890");
+
+        // Rate Limiting بيتقرأ eagerly بـProgram.cs (نفس سبب مفتاح JWT فوق) - الاختبارات بتسجّل دخول مئات المرات من نفس الـIP
+        // بالدقيقة، فمطفي افتراضيًا هون؛ اختبار الحد نفسه بيشغّل مصنع بـRateLimiting__Enabled=true صراحة.
+        Environment.SetEnvironmentVariable("RateLimiting__Enabled", "false");
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)

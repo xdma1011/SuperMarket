@@ -11,6 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddAppRateLimiting(builder.Configuration);
 
 // سجل بملف يومي (2-أ بند 4) - بلا حزمة جديدة، راجع DailyFileLoggerProvider. المجلد الافتراضي `logs` جنب الـAPI.
 if (builder.Configuration.GetValue("Logging:File:Enabled", true))
@@ -111,6 +112,9 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 // تنعالج وترجع هيدرات CORS الصحيحة قبل ما توصل لأي فحص هوية أو صلاحية.
 app.UseCors(AdminWebCorsPolicy);
 
+// حد الطلبات (2-أ بند 3): بعد CORS (ردود الـ429 تحمل هيدرات CORS)، وقبل المصادقة (ما بدنا نصرف جهد على طلب مرفوض أصلًا).
+app.UseRateLimiter();
+
 // الترتيب هون إلزامي: UseAuthentication (مين أنت؟) لازم تسبق
 // UseAuthorization (مسموحلك؟) — عكسهم بيخلي التخويل يشتغل على هوية
 // فاضية دائمًا.
@@ -177,7 +181,7 @@ app.Lifetime.ApplicationStarted.Register(() => _ = Task.Run(async () =>
 app.Run();
 
 // STILL NOT IMPLEMENTED (deliberate, tracked):
-//   - Rate limiting, HTTPS redirection enforcement — deployment concerns,
+//   - HTTPS redirection enforcement — deployment concerns,
 //     added with the hosting decision rather than guessed at now.
 //   - CORS origins are hardcoded to localhost:4200 for local development.
 //     A production deployment must move this list into configuration

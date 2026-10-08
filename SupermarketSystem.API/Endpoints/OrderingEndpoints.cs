@@ -42,6 +42,7 @@ public static class OrderingEndpoints
         .WithName("PlaceOrder")
         .WithTags("Ordering")
         .AllowAnonymous()
+        .RequireRateLimiting(RateLimitingExtensions.Orders)
         .WithSummary("⚠️ مؤقت بلا تحقق هوية حقيقي - يقدّم طلب زبون جديد (Pending)، بلا أي تأثير على المخزون لحد ما يُقبل ويُكمَّل.")
         .Produces<PlaceOrderResponse>(StatusCodes.Status201Created)
         .ProducesProblem(StatusCodes.Status400BadRequest);

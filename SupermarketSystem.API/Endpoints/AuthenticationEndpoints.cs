@@ -62,6 +62,7 @@ public static class AuthenticationEndpoints
             return result.ToHttpResult();
         })
         .WithName("Login")
+        .RequireRateLimiting(RateLimitingExtensions.Login)
         .WithSummary("تسجيل دخول: يتحقق من بيانات الاعتماد، ينشئ جلسة، ويسحب أي جلسة قائمة لنفس المستخدم بنفس نوع التطبيق.")
         .Produces<LoginResponse>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status403Forbidden);
