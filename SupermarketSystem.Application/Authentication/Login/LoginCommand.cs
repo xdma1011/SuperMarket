@@ -173,7 +173,17 @@ public sealed class LoginHandler
 
         var branchId = branchResult.Value;
 
+        // === الجلسة الجديدة ===
+        var refreshToken = _tokenService.CreateRefreshToken();
+
+        var newSession = new UserSession(
+            user.Id, command.AppType, refreshToken.TokenHash, branchId,
+            command.IpAddress, command.DeviceInfo, utcNow, refreshToken.ExpiresAtUtc);
+
         // === سحب أي جلسة قائمة لنفس (المستخدم + نوع التطبيق) ===
+        // قاعدة وحدة: "الأحدث (CreatedAtUtc ثم Id) بتضل" - هون وبإعادة الفحص بعد الحفظ تحت. انمسك باختبار تزامن (8/10/2026):
+        // 6 دخولات بنفس اللحظة لنفس المستخدم كانت تخلّي 4 جلسات فعّالة (قراءة ثم كتابة بلا قفل)، ولما الفحصين كانوا بقاعدتين مختلفتين
+        // (ترتيب الوصول هون، الأحدث تحت) ضلّوا 2. دخول عادي (مش متزامن) دايمًا الأحدث، فسلوكه زي قبل بالزبط.
         var existingSessions = await _context.UserSessions
             .Where(s => s.UserId == user.Id && s.AppType == command.AppType && s.RevokedAtUtc == null)
             .ToListAsync(cancellationToken);
@@ -185,7 +195,7 @@ public sealed class LoginHandler
             // الجلسات المنتهية طبيعيًا تُترك كما هي: "انتهت صلاحيتها"
             // و"سُحبت لدخول جديد" حدثان مختلفان، ودمجهما بيضيّع إشارة
             // أمنية حقيقية (دخول متزامن من مكانين).
-            if (!session.IsActive(utcNow))
+            if (!session.IsActive(utcNow) || IsNewer(session, newSession))
             {
                 continue;
             }
@@ -194,13 +204,6 @@ public sealed class LoginHandler
             previousSessionRevoked = true;
         }
 
-        // === الجلسة الجديدة ===
-        var refreshToken = _tokenService.CreateRefreshToken();
-
-        var newSession = new UserSession(
-            user.Id, command.AppType, refreshToken.TokenHash, branchId,
-            command.IpAddress, command.DeviceInfo, utcNow, refreshToken.ExpiresAtUtc);
-
         _context.UserSessions.Add(newSession);
 
         var accessToken = _tokenService.CreateAccessToken(
@@ -208,6 +211,22 @@ public sealed class LoginHandler
 
         await LogAttemptAsync(user.Id, command, success: true, utcNow, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
+
+        // === إعادة الفحص بعد الحفظ: دخول متزامن ما شاف جلستنا (أو إحنا ما شفنا جلسته) ===
+        var activeAfterSave = await _context.UserSessions
+            .Where(s => s.UserId == user.Id && s.AppType == command.AppType && s.RevokedAtUtc == null && s.ExpiresAtUtc > utcNow)
+            .ToListAsync(cancellationToken);
+        if (activeAfterSave.Count > 1)
+        {
+            var newest = activeAfterSave.Aggregate((a, b) => IsNewer(a, b) ? a : b);
+            foreach (var session in activeAfterSave.Where(s => s.Id != newest.Id && s.IsActive(utcNow)))
+            {
+                session.Revoke(SessionRevocationReason.NewLoginElsewhere, utcNow);
+                previousSessionRevoked |= session.Id != newSession.Id;
+            }
+
+            await _context.SaveChangesAsync(cancellationToken);
+        }
 
         return Result.Success(new LoginResponse(
             accessToken.Token, accessToken.ExpiresAtUtc,
@@ -314,6 +333,10 @@ public sealed class LoginHandler
             .Join(_context.Permissions.AsNoTracking(), pid => pid, p => p.Id, (pid, p) => p.Code)
             .AnyAsync(code => code == PermissionCodes.CrossBranchAccess, cancellationToken);
     }
+
+    /// <summary>ترتيب "الأحدث" بين جلستين - نفس القرار عند كل الدخولات المتسابقة (CreatedAtUtc ثم Id).</summary>
+    private static bool IsNewer(UserSession a, UserSession b) =>
+        a.CreatedAtUtc != b.CreatedAtUtc ? a.CreatedAtUtc > b.CreatedAtUtc : a.Id.CompareTo(b.Id) > 0;
 
     private async Task LogAttemptAsync(
         Guid userId, LoginCommand command, bool success, DateTime utcNow, CancellationToken cancellationToken)

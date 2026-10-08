@@ -448,6 +448,13 @@ public sealed class ApiClient
                     : new LoginResult(true, body, null);
             }
 
+            // نسخة قديمة (426): رسالة السيرفر "حدّث البرنامج" مش "كلمة السر غلط" (انمسك بالتست 8/10/2026 - كان الكاشير يشوف
+            // الاثنين سوا: نافذة "حدّث" + "اسم المستخدم أو كلمة السر غير صحيحة" تحت).
+            if (response.StatusCode == (HttpStatusCode)426)
+            {
+                return new LoginResult(false, null, ServerError(await response.Content.ReadAsStringAsync(cancellationToken)));
+            }
+
             // رسالة فشل واحدة عامة بقصد (راجع تعليق LoginResponse بالباك إند:
             // "مبدأ حاكم: رسالة فشل واحدة لكل الأسباب") - لا نميّز هون بين
             // خطأ اسم مستخدم أو كلمة سر، نفس فلسفة الباك إند بالضبط.

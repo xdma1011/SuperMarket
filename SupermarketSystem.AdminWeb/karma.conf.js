@@ -1,5 +1,9 @@
 // راجع https://karma-runner.github.io/6.4/config/configuration-file.html
-process.env.CHROME_BIN = process.env.CHROME_BIN || '/opt/pw-browsers/chromium';
+// المسار الافتراضي للكونتينر السحابي بس لو موجود فعلًا - على ويندوز (جهاز صاحب المشروع) بنخلّي karma-chrome-launcher
+// يلاقي Chrome المثبَّت لحاله (كان run\6-tests-web.bat بيفشل "Can not find the binary \opt\pw-browsers\chromium").
+if (!process.env.CHROME_BIN && require('fs').existsSync('/opt/pw-browsers/chromium')) {
+  process.env.CHROME_BIN = '/opt/pw-browsers/chromium';
+}
 
 module.exports = function (config) {
   config.set({

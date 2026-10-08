@@ -24,9 +24,14 @@ public partial class App : Application
         // %LocalAppData%\SupermarketSystem.CashierApp\local.db - مجلد
         // مضمون الكتابة لأي مستخدم عادي، بخلاف مجلد التثبيت (ممكن يكون
         // Program Files، بلا صلاحية كتابة).
-        var dataDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "SupermarketSystem.CashierApp");
+        // SPKT_CASHIER_DATA_DIR (اختياري، للاختبار الآلي بس - 8/10/2026): مجلد بيانات بديل عشان أتمتة الشاشات وتشغيل أكتر من
+        // نسخة ما يلمسوا قاعدة الكاشير الحقيقية ولا يتصادموا على local.db. فاضي = المسار الافتراضي زي ما هو.
+        var dataDirOverride = Environment.GetEnvironmentVariable("SPKT_CASHIER_DATA_DIR");
+        var dataDir = !string.IsNullOrWhiteSpace(dataDirOverride)
+            ? dataDirOverride
+            : Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "SupermarketSystem.CashierApp");
         Directory.CreateDirectory(dataDir);
         var dbPath = Path.Combine(dataDir, "local.db");
 

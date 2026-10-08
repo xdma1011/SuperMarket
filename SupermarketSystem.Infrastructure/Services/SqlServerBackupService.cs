@@ -65,10 +65,37 @@ public sealed class SqlServerBackupService : IBackupService
 
         await command.ExecuteNonQueryAsync(cancellationToken);
 
-        // الحجم الحقيقي بعد الضغط — يُقرأ من نظام الملفات مباشرة، لا يُخمَّن.
-        var fileSizeBytes = File.Exists(filePath) ? new FileInfo(filePath).Length : 0;
+        // الحجم الحقيقي بعد الضغط — من نظام الملفات لو الملف ظاهر لحساب الـAPI، وإلا من سجل SQL Server نفسه (msdb).
+        // انمسك بالتست (8/10/2026): مجلد النسخ الافتراضي لـSQL Server (Program Files\...\Backup) ممنوع على حساب المستخدم
+        // العادي، فـFile.Exists بيرجع false والنسخة (32MB فعليًا) كانت تنسجّل "0 بايت" - شكلها فاشلة بصفحة النسخ.
+        var fileSizeBytes = File.Exists(filePath)
+            ? new FileInfo(filePath).Length
+            : await GetBackupSizeFromServerAsync(connection, filePath, cancellationToken) ?? 0;
 
         return new BackupFileInfo(fileName, filePath, fileSizeBytes);
+    }
+
+    /// <summary>حجم النسخة كما سجّله SQL Server (msdb.backupset) - أفضل جهد: أي فشل (صلاحيات msdb مثلًا) = null.</summary>
+    private static async Task<long?> GetBackupSizeFromServerAsync(SqlConnection connection, string filePath, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT TOP (1) COALESCE(b.compressed_backup_size, b.backup_size)
+                FROM msdb.dbo.backupset AS b
+                JOIN msdb.dbo.backupmediafamily AS m ON m.media_set_id = b.media_set_id
+                WHERE m.physical_device_name = @filePath
+                ORDER BY b.backup_finish_date DESC;
+                """;
+            command.Parameters.Add(new SqlParameter("@filePath", filePath));
+            var result = await command.ExecuteScalarAsync(cancellationToken);
+            return result is null or DBNull ? null : Convert.ToInt64(result);
+        }
+        catch (SqlException)
+        {
+            return null;
+        }
     }
 
     public Task CopyToSecondaryAsync(string sourceFilePath, string secondaryDirectory, CancellationToken cancellationToken)
