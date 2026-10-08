@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using SupermarketSystem.API.Common;
 using SupermarketSystem.API.Endpoints;
@@ -133,6 +134,31 @@ app.MapReportingEndpoints();
 app.MapFinanceEndpoints();
 app.MapPartnersEndpoints();
 app.MapEmployeeEndpoints();
+
+// فحص Migrations ناقصة عند الإقلاع (2-أ بند 1، 8/10/2026): نسيان `dotnet ef database update` بعد تحديث كان بيطلع 500 غامضة بنص
+// الاستخدام. هون بس بنكتب رسالة واضحة بالسجل (ما بنطبّق شي تلقائيًا - قاعدة صاحب المشروع الحقيقية، هو بيطبّقها يدويًا §1.4).
+// بالخلفية بعد الإقلاع: ما بيأخّر فتح الـAPI، وفشل الفحص نفسه (القاعدة مش متاحة) ما بيوقف شي.
+app.Lifetime.ApplicationStarted.Register(() => _ = Task.Run(async () =>
+{
+    var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("MigrationsCheck");
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var pending = (await db.Database.GetPendingMigrationsAsync()).ToList();
+        if (pending.Count > 0)
+        {
+            logger.LogError(
+                "في {Count} Migration ما انطبقت على القاعدة: {Migrations}. شغّل: dotnet ef database update --project SupermarketSystem.Infrastructure --startup-project SupermarketSystem.API " +
+                "(أو update-database.bat) وإلا بعض الشاشات رح تطلع 500.",
+                pending.Count, string.Join(", ", pending));
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "تعذّر فحص Migrations الناقصة (القاعدة مش متاحة؟).");
+    }
+}));
 
 app.Run();
 
