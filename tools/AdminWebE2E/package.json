@@ -1,0 +1,11 @@
+{
+  "name": "spkt-adminweb-e2e",
+  "private": true,
+  "description": "اختبارات لوحة الإدارة بمتصفح حقيقي (Playwright) - مشروع أدوات منفصل، ما بيلمس حزم AdminWeb",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0"
+  }
+}
