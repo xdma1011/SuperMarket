@@ -73,7 +73,7 @@ describe('PurchasingComponent', () => {
 
   describe('openForm / closeForm', () => {
     it('openForm يفتح النموذج ويصفّر الأسطر', () => {
-      component.lines = [{ productId: 'p1', productName: 'سكر', unitId: 'u1', units: [], quantity: 1, unitCost: 1, isBatchTracked: false, newBatchNumber: '', newBatchExpiryDate: '' }];
+      component.lines = [{ key: Math.random(), productId: 'p1', productName: 'سكر', unitId: 'u1', units: [], quantity: 1, unitCost: 1, isBatchTracked: false, newBatchNumber: '', newBatchExpiryDate: '' }];
 
       component.openForm();
 
@@ -83,7 +83,7 @@ describe('PurchasingComponent', () => {
 
     it('closeForm يصفّر المرجع والأسطر', () => {
       component.supplierInvoiceReference = 'REF-1';
-      component.lines = [{ productId: 'p1', productName: 'سكر', unitId: 'u1', units: [], quantity: 1, unitCost: 1, isBatchTracked: false, newBatchNumber: '', newBatchExpiryDate: '' }];
+      component.lines = [{ key: Math.random(), productId: 'p1', productName: 'سكر', unitId: 'u1', units: [], quantity: 1, unitCost: 1, isBatchTracked: false, newBatchNumber: '', newBatchExpiryDate: '' }];
 
       component.closeForm();
 
@@ -106,6 +106,20 @@ describe('PurchasingComponent', () => {
 
       expect(component.lines.length).toBe(1);
       expect(component.lines[0].isBatchTracked).toBeFalse();
+    });
+
+    it('نفس الصنف مرتين (حبة + كرتونة) = سطرين بمفتاحين مختلفين (NG0955 قبل)', async () => {
+      fixture.detectChanges();
+      await fixture.whenStable();
+      component.newLineProductId = 'p1';
+      apiClientSpy.get.and.returnValue(of([{ id: 'u1', unitName: 'حبة', isBaseUnit: true }, { id: 'u12', unitName: 'كرتونة', isBaseUnit: false }]));
+
+      await component.addLine();
+      await component.addLine();
+
+      expect(component.lines.length).toBe(2);
+      expect(component.lines[0].productId).toBe(component.lines[1].productId);
+      expect(component.lines[0].key).not.toBe(component.lines[1].key);
     });
 
     it('يعلّم السطر isBatchTracked=true لمنتج متتبَّع دفعات', async () => {
@@ -145,8 +159,8 @@ describe('PurchasingComponent', () => {
   describe('removeLine / lineTotal / invoiceTotal', () => {
     it('removeLine يحذف السطر بالمؤشر الصحيح', () => {
       component.lines = [
-        { productId: 'p1', productName: 'أ', unitId: 'u1', units: [], quantity: 1, unitCost: 5, isBatchTracked: false, newBatchNumber: '', newBatchExpiryDate: '' },
-        { productId: 'p2', productName: 'ب', unitId: 'u1', units: [], quantity: 2, unitCost: 3, isBatchTracked: false, newBatchNumber: '', newBatchExpiryDate: '' }
+        { key: Math.random(), productId: 'p1', productName: 'أ', unitId: 'u1', units: [], quantity: 1, unitCost: 5, isBatchTracked: false, newBatchNumber: '', newBatchExpiryDate: '' },
+        { key: Math.random(), productId: 'p2', productName: 'ب', unitId: 'u1', units: [], quantity: 2, unitCost: 3, isBatchTracked: false, newBatchNumber: '', newBatchExpiryDate: '' }
       ];
 
       component.removeLine(0);
@@ -156,14 +170,14 @@ describe('PurchasingComponent', () => {
     });
 
     it('lineTotal يحسب كمية × تكلفة الوحدة', () => {
-      const line = { productId: 'p1', productName: 'أ', unitId: 'u1', units: [], quantity: 4, unitCost: 2.5, isBatchTracked: false, newBatchNumber: '', newBatchExpiryDate: '' };
+      const line = { key: Math.random(), productId: 'p1', productName: 'أ', unitId: 'u1', units: [], quantity: 4, unitCost: 2.5, isBatchTracked: false, newBatchNumber: '', newBatchExpiryDate: '' };
       expect(component.lineTotal(line)).toBe(10);
     });
 
     it('invoiceTotal يجمع كل الأسطر', () => {
       component.lines = [
-        { productId: 'p1', productName: 'أ', unitId: 'u1', units: [], quantity: 2, unitCost: 5, isBatchTracked: false, newBatchNumber: '', newBatchExpiryDate: '' },
-        { productId: 'p2', productName: 'ب', unitId: 'u1', units: [], quantity: 3, unitCost: 2, isBatchTracked: false, newBatchNumber: '', newBatchExpiryDate: '' }
+        { key: Math.random(), productId: 'p1', productName: 'أ', unitId: 'u1', units: [], quantity: 2, unitCost: 5, isBatchTracked: false, newBatchNumber: '', newBatchExpiryDate: '' },
+        { key: Math.random(), productId: 'p2', productName: 'ب', unitId: 'u1', units: [], quantity: 3, unitCost: 2, isBatchTracked: false, newBatchNumber: '', newBatchExpiryDate: '' }
       ];
 
       expect(component.invoiceTotal).toBe(16);
@@ -176,7 +190,7 @@ describe('PurchasingComponent', () => {
   });
 
   describe('submit', () => {
-    const validLine = { productId: 'p1', productName: 'سكر', unitId: 'u1', units: [], quantity: 2, unitCost: 5, isBatchTracked: false, newBatchNumber: '', newBatchExpiryDate: '' };
+    const validLine = { key: Math.random(), productId: 'p1', productName: 'سكر', unitId: 'u1', units: [], quantity: 2, unitCost: 5, isBatchTracked: false, newBatchNumber: '', newBatchExpiryDate: '' };
 
     it('يرفض بلا مورد أو فرع أو أسطر', async () => {
       component.selectedSupplierId = '';

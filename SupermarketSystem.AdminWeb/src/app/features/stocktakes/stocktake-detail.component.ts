@@ -111,6 +111,20 @@ export class StocktakeDetailComponent implements OnInit {
     return s !== null && (s.status === STATUS_DRAFT || s.status === STATUS_IN_PROGRESS);
   }
 
+  /**
+   * الحفظ لما الخانة تتأكد (طلعت منها أو Enter) - مش مع كل حرف. قبل (انمسك بـPlaywright 9/10/2026): كل ضغطة كانت تحفظ
+   * وتقفل الخانة لحد ما يرجع الرد، فكتابة "27" بسرعة كانت تنحفظ "2" (الـ7 بتضيع) = نقص وهمي بالجرد.
+   */
+  onCountCommitted(item: StocktakeItemDetailDto, event: Event): void {
+    const raw = (event.target as HTMLInputElement).value.trim();
+    const value = raw === '' ? null : Number(raw);
+    if (value === null || !Number.isFinite(value) || value === item.countedQuantity) {
+      return;
+    }
+
+    void this.saveCount(item, value);
+  }
+
   async saveCount(item: StocktakeItemDetailDto, value: number | null): Promise<void> {
     if (value === null || value < 0) {
       return;

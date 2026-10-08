@@ -174,7 +174,7 @@
 
       @if (receiveDetail(); as detail) {
         <div class="lines-list">
-          @for (item of detail.items; track item.productId) {
+          @for (item of detail.items; track $index) {
             <div class="unit-row">
               <span class="unit-name">{{ item.productName }}</span>
               <span class="unit-factor mono">{{ item.quantityBase }} {{ item.unitName }}</span>

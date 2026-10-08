@@ -45,7 +45,11 @@ public sealed class BootstrapAdminHandler
 
     public async Task<Result<BootstrapAdminResponse>> HandleAsync(CancellationToken cancellationToken)
     {
-        var anyUserExists = await _context.Users.IgnoreQueryFilters().AnyAsync(cancellationToken);
+        // مستخدم "system" مبذور بالـMigrations نفسها (User.SystemUserId، معطّل وبلا كلمة سر) - موجود
+        // بكل قاعدة من أول لحظة، فعدّه كان بيخلّي التمهيد يرفض دايمًا على قاعدة جديدة فاضية.
+        // (انصلح 25/9 بـ77880eb، ورجع انكسر برفع ملفات 202c006 - انمسك بتست الشاشات 9/10/2026.)
+        var anyUserExists = await _context.Users.IgnoreQueryFilters()
+            .AnyAsync(u => u.Id != User.SystemUserId, cancellationToken);
         if (anyUserExists)
         {
             return Result.Failure<BootstrapAdminResponse>(Error.Conflict(

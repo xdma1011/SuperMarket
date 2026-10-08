@@ -51,6 +51,8 @@ interface PaymentMethodDto {
 }
 
 interface DraftLine {
+  // مفتاح السطر بالشاشة: نفس الصنف ممكن ينضاف مرتين (حبة + كرتونة)، فالـproductId ما بيصلح مفتاح لـ@for (NG0955 - انمسك بـPlaywright 9/10/2026).
+  key: number;
   productId: string;
   productName: string;
   unitId: string;
@@ -120,6 +122,7 @@ export class PurchasingComponent implements OnInit {
   supplierInvoiceReference = '';
   dueDate = '';
   lines: DraftLine[] = [];
+  private nextLineKey = 1;
 
   newLineProductId = '';
 
@@ -219,6 +222,7 @@ export class PurchasingComponent implements OnInit {
       this.lines = [
         ...this.lines,
         {
+          key: this.nextLineKey++,
           productId: product.id,
           productName: product.name,
           unitId: baseUnit.id,

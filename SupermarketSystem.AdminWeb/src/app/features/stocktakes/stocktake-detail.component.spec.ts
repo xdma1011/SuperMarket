@@ -120,6 +120,32 @@ describe('StocktakeDetailComponent', () => {
     });
   });
 
+  describe('onCountCommitted (الحفظ لما الخانة تتأكد، مش مع كل حرف)', () => {
+    const commit = (value: string) => ({ target: { value } }) as unknown as Event;
+
+    it('بيحفظ القيمة كاملة (27 مش 2)', async () => {
+      await component.load();
+      const item = { ...sampleDetail.items[0], countedQuantity: null };
+      apiClientSpy.post.and.returnValue(of({ expectedQuantity: 30, countedQuantity: 27, variance: -3 }));
+
+      component.onCountCommitted(item, commit('27'));
+      await fixture.whenStable();
+
+      expect(apiClientSpy.post).toHaveBeenCalledTimes(1);
+      expect(apiClientSpy.post.calls.mostRecent().args[2]).toEqual({ countedQuantity: 27 });
+    });
+
+    it('ما بيحفظ لخانة فاضية أو نفس القيمة المحفوظة', async () => {
+      await component.load();
+      const item = { ...sampleDetail.items[0], countedQuantity: 5 };
+
+      component.onCountCommitted(item, commit(''));
+      component.onCountCommitted(item, commit('5'));
+
+      expect(apiClientSpy.post).not.toHaveBeenCalled();
+    });
+  });
+
   describe('countedItemsCount / totalItemsCount', () => {
     it('يحسب عدد الأصناف المعدودة والإجمالي بدقة', async () => {
       await component.load();

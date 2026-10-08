@@ -73,9 +73,8 @@
                   <input
                     type="number"
                     class="count-input"
-                    [ngModel]="item.countedQuantity"
-                    (ngModelChange)="saveCount(item, $event)"
-                    [disabled]="savingItemId() === item.stocktakeItemId"
+                    [value]="item.countedQuantity ?? ''"
+                    (change)="onCountCommitted(item, $event)"
                     min="0"
                     placeholder="—"
                   />

@@ -151,7 +151,7 @@
             <span>الإجمالي</span>
             <span></span>
           </div>
-          @for (line of lines; track line.productId; let i = $index) {
+          @for (line of lines; track line.key; let i = $index) {
             <div class="lines-row">
               <span>{{ line.productName }}</span>
               <select [(ngModel)]="line.unitId" class="line-unit-select">
