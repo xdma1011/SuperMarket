@@ -48,7 +48,9 @@ public sealed record LogoutRequestDto(string RefreshToken);
 public sealed record CompleteCashClosingCountedDetailDto(Guid PaymentMethodId, decimal CountedAmount);
 
 public sealed record CompleteCashClosingRequestDto(
-    Guid BranchId, DateOnly BusinessDate, decimal CountedCash, List<CompleteCashClosingCountedDetailDto> CountedDetails);
+    Guid BranchId, DateOnly BusinessDate, decimal CountedCash, List<CompleteCashClosingCountedDetailDto> CountedDetails,
+    // بيعات لسه بالطابور المحلي لحظة التقفيل (بند 23) - معلومة للتفسير بس، بتنذكر بتنبيه الفرق عند الإدارة.
+    int PendingSalesCount = 0, decimal PendingSalesAmount = 0m);
 
 /// <summary>بس الحقول اللي شاشة الكاشير فعليًا بتعرضها - التفاصيل حسب طريقة الدفع (Details) موجودة بالرد الفعلي بس غير مستخدَمة هون.</summary>
 public sealed record CompleteCashClosingResponseDto(Guid CashClosingId, decimal ExpectedCash, decimal CountedCash, decimal Variance);
@@ -463,11 +465,13 @@ public sealed class ApiClient
     /// </summary>
     public async Task<CashClosingResult> CompleteCashClosingAsync(
         Guid branchId, DateOnly businessDate, decimal countedCash,
-        List<CompleteCashClosingCountedDetailDto> countedDetails, CancellationToken cancellationToken)
+        List<CompleteCashClosingCountedDetailDto> countedDetails, CancellationToken cancellationToken,
+        int pendingSalesCount = 0, decimal pendingSalesAmount = 0m)
     {
         try
         {
-            var request = new CompleteCashClosingRequestDto(branchId, businessDate, countedCash, countedDetails);
+            var request = new CompleteCashClosingRequestDto(
+                branchId, businessDate, countedCash, countedDetails, pendingSalesCount, pendingSalesAmount);
             var response = await _http.PostAsJsonAsync("cash-closings", request, cancellationToken);
 
             if (response.IsSuccessStatusCode)
@@ -509,6 +513,36 @@ public sealed class ApiClient
         catch (Exception ex)
         {
             return (false, $"تعذّر الاتصال بالسيرفر: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// وقت السيرفر الحالي (UTC) لضبط الساعة الموثوقة (TrustedClock، بند 22). GET /system/time-settings (بلا دخول).
+    /// بيصحّح بنصف زمن الرحلة (الرد وصل بعد نص الرحلة تقريبًا). null = السيرفر مش متاح أو رد غير متوقع.
+    /// </summary>
+    public async Task<DateTime?> GetServerUtcNowAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            var response = await _http.GetAsync("system/time-settings", cancellationToken);
+            stopwatch.Stop();
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            using var doc = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+            if (!doc.RootElement.TryGetProperty("serverUtcNow", out var element) || !element.TryGetDateTime(out var serverUtc))
+            {
+                return null;
+            }
+
+            return DateTime.SpecifyKind(serverUtc, DateTimeKind.Utc) + stopwatch.Elapsed / 2;
+        }
+        catch (Exception)
+        {
+            return null;
         }
     }
 

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Domain.Notifications;
 using SupermarketSystem.Application.Common.Notifications;
 using SupermarketSystem.Application.Common.Interfaces;
+using SupermarketSystem.Application.Partners;
 using SupermarketSystem.Application.Common.Policies;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Domain.CashManagement;
@@ -211,6 +212,13 @@ public sealed class VoidSaleHandler
                 cancellationToken,
                 NotificationSeverity.Warning,
                 link: $"/sales?search={Uri.EscapeDataString(result.Value.InvoiceNumber)}");
+
+            // إلغاء فاتورة من شهر نزل كشفه = ربح هالشهر تغيّر والكشف صار قديم (بند 2 بالمراجعة النقدية).
+            var (invoiceYear, invoiceMonth) = await PartnerStatementStaleness.LocalMonthAsync(_context, invoice.CreatedAtUtc, cancellationToken);
+            await PartnerStatementStaleness.MarkAndNotifyAsync(
+                _context, _notificationDispatcher, _dateTimeProvider.UtcNow, invoice.BranchId,
+                new[] { (invoiceYear, invoiceMonth) },
+                $"انلغت فاتورة {result.Value.InvoiceNumber} ({invoice.TotalAmount:0.000} د.أ) من هالشهر بعد نزول الكشف.", cancellationToken);
         }
 
         return result;

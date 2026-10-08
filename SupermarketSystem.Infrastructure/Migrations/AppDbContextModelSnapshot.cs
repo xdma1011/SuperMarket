@@ -186,6 +186,16 @@ namespace SupermarketSystem.Infrastructure.Migrations
                     b.Property<decimal>("ExpectedCash")
                         .HasColumnType("decimal(18,4)");
 
+                    b.Property<decimal>("PendingSalesAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18,4)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<int>("PendingSalesCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -238,6 +248,48 @@ namespace SupermarketSystem.Infrastructure.Migrations
                     b.HasIndex("PaymentMethodId");
 
                     b.ToTable("CashClosingDetails", (string)null);
+                });
+
+            modelBuilder.Entity("SupermarketSystem.Domain.CashManagement.CashClosingVarianceNote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CashClosingId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("ExplainedAmount")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("Reason")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("RecordedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("RecordedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("RelatedExpenseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("CashClosingId");
+
+                    b.HasIndex("RecordedByUserId");
+
+                    b.ToTable("CashClosingVarianceNotes", (string)null);
                 });
 
             modelBuilder.Entity("SupermarketSystem.Domain.CashManagement.CashDrawerLog", b =>
@@ -3008,6 +3060,13 @@ namespace SupermarketSystem.Infrastructure.Migrations
                     b.Property<decimal>("NetProfit")
                         .HasColumnType("decimal(18,4)");
 
+                    b.Property<string>("StaleReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime?>("StaleSinceUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<decimal>("UnallocatedAmount")
                         .HasColumnType("decimal(18,4)");
 
@@ -3728,6 +3787,73 @@ namespace SupermarketSystem.Infrastructure.Migrations
                     b.ToTable("PromotionBranches", (string)null);
                 });
 
+            modelBuilder.Entity("SupermarketSystem.Domain.Sales.RejectedSaleAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CashierUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ClientRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ErrorCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ErrorMessage")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("FirstAttemptAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ItemCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("LastAttemptAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("PaidAmountHint")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("ResolvedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("ResolvedAutomatically")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid?>("ResolvedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientRequestId")
+                        .IsUnique();
+
+                    b.HasIndex("BranchId", "ResolvedAtUtc", "LastAttemptAtUtc");
+
+                    b.ToTable("RejectedSaleAttempts", (string)null);
+                });
+
             modelBuilder.Entity("SupermarketSystem.Domain.Sales.ReturnInvoice", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3955,6 +4081,9 @@ namespace SupermarketSystem.Infrastructure.Migrations
 
                     b.Property<bool>("IsDeductedFromShare")
                         .HasColumnType("bit");
+
+                    b.Property<DateTime?>("ReceivedAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("ReviewedAtUtc")
                         .HasColumnType("datetime2");
@@ -4617,6 +4746,27 @@ namespace SupermarketSystem.Infrastructure.Migrations
                     b.HasOne("SupermarketSystem.Domain.Payments.PaymentMethod", null)
                         .WithMany()
                         .HasForeignKey("PaymentMethodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SupermarketSystem.Domain.CashManagement.CashClosingVarianceNote", b =>
+                {
+                    b.HasOne("SupermarketSystem.Domain.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SupermarketSystem.Domain.CashManagement.CashClosing", null)
+                        .WithMany()
+                        .HasForeignKey("CashClosingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SupermarketSystem.Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("RecordedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
@@ -5504,6 +5654,15 @@ namespace SupermarketSystem.Infrastructure.Migrations
                         .WithMany("Branches")
                         .HasForeignKey("PromotionId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SupermarketSystem.Domain.Sales.RejectedSaleAttempt", b =>
+                {
+                    b.HasOne("SupermarketSystem.Domain.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

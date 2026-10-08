@@ -106,7 +106,7 @@ public abstract class AuditableEntity : Entity, IAuditable
     protected AuditableEntity() : base() { }
     protected AuditableEntity(Guid id) : base(id) { }
 
-    public void SetCreationAudit(DateTime utcNow, Guid? userId)
+    public virtual void SetCreationAudit(DateTime utcNow, Guid? userId)
     {
         CreatedAtUtc = utcNow;
         CreatedByUserId = userId;

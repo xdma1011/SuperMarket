@@ -101,6 +101,15 @@ public class SaleInvoice : AuditableEntity, IBranchOwned, IHasRowVersion
     /// </summary>
     public bool IsDeductedFromShare { get; private set; }
 
+    /// <summary>
+    /// وقت وصول البيعة للسيرفر (بند 22). CreatedAtUtc = وقت البيع الفعلي عند الكاشير (الأوفلاين بيختمه بساعة موثوقة)؛
+    /// الاثنين نفس الشي لبيعة أونلاين عادية. null = فاتورة قديمة (قبل هالعمود، CreatedAtUtc كان وقت الوصول).
+    /// </summary>
+    public DateTime? ReceivedAtUtc { get; private set; }
+
+    // غير مخزَّن: وقت البيع اللي لازم يختمه SetCreationAudit بدل وقت الحفظ (راجع SetSaleTime).
+    private DateTime? _saleTimeOverrideUtc;
+
     public byte[]? RowVersion { get; private set; }
 
     private readonly List<SaleInvoiceItem> _items = new();
@@ -110,6 +119,22 @@ public class SaleInvoice : AuditableEntity, IBranchOwned, IHasRowVersion
     public IReadOnlyCollection<SaleInvoicePayment> Payments => _payments.AsReadOnly();
 
     private SaleInvoice() { } // EF Core
+
+    /// <summary>
+    /// بند 22: بيعة أوفلاين وصلت متأخرة - CreatedAtUtc (اللي كل التقارير والشهر والوردية بتعتمد عليه) = وقت البيع الفعلي،
+    /// مش وقت الحفظ. بتنادى قبل الحفظ؛ SetCreationAudit (من الـinterceptor) هو اللي بيطبّقه. وقت الوصول بيتحفظ بـReceivedAtUtc.
+    /// </summary>
+    public void SetSaleTime(DateTime saleTimeUtc, DateTime receivedAtUtc)
+    {
+        _saleTimeOverrideUtc = saleTimeUtc;
+        ReceivedAtUtc = receivedAtUtc;
+    }
+
+    public override void SetCreationAudit(DateTime utcNow, Guid? userId)
+    {
+        base.SetCreationAudit(_saleTimeOverrideUtc ?? utcNow, userId);
+        ReceivedAtUtc ??= utcNow;
+    }
 
     public SaleInvoice(Guid branchId, string invoiceNumber, Guid clientRequestId, Guid? customerId, string? customerNameSnapshot, string? customerPhoneSnapshot)
     {

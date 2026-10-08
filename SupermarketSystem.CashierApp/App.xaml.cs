@@ -39,6 +39,9 @@ public partial class App : Application
             db.Database.Migrate();
         }
 
+        // الساعة الموثوقة (بند 22): آخر مرجع وقت من السيرفر محفوظ محليًا - لازم يتحمّل قبل أي بيع.
+        Services.TrustedClock.Instance.Load(dbPath);
+
         var apiClient = new ApiClient(config);
         var authSession = new AuthSession();
         var backgroundSync = new BackgroundSyncService(apiClient, dbPath, config.SyncIntervalSeconds, config.CatalogSyncPageSize);

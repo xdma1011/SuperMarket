@@ -80,6 +80,7 @@ public interface IApplicationDbContext
     DbSet<SaleInvoiceItem> SaleInvoiceItems { get; }
     DbSet<SaleInvoicePayment> SaleInvoicePayments { get; }
     DbSet<SuspendedSale> SuspendedSales { get; }
+    DbSet<RejectedSaleAttempt> RejectedSaleAttempts { get; }
     DbSet<Discount> Discounts { get; }
     DbSet<Promotion> Promotions { get; }
     DbSet<PromotionBranch> PromotionBranches { get; }
@@ -100,6 +101,7 @@ public interface IApplicationDbContext
     // Cash Management
     DbSet<CashDrawerLog> CashDrawerLogs { get; }
     DbSet<CashClosing> CashClosings { get; }
+    DbSet<CashClosingVarianceNote> CashClosingVarianceNotes { get; }
     DbSet<DrawerOpenEvent> DrawerOpenEvents { get; }
     DbSet<Partner> Partners { get; }
     DbSet<PartnerWithdrawal> PartnerWithdrawals { get; }

@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Application.Common.Interfaces;
+using SupermarketSystem.Application.Common.Notifications;
+using SupermarketSystem.Application.Partners;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Domain.Finance;
 using SupermarketSystem.Domain.Identity;
@@ -43,11 +45,17 @@ public sealed class CreateCapitalTransactionHandler
 {
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserContext _currentUser;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly INotificationDispatcher _notificationDispatcher;
 
-    public CreateCapitalTransactionHandler(IApplicationDbContext context, ICurrentUserContext currentUser)
+    public CreateCapitalTransactionHandler(
+        IApplicationDbContext context, ICurrentUserContext currentUser, IDateTimeProvider dateTimeProvider,
+        INotificationDispatcher notificationDispatcher)
     {
         _context = context;
         _currentUser = currentUser;
+        _dateTimeProvider = dateTimeProvider;
+        _notificationDispatcher = notificationDispatcher;
     }
 
     public async Task<Result<CreateCapitalTransactionResponse>> HandleAsync(
@@ -100,6 +108,13 @@ public sealed class CreateCapitalTransactionHandler
 
         _context.CapitalTransactions.Add(transaction);
         await _context.SaveChangesAsync(cancellationToken);
+
+        // حركة رأس مال بتاريخ رجعي بتغيّر نسب الشركاء لكشوف انتهت بعد هالتاريخ (رأس المال بيتحسب آخر الشهر) - بند 2.
+        var affectedMonths = await PartnerStatementStaleness.MonthsAffectedByCapitalAsync(
+            _context, command.BranchId, command.OccurredAtUtc, cancellationToken);
+        await PartnerStatementStaleness.MarkAndNotifyAsync(
+            _context, _notificationDispatcher, _dateTimeProvider.UtcNow, command.BranchId, affectedMonths,
+            $"انسجّلت حركة رأس مال ({command.Amount:0.000} د.أ) بتاريخ {command.OccurredAtUtc:yyyy-MM-dd} قبل نهاية هالشهر.", cancellationToken);
 
         return Result.Success(new CreateCapitalTransactionResponse(transaction.Id));
     }

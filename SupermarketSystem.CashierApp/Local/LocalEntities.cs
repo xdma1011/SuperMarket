@@ -89,3 +89,17 @@ public sealed class SyncState
     /// <summary>آخر تحديث لطرق الدفع من السيرفر (29/9/2026) - التحديث التلقائي مرة كل 24 ساعة (PaymentMethodStore).</summary>
     public DateTime? LastPaymentMethodsRefreshAtUtc { get; set; }
 }
+
+/// <summary>
+/// الساعة الموثوقة (بند 22): صف واحد (Id=1). الكاشير ما بيثق بساعة ويندوز - بيجيب الوقت من السيرفر كل دورة مزامنة وبيخزّن هون
+/// (وقت السيرفر + ساعة الجهاز لحظتها). بعد إعادة التشغيل بلا نت: الآن الموثوق = ساعة الجهاز الحالية + (ServerUtc - DeviceUtcAtSync).
+/// HighWaterUtc حارس ثانوي: آخر وقت موثوق انختم فيه إشي (بيع، فتح صندوق، مزامنة) - الوقت الموثوق ما بينزل عنه أبدًا (أوفلاين)،
+/// ومع كل مزامنة ناجحة بينعاد ضبطه على وقت السيرفر (السيرفر هو المرجع، فحارس مسمَّم بساعة غلط ما بيضل).
+/// </summary>
+public sealed class TrustedTimeAnchor
+{
+    public int Id { get; set; }
+    public DateTime ServerUtc { get; set; }
+    public DateTime DeviceUtcAtSync { get; set; }
+    public DateTime HighWaterUtc { get; set; }
+}

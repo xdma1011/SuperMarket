@@ -13,7 +13,9 @@ public sealed record CashierVarianceItemDto(
     int DeficitCount,
     int SurplusCount,
     decimal TotalVariance,
-    decimal AverageVariance);
+    decimal AverageVariance,
+    // بند 23: مجموع الفرق اللي لسه بلا تفسير من صاحب المحل (مجموع غير المفسَّر لكل تقفيل بإشارته: سالب = عجز بلا تفسير).
+    decimal UnexplainedVariance = 0m);
 
 /// <summary>
 /// فروقات تقفيل الصندوق (`CashClosing.Variance`) مجمَّعة لكل كاشير عبر
@@ -78,6 +80,23 @@ public sealed class GetCashierVarianceReportHandler
                     x.g.TotalVariance,
                     x.g.AverageVariance))
             .ToListAsync(cancellationToken);
+
+        // غير المفسَّر لكل كاشير بالصفحة: من تقفيلاته بالفترة ناقص ملاحظات التفسير (بند 23). عدد التقفيلات محدود (وردية يوميًا).
+        var pageUserIds = page.Select(p => p.UserId).ToList();
+        var pageClosings = await closings
+            .Where(c => pageUserIds.Contains(c.UserId))
+            .Select(c => new { c.Id, c.UserId, Variance = c.CountedCash - c.ExpectedCash })
+            .ToListAsync(cancellationToken);
+        var pageClosingIds = pageClosings.Select(c => c.Id).ToList();
+        var explained = await _context.CashClosingVarianceNotes.AsNoTracking()
+            .Where(n => pageClosingIds.Contains(n.CashClosingId))
+            .GroupBy(n => n.CashClosingId)
+            .Select(g => new { ClosingId = g.Key, Total = g.Sum(n => n.ExplainedAmount) })
+            .ToDictionaryAsync(x => x.ClosingId, x => x.Total, cancellationToken);
+        var unexplainedByUser = pageClosings
+            .GroupBy(c => c.UserId)
+            .ToDictionary(g => g.Key, g => g.Sum(c => CashManagement.VarianceNotes.VarianceNoteMath.Unexplained(c.Variance, explained.GetValueOrDefault(c.Id))));
+        page = page.Select(p => p with { UnexplainedVariance = unexplainedByUser.GetValueOrDefault(p.UserId) }).ToList();
 
         return new PagedResult<CashierVarianceItemDto>(page, totalCount, paging.PageNumber, paging.PageSize);
     }

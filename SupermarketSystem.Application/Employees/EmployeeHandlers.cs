@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Application.Common.Interfaces;
+using SupermarketSystem.Application.Common.Notifications;
+using SupermarketSystem.Application.Partners;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Domain.CashManagement;
 using SupermarketSystem.Domain.Common;
@@ -191,12 +193,16 @@ public sealed class RecordEmployeePaymentHandler
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserContext _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly INotificationDispatcher _notificationDispatcher;
 
-    public RecordEmployeePaymentHandler(IApplicationDbContext context, ICurrentUserContext currentUser, IDateTimeProvider dateTimeProvider)
+    public RecordEmployeePaymentHandler(
+        IApplicationDbContext context, ICurrentUserContext currentUser, IDateTimeProvider dateTimeProvider,
+        INotificationDispatcher notificationDispatcher)
     {
         _context = context;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
+        _notificationDispatcher = notificationDispatcher;
     }
 
     public async Task<Result<RecordEmployeePaymentResponse>> HandleAsync(RecordEmployeePaymentCommand command, CancellationToken cancellationToken)
@@ -317,6 +323,15 @@ public sealed class RecordEmployeePaymentHandler
         }
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // راتب بفترة شهر نزل كشفه = الكشف صار قديم (الراتب بيتسجّل كمصروف بفترته) - بند 2.
+        if (payment.Type == EmployeePaymentType.Salary)
+        {
+            await PartnerStatementStaleness.MarkAndNotifyAsync(
+                _context, _notificationDispatcher, now, employee.BranchId,
+                new[] { (payment.PeriodYear!.Value, payment.PeriodMonth!.Value) },
+                $"انصرف راتب ({payment.GrossAmount:0.000} د.أ) بفترة {payment.PeriodMonth}/{payment.PeriodYear} بعد نزول الكشف.", cancellationToken);
+        }
 
         var outstanding = payment.Type == EmployeePaymentType.Advance
             ? totals.OutstandingAdvance + payment.GrossAmount

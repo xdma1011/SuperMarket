@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Policies;
+using SupermarketSystem.Application.Sales.RejectedSales;
 using SupermarketSystem.Infrastructure.Persistence;
 using SupermarketSystem.Infrastructure.Persistence.Interceptors;
 using SupermarketSystem.Infrastructure.Services;
@@ -64,6 +65,7 @@ public static class DependencyInjection
         services.AddScoped<IStockOperations, StockOperations>();
         services.AddScoped<ICatalogVersionService, SqlCatalogVersionService>();
         services.AddScoped<ISaleInvoiceOperations, SaleInvoiceOperations>();
+        services.AddScoped<IRejectedSaleRecorder, RejectedSaleRecorder>();
         services.AddScoped<ITransactionalExecutor, TransactionalExecutor>();
 
         // مُرسِل تلغرام — HttpClient مخصص (typed client)، بلا base address

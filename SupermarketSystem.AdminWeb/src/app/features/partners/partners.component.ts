@@ -56,6 +56,9 @@ export interface PartnerStatementSummaryDto {
   partnerCount: number;
   /** بنود استُبعدت من الربح لأن ما إلها تكلفة معروفة - أكبر من صفر = الربح على الأغلب مبالغ فيه. */
   uncostedItemsCount?: number;
+  /** الكشف صار قديم: انضاف شي بفترته بعد نزوله - لازم إعادة إصدار. */
+  staleSinceUtc?: string | null;
+  staleReason?: string | null;
 }
 
 export interface PartnerStatementDto extends PartnerStatementSummaryDto {

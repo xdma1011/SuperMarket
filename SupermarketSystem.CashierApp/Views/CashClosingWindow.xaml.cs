@@ -16,15 +16,17 @@ public partial class CashClosingWindow : Window
 {
     private readonly ApiClient _apiClient;
     private readonly Guid _branchId;
+    private readonly string _dbPath;
     private readonly Dictionary<Guid, TextBox> _detailBoxes = new();
 
-    public CashClosingWindow(ApiClient apiClient, Guid branchId, List<PaymentMethodDto> paymentMethods)
+    public CashClosingWindow(ApiClient apiClient, Guid branchId, List<PaymentMethodDto> paymentMethods, string dbPath)
     {
         InitializeComponent();
         _apiClient = apiClient;
         _branchId = branchId;
+        _dbPath = dbPath;
 
-        BusinessDateBox.Text = DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        BusinessDateBox.Text = TrustedClock.Instance.LocalNow().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
         foreach (var method in paymentMethods)
         {
@@ -85,9 +87,40 @@ public partial class CashClosingWindow : Window
         }
 
         SubmitButton.IsEnabled = false;
+
+        // بند 23: نحاول نبعت الطابور قبل التقفيل، عشان بيعات ما وصلت ما تطلع "زيادة" وهمية هون و"عجز" بالوردية الجاية.
+        // وقت أقصى قصير: لو النت قاطع ما بنعلّق الكاشير - اللي ضل بالطابور بينعدّ وبينبعت مع التقفيل كمعلومة للإدارة.
+        ResultText.Text = "جارٍ إرسال البيعات المعلّقة قبل التقفيل…";
+        try
+        {
+            using var flushCts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            await new PendingSaleSyncService(_dbPath, _apiClient).SyncPendingSalesAsync(flushCts.Token);
+        }
+        catch (Exception)
+        {
+            // أفضل جهد - فشل الإرسال ما بيمنع التقفيل (نسمح وننبّه، مش نوقف).
+        }
+
+        var (pendingCount, pendingAmount) = await PendingQueueSummary.ComputeAsync(_dbPath, CancellationToken.None);
+        if (pendingCount > 0)
+        {
+            var proceed = MessageBox.Show(this,
+                $"فيه {pendingCount} بيعة (قيمتها {pendingAmount:0.000}) لسه ما وصلت للسيرفر.\n" +
+                "الكاش اللي قبضته منها بالدرج بس ما انحسب بالمتوقع، فالتقفيل رح يبين زيادة والوردية الجاية عجز.\n" +
+                "التقفيل رح يكمل وبينذكر للإدارة إنها معلّقة. بدك تكمل؟",
+                "بيعات معلّقة", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (proceed != MessageBoxResult.Yes)
+            {
+                SubmitButton.IsEnabled = true;
+                ResultText.Text = "انلغى التقفيل - ما انحفظ إشي.";
+                return;
+            }
+        }
+
         ResultText.Text = "جارٍ الحفظ…";
 
-        var result = await _apiClient.CompleteCashClosingAsync(_branchId, businessDate, countedCash, countedDetails, CancellationToken.None);
+        var result = await _apiClient.CompleteCashClosingAsync(
+            _branchId, businessDate, countedCash, countedDetails, CancellationToken.None, pendingCount, pendingAmount);
 
         SubmitButton.IsEnabled = true;
 

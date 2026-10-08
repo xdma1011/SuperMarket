@@ -19,6 +19,7 @@ public sealed class LocalDbContext : DbContext
     public DbSet<LocalPaymentMethod> PaymentMethods => Set<LocalPaymentMethod>();
     public DbSet<SyncState> SyncStates => Set<SyncState>();
     public DbSet<LocalPromotion> Promotions => Set<LocalPromotion>();
+    public DbSet<TrustedTimeAnchor> TrustedTimeAnchors => Set<TrustedTimeAnchor>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -44,6 +45,8 @@ public sealed class LocalDbContext : DbContext
         modelBuilder.Entity<LocalPaymentMethod>().HasKey(m => m.Id);
 
         modelBuilder.Entity<SyncState>().HasKey(s => s.Id);
+
+        modelBuilder.Entity<TrustedTimeAnchor>().HasKey(a => a.Id);
 
         modelBuilder.Entity<LocalPromotion>().HasKey(p => p.PromotionId);
         modelBuilder.Entity<LocalPromotion>().HasIndex(p => p.ProductId);

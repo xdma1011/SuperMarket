@@ -275,11 +275,13 @@ public sealed record PartnerStatementLineDto(
 
 public sealed record PartnerStatementDto(
     Guid Id, Guid BranchId, string BranchName, int Year, int Month, decimal NetProfit, decimal UnallocatedAmount,
-    DateTime GeneratedAtUtc, bool IsAutomatic, IReadOnlyList<PartnerStatementLineDto> Lines, int UncostedItemsCount = 0);
+    DateTime GeneratedAtUtc, bool IsAutomatic, IReadOnlyList<PartnerStatementLineDto> Lines, int UncostedItemsCount = 0,
+    DateTime? StaleSinceUtc = null, string? StaleReason = null);
 
 public sealed record PartnerStatementSummaryDto(
     Guid Id, Guid BranchId, string BranchName, int Year, int Month, decimal NetProfit, decimal UnallocatedAmount,
-    DateTime GeneratedAtUtc, bool IsAutomatic, int PartnerCount, int UncostedItemsCount = 0);
+    DateTime GeneratedAtUtc, bool IsAutomatic, int PartnerCount, int UncostedItemsCount = 0,
+    DateTime? StaleSinceUtc = null, string? StaleReason = null);
 
 public sealed record GeneratePartnerStatementCommand(Guid BranchId, int Year, int Month);
 
@@ -345,7 +347,7 @@ public sealed class GetPartnerStatementsHandler
 
         var rows = await statements
             .OrderByDescending(s => s.Year).ThenByDescending(s => s.Month)
-            .Select(s => new { s.Id, s.BranchId, s.Year, s.Month, s.NetProfit, s.UnallocatedAmount, s.GeneratedAtUtc, s.IsAutomatic, s.UncostedItemsCount, Count = s.Lines.Count })
+            .Select(s => new { s.Id, s.BranchId, s.Year, s.Month, s.NetProfit, s.UnallocatedAmount, s.GeneratedAtUtc, s.IsAutomatic, s.UncostedItemsCount, s.StaleSinceUtc, s.StaleReason, Count = s.Lines.Count })
             .Take(60)
             .ToListAsync(cancellationToken);
 
@@ -356,7 +358,7 @@ public sealed class GetPartnerStatementsHandler
 
         return rows.Select(r => new PartnerStatementSummaryDto(
             r.Id, r.BranchId, branchNames.GetValueOrDefault(r.BranchId, ""), r.Year, r.Month, r.NetProfit, r.UnallocatedAmount,
-            r.GeneratedAtUtc, r.IsAutomatic, r.Count, r.UncostedItemsCount)).ToList();
+            r.GeneratedAtUtc, r.IsAutomatic, r.Count, r.UncostedItemsCount, r.StaleSinceUtc, r.StaleReason)).ToList();
     }
 }
 
@@ -398,7 +400,9 @@ public sealed class GetPartnerStatementByIdHandler
                     l.PartnerId, names.GetValueOrDefault(l.PartnerId, "(شريك محذوف)"), (int)l.PartnerType, PartnerTitles.Type(l.PartnerType),
                     l.CapitalBalance, l.SharePercent, l.ShareAmount))
                 .ToList(),
-            statement.UncostedItemsCount);
+            statement.UncostedItemsCount,
+            statement.StaleSinceUtc,
+            statement.StaleReason);
     }
 }
 

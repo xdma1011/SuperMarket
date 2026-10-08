@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Application.Common.Interfaces;
+using SupermarketSystem.Application.Common.Notifications;
+using SupermarketSystem.Application.Partners;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Domain.CashManagement;
 using SupermarketSystem.Domain.Finance;
@@ -77,12 +79,16 @@ public sealed class CreateExpenseHandler
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserContext _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly INotificationDispatcher _notificationDispatcher;
 
-    public CreateExpenseHandler(IApplicationDbContext context, ICurrentUserContext currentUser, IDateTimeProvider dateTimeProvider)
+    public CreateExpenseHandler(
+        IApplicationDbContext context, ICurrentUserContext currentUser, IDateTimeProvider dateTimeProvider,
+        INotificationDispatcher notificationDispatcher)
     {
         _context = context;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
+        _notificationDispatcher = notificationDispatcher;
     }
 
     public async Task<Result<CreateExpenseResponse>> HandleAsync(CreateExpenseCommand command, CancellationToken cancellationToken)
@@ -139,6 +145,12 @@ public sealed class CreateExpenseHandler
         }
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // مصروف بفترة شهر نزل كشفه = الكشف صار قديم (بند 2 بالمراجعة النقدية).
+        await PartnerStatementStaleness.MarkAndNotifyAsync(
+            _context, _notificationDispatcher, _dateTimeProvider.UtcNow, command.BranchId,
+            new[] { (command.PeriodYear, command.PeriodMonth) },
+            $"انضاف مصروف ({expense.Amount:0.000} د.أ) بفترة {command.PeriodMonth}/{command.PeriodYear} بعد نزول الكشف.", cancellationToken);
 
         return Result.Success(new CreateExpenseResponse(expense.Id));
     }

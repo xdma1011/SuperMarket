@@ -12,6 +12,13 @@ public static class BackupSettingsKeys
     /// </summary>
     public const string StorageDirectory = "Backup.StorageDirectory";
 
+    /// <summary>
+    /// نسخة ثانية لمكان تاني (فلاشة/مجلد Drive/مشاركة شبكة) - اختياري. النسخ الأولى على نفس الهارد: لو الهارد خرب أو الجهاز انسرق
+    /// بتروح القاعدة والنسخ سوا (المراجعة النقدية 6/10/2026، بند 3). المسار لازم يكون قابل للكتابة من حساب تشغيل الـAPI. فاضي = بلا نسخة ثانية.
+    /// ما بينظّف تلقائيًا (بخلاف الأولى) - الإدارة بتنظّفه يدويًا.
+    /// </summary>
+    public const string SecondaryDirectory = "Backup.SecondaryDirectory";
+
     /// <summary>عدد النسخ المحفوظة قبل حذف الأقدم تلقائيًا.</summary>
     public const string RetentionCount = "Backup.RetentionCount";
 }
@@ -24,6 +31,9 @@ public static class BackupSettingsKeys
 public interface IBackupService
 {
     Task<BackupFileInfo> CreateBackupAsync(CancellationToken cancellationToken);
+
+    /// <summary>ينسخ ملف نسخة ناجحة لمجلد ثانوي (بيرمي استثناء لو فشل - المستدعي بينبّه ولا بيفشّل النسخة الأصلية).</summary>
+    Task CopyToSecondaryAsync(string sourceFilePath, string secondaryDirectory, CancellationToken cancellationToken);
 
     /// <summary>يحذف ملفات النسخ المحدَّدة من القرص. يرجّع أسماء الملفات المحذوفة فعليًا.</summary>
     Task<IReadOnlyList<string>> DeleteBackupFilesAsync(IReadOnlyList<string> filePaths, CancellationToken cancellationToken);

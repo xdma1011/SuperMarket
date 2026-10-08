@@ -91,6 +91,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/notifications/notifications.component').then(m => m.NotificationsComponent)
       },
       {
+        path: 'rejected-sales',
+        canActivate: [requirePermissionGuard('Returns.Review')],
+        loadComponent: () => import('./features/rejected-sales/rejected-sales.component').then(m => m.RejectedSalesComponent)
+      },
+      {
         path: 'reviews',
         canActivate: [requirePermissionGuard('Returns.Review')],
         loadComponent: () => import('./features/reviews/reviews.component').then(m => m.ReviewsComponent)

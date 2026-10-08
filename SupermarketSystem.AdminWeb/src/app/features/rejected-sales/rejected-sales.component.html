@@ -1,0 +1,117 @@
+<div class="page-head">
+  <div class="head-text">
+    <span class="crumb">المبيعات / بيعات مرفوضة</span>
+    <h1>بيعات مرفوضة من السيرفر</h1>
+    <span class="subtitle">بيعات الكاشير اللي السيرفر رفضها نهائيًا وضلت عالقة بطابوره - المصاري ممكن تكون بالدرج بلا فاتورة وبلا خصم مخزون.</span>
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn-outline" (click)="toggleIncludeResolved()">
+      {{ includeResolved() ? 'إخفاء المعالَجة' : 'عرض المعالَجة كمان' }}
+    </button>
+    <button type="button" class="btn-outline" (click)="load()">تحديث</button>
+  </div>
+</div>
+
+@if (errorMessage()) {
+  <div class="alert-banner">{{ errorMessage() }}</div>
+}
+
+@if (loading() && items().length === 0) {
+  <div class="empty">جارٍ التحميل...</div>
+} @else if (items().length === 0) {
+  <div class="empty ok">ما في بيعات مرفوضة بانتظار معالجة ✓</div>
+} @else {
+  <div class="reject-list">
+    @for (item of items(); track item.id) {
+      <div class="reject-card" [class.resolved]="item.isResolved">
+        <div class="reject-top">
+          <div class="reject-main">
+            <div class="reject-title-row">
+              <span class="reject-title">{{ item.itemCount }} أصناف - مدفوع {{ item.paidAmountHint | number: '1.3-3' }} د.أ</span>
+              <span class="reject-time">{{ item.lastAttemptAtUtc | date: 'yyyy-MM-dd HH:mm' }}</span>
+            </div>
+            <p class="reject-reason">{{ item.errorMessage }}</p>
+            <p class="reject-meta">
+              الكاشير: {{ item.cashierName ?? 'غير معروف' }} - الفرع: {{ item.branchName }} - عدد المحاولات: {{ item.attemptCount }}
+              (أول محاولة {{ item.firstAttemptAtUtc | date: 'yyyy-MM-dd HH:mm' }})
+            </p>
+            @if (item.isResolved) {
+              <p class="reject-resolution">
+                {{ item.resolvedAutomatically ? 'انقبلت لاحقًا' : 'معالَجة' }}
+                {{ item.resolvedAtUtc | date: 'yyyy-MM-dd HH:mm' }}
+                @if (item.resolvedByName) { - {{ item.resolvedByName }} }
+                @if (item.resolutionNote) { - {{ item.resolutionNote }} }
+              </p>
+            }
+          </div>
+          <div class="reject-actions">
+            <button type="button" class="btn-outline" (click)="toggleDetails(item)">
+              {{ expandedId() === item.id ? 'إخفاء التفاصيل' : 'التفاصيل' }}
+            </button>
+            @if (!item.isResolved) {
+              <button type="button" class="btn-primary" [disabled]="processingId() === item.id" (click)="startResolve(item)">
+                تمت المعالجة
+              </button>
+            }
+          </div>
+        </div>
+
+        @if (resolvingId() === item.id) {
+          <div class="resolve-row">
+            <input
+              type="text"
+              placeholder="ملاحظة (مثلًا: دخلتها يدويًا بفاتورة رقم...)"
+              maxlength="500"
+              [value]="resolveNote()"
+              (input)="onNoteInput($event)"
+            />
+            <button type="button" class="btn-primary" [disabled]="processingId() === item.id" (click)="confirmResolve(item)">
+              {{ processingId() === item.id ? 'جارٍ...' : 'تأكيد' }}
+            </button>
+            <button type="button" class="btn-outline" (click)="cancelResolve()">إلغاء</button>
+          </div>
+        }
+
+        @if (expandedId() === item.id) {
+          <div class="details">
+            @if (detailsLoading()) {
+              <span>جارٍ تحميل التفاصيل...</span>
+            }
+            @if (details(); as d) {
+              <table class="detail-table">
+                <thead>
+                  <tr><th>الصنف</th><th>الوحدة</th><th>الكمية</th><th>خصم يدوي</th></tr>
+                </thead>
+                <tbody>
+                  @for (line of d.lines; track $index) {
+                    <tr>
+                      <td>{{ line.productName }}</td>
+                      <td>{{ line.unitName ?? '-' }}</td>
+                      <td>{{ line.quantity | number: '1.0-3' }}</td>
+                      <td>{{ line.manualDiscountAmount | number: '1.3-3' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+              <p class="detail-line">
+                الدفعات:
+                @for (p of d.payments; track $index) {
+                  <span class="pay-chip">{{ p.paymentMethodName }}: {{ p.amount | number: '1.3-3' }} د.أ</span>
+                } @empty {
+                  <span>بلا دفعات</span>
+                }
+              </p>
+              @if (d.invoiceLevelDiscountAmount > 0) {
+                <p class="detail-line">خصم الفاتورة: {{ d.invoiceLevelDiscountAmount | number: '1.3-3' }} د.أ</p>
+              }
+              @if (d.allowCreditSale) {
+                <p class="detail-line">بيع بالدين{{ d.customerPhone ? ' - رقم الزبون ' + d.customerPhone : '' }}</p>
+              }
+              <p class="detail-line code">رمز الرفض: {{ d.summary.errorCode }}</p>
+            }
+          </div>
+        }
+      </div>
+    }
+  </div>
+}

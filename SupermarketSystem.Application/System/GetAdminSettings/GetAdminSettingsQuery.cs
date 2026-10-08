@@ -28,6 +28,9 @@ public sealed class GetAdminSettingsHandler
     // (المفتاح، تسمية عربية للواجهة، نوع القيمة) - كل إعداد الصفحة هاي بتديره.
     internal static readonly (string Key, string Label, AdminSettingDataType DataType)[] ManagedSettings =
     {
+        (BackupSettingsKeys.StorageDirectory, "مجلد النسخ الاحتياطي (مسار كامل على جهاز SQL Server، مثلًا D:\\Backups) - فاضي = مجلد SQL Server الافتراضي", AdminSettingDataType.String),
+        (BackupSettingsKeys.SecondaryDirectory, "مجلد النسخة الاحتياطية الثانية (فلاشة/Drive/مشاركة شبكة، مكان غير الهارد الأصلي) - فاضي = بلا نسخة ثانية", AdminSettingDataType.String),
+        (BackupSettingsKeys.RetentionCount, "عدد النسخ الاحتياطية المحفوظة قبل حذف الأقدم (0 = بلا حذف تلقائي)", AdminSettingDataType.Decimal),
         (PosPolicyKeys.AllowVoidSale, "السماح بإلغاء فاتورة بيع مكتملة", AdminSettingDataType.Boolean),
         (PosPolicyKeys.AllowReturn, "السماح بمعالجة إرجاع من زبون", AdminSettingDataType.Boolean),
         (PosPolicyKeys.AllowCrossMethodRefund, "السماح بالاسترجاع بطريقة دفع مختلفة عن الأصلية", AdminSettingDataType.Boolean),

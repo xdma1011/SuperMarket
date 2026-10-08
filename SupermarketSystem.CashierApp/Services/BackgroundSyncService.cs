@@ -143,6 +143,12 @@ public sealed class BackgroundSyncService
 
         try
         {
+            // الساعة الموثوقة (بند 22): وقت السيرفر أول كل دورة - بيختم بيعات الأوفلاين لاحقًا. أفضل جهد (فشلها = بلا مرجع جديد).
+            if (await _apiClient.GetServerUtcNowAsync(cancellationToken) is { } serverUtcNow)
+            {
+                await TrustedClock.Instance.RecordServerTimeAsync(_dbPath, serverUtcNow, cancellationToken);
+            }
+
             var pendingSaleSync = new PendingSaleSyncService(_dbPath, _apiClient);
             await pendingSaleSync.SyncPendingSalesAsync(cancellationToken);
 

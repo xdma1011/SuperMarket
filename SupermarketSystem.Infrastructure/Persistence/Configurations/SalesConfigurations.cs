@@ -28,6 +28,7 @@ public class SaleInvoiceConfiguration : IEntityTypeConfiguration<SaleInvoice>
         builder.Property(s => s.VoidReason).HasConversion<int?>();
         builder.Property(s => s.VoidNotes).HasMaxLength(500);
         builder.Property(s => s.ReviewedAtUtc).HasColumnType("datetime2");
+        builder.Property(s => s.ReceivedAtUtc).HasColumnType("datetime2");
         builder.Property(s => s.RowVersion).IsRowVersion();
         builder.Property(s => s.CreatedAtUtc).HasColumnType("datetime2").IsRequired();
         builder.Property(s => s.UpdatedAtUtc).HasColumnType("datetime2");
@@ -316,5 +317,31 @@ public class ReturnInvoicePaymentConfiguration : IEntityTypeConfiguration<Return
         builder.HasOne<User>().WithMany().HasForeignKey(p => p.UserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Branch>().WithMany().HasForeignKey(p => p.BranchId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(p => p.ReversedByUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class RejectedSaleAttemptConfiguration : IEntityTypeConfiguration<RejectedSaleAttempt>
+{
+    public void Configure(EntityTypeBuilder<RejectedSaleAttempt> builder)
+    {
+        builder.ToTable("RejectedSaleAttempts");
+        builder.HasKey(r => r.Id);
+
+        builder.Property(r => r.ErrorCode).HasMaxLength(RejectedSaleAttempt.MaxErrorCodeLength).IsRequired();
+        builder.Property(r => r.ErrorMessage).HasMaxLength(RejectedSaleAttempt.MaxErrorMessageLength).IsRequired();
+        builder.Property(r => r.PayloadJson).IsRequired();
+        builder.Property(r => r.PaidAmountHint).HasColumnType("decimal(18,4)");
+        builder.Property(r => r.FirstAttemptAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(r => r.LastAttemptAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(r => r.ResolvedAtUtc).HasColumnType("datetime2");
+        builder.Property(r => r.ResolutionNote).HasMaxLength(RejectedSaleAttempt.MaxNoteLength);
+        builder.Ignore(r => r.IsOpen);
+
+        // سجل واحد لكل بيعة (إعادة المحاولة بتحدّث نفس الصف).
+        builder.HasIndex(r => r.ClientRequestId).IsUnique();
+        builder.HasIndex(r => new { r.BranchId, r.ResolvedAtUtc, r.LastAttemptAtUtc });
+
+        builder.HasOne<Branch>().WithMany().HasForeignKey(r => r.BranchId).OnDelete(DeleteBehavior.Restrict);
+        // الكاشير/المعالِج: بلا FK عمدًا - السجل بيضل مقروء حتى لو المستخدم انحذف، وتسجيل الرفض ما لازم يفشل لسبب مرجعي.
     }
 }

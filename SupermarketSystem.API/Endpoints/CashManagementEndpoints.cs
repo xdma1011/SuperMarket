@@ -4,6 +4,7 @@ using SupermarketSystem.Application.Common.Pagination;
 using SupermarketSystem.Application.CashManagement.CompleteCashClosing;
 using SupermarketSystem.Application.CashManagement.GetCashClosings;
 using SupermarketSystem.Application.CashManagement.RecordDrawerOpen;
+using SupermarketSystem.Application.CashManagement.VarianceNotes;
 
 namespace SupermarketSystem.API.Endpoints;
 
@@ -31,6 +32,31 @@ public static class CashManagementEndpoints
         .Produces<RecordDrawerOpenResponse>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status403Forbidden);
+
+        // تفسير فرق التقفيل (بند 23) - برّا المجموعة (§3.4): صاحب المحل/مساعد الأدمن بس (Returns.Review)، الكاشير ما بيفسّر فرق نفسه.
+        app.MapGet("/api/v1/cash-closings/{id:guid}/variance-notes", async (
+            Guid id, GetVarianceNotesHandler handler, CancellationToken cancellationToken) =>
+            (await handler.HandleAsync(id, cancellationToken)).ToHttpResult())
+        .WithTags("CashManagement")
+        .RequirePermission(PermissionCodes.ReturnsReview)
+        .WithName("GetCashClosingVarianceNotes")
+        .WithSummary("تفسيرات فرق تقفيل صندوق + المفسَّر وغير المفسَّر.")
+        .Produces<VarianceNotesResponse>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status404NotFound);
+
+        app.MapPost("/api/v1/cash-closings/{id:guid}/variance-notes", async (
+            Guid id, RecordVarianceNoteRequest request, RecordVarianceNoteHandler handler, CancellationToken cancellationToken) =>
+            (await handler.HandleAsync(
+                new RecordVarianceNoteCommand(id, request.Reason, request.ExplainedAmount, request.Note, request.RelatedExpenseId),
+                cancellationToken)).ToHttpResult())
+        .WithTags("CashManagement")
+        .RequirePermission(PermissionCodes.ReturnsReview)
+        .WithName("RecordCashClosingVarianceNote")
+        .WithSummary("تسجيل تفسير لفرق تقفيل صندوق - سجل تاريخي بلا أي أثر على التقفيل أو حركات الصندوق.")
+        .Produces<VarianceNotesResponse>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status404NotFound)
+        .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
 
         var group = app.MapGroup("/api/v1/cash-closings").WithTags("CashManagement").RequirePermission(PermissionCodes.CashClosingManage);
 
@@ -66,3 +92,6 @@ public static class CashManagementEndpoints
         return app;
     }
 }
+
+public sealed record RecordVarianceNoteRequest(
+    SupermarketSystem.Domain.CashManagement.VarianceExplanationReason Reason, decimal ExplainedAmount, string? Note, Guid? RelatedExpenseId);

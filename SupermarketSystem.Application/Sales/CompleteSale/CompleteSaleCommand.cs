@@ -67,7 +67,11 @@ public sealed record CompleteSaleCommand(
     // رقم الزبون اختياري من الكاشير (28/9/2026): لو بيطابق زبون مسجّل (آخر 9 أرقام) الفاتورة بتنربط فيه،
     // وإلا بينحفظ الرقم على الفاتورة بس (CustomerPhoneSnapshot) بلا إنشاء زبون. رقم غلط ما بيوقف البيع
     // أبدًا (بينبعت أوفلاين وبيوصل متأخر) - بينتجاهل بس. CustomerId الصريح (لوحة الإدارة/الطلبات) أولى منه.
-    string? CustomerPhone = null);
+    string? CustomerPhone = null,
+    // وقت البيع الفعلي عند الكاشير (بند 22): الكاشير بيختم كل بيعة بساعة موثوقة (ساعة السيرفر المحفوظة محليًا) عشان
+    // بيعة أوفلاين توصل متأخرة تنحسب بوقتها مش بوقت وصولها. السيرفر بيقبله بحدود وبيعلّم المشبوه - راجع SaleTimeRules.
+    // null (لوحة الإدارة، الطلبات، كاشير قديم) = وقت الوصول زي قبل.
+    DateTime? OccurredAtUtc = null);
 
 public sealed record CompleteSaleResponse(
     Guid SaleInvoiceId,
@@ -396,7 +400,10 @@ public sealed class CompleteSaleHandler
         // نفس المبدأ: أقصى عرض واحد نشط فعليًا لكل (منتج، فرع) بنفس اللحظة
         // - لو تصادف أكتر من صف (خطأ إداري بإدخال عروض متداخلة تواريخها)،
         // نأخذ الأقدم إنشاءً بهدوء بدل ما نفشل البيع بالكامل.
-        var nowUtc = _dateTimeProvider.UtcNow;
+        // بند 22: وقت البيع الفعلي (الأوفلاين) مش وقت الوصول - بيحدد تكلفة الوحدة المجمَّدة والعروض الشغّالة، وبيتختم على
+        // الفاتورة (SaleInvoice.SetSaleTime). سجلات الصندوق والمخزون بتضل بوقت الوصول (occurredAtUtc تحت).
+        var saleTime = SaleTimeRules.Resolve(command.OccurredAtUtc, _dateTimeProvider.UtcNow);
+        var nowUtc = saleTime.SaleTimeUtc;
 
         // --- تكلفة الوحدة وقت البيع (UnitCostSnapshot) - راجع تعليق PROFIT ASSUMPTION فوق ---
         var (batchUnitCosts, weightedAverageCosts) = await SaleUnitCosts.LoadAsync(
@@ -438,6 +445,11 @@ public sealed class CompleteSaleHandler
                 .ToDictionaryAsync(p => p.PromotionId, cancellationToken);
 
         var reviewFlags = new List<string>();
+        if (saleTime.ReviewFlag is { } saleTimeFlag)
+        {
+            reviewFlags.Add(saleTimeFlag);
+        }
+
         var offlinePriceFlaggedProducts = new HashSet<Guid>();
         var resolvedLines = new List<ResolvedSaleLine>();
 
@@ -797,6 +809,8 @@ public sealed class CompleteSaleHandler
             var invoice = new SaleInvoice(
                 command.BranchId, invoiceNumber, command.ClientRequestId,
                 linkedCustomerId, customerName, customerPhone);
+
+            invoice.SetSaleTime(saleTime.SaleTimeUtc, occurredAtUtc);
 
             if (atCost is not null)
             {

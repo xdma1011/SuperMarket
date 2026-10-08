@@ -114,6 +114,41 @@ public sealed class PartnersHttpTests : IntegrationTestBase
         (await ReadJsonAsync(await admin.GetAsync($"/api/v1/partners?branchId={Fixture.TestBranchId}"), "الشركاء"))
         .EnumerateArray().ToDictionary(p => p.GetProperty("id").GetGuid());
 
+    /// <summary>بند 2 (8/10/2026): مصروف بفترة شهر نزل كشفه = الكشف "قديم" (سماح مع تعليم)، وإعادة الإصدار بتصفّر العلامة.</summary>
+    [Fact]
+    public async Task مصروف_بفترة_شهر_نزل_كشفه_بيعلّم_الكشف_قديم_وإعادة_الإصدار_بتصفّر_العلامة()
+    {
+        var admin = await CreateAuthenticatedClientAsync();
+        var branchId = Fixture.TestBranchId;
+        var previous = PreviousMonthMiddle();
+
+        var partner = await CreatePartnerAsync(admin, "شريك الكشف القديم", "Capital");
+        await DepositCapitalAsync(admin, partner, 1000m, previous.AddDays(-5));
+        await ReadJsonAsync(await admin.PostAsJsonAsync("/api/v1/partners/statements",
+            new { branchId, year = previous.Year, month = previous.Month }), "إصدار كشف");
+
+        async Task<JsonElement> SummaryAsync() =>
+            (await ReadJsonAsync(await admin.GetAsync($"/api/v1/partners/statements?branchId={branchId}"), "الكشوف")).EnumerateArray()
+                .Single(x => x.GetProperty("year").GetInt32() == previous.Year && x.GetProperty("month").GetInt32() == previous.Month);
+
+        Assert.Equal(JsonValueKind.Null, (await SummaryAsync()).GetProperty("staleSinceUtc").ValueKind);
+
+        // مصروف بفترة هالشهر بعد نزول الكشف: بينقبل (ما بنمنع) بس الكشف بيصير قديم.
+        await ReadJsonAsync(await admin.PostAsJsonAsync("/api/v1/finance/expenses", new
+        {
+            branchId, category = 2, amount = 5.000m, paymentDateUtc = previous.ToString("yyyy-MM-dd"),
+            periodYear = previous.Year, periodMonth = previous.Month, notes = "كهربا متأخرة"
+        }), "مصروف");
+
+        var stale = await SummaryAsync();
+        Assert.NotEqual(JsonValueKind.Null, stale.GetProperty("staleSinceUtc").ValueKind);
+        Assert.Contains("مصروف", stale.GetProperty("staleReason").GetString());
+
+        await ReadJsonAsync(await admin.PostAsJsonAsync("/api/v1/partners/statements",
+            new { branchId, year = previous.Year, month = previous.Month }), "إعادة إصدار");
+        Assert.Equal(JsonValueKind.Null, (await SummaryAsync()).GetProperty("staleSinceUtc").ValueKind);
+    }
+
     [Fact]
     public async Task الكشف_الشهري_والسحوبات_والمستحق_لصاحب_المحل_والسحب_من_الكاشير()
     {

@@ -29,7 +29,12 @@ public sealed record CompleteCashClosingCommand(
     // هيك بيبعت تطبيق الكاشير، فالكاشير بيقدر يقفّل أكتر من مرة باليوم (ظرف طارئ، تسليم وردية).
     // لوحة الإدارة بتبعت رقم صريح. راجع تعليق CashClosing.ShiftNumber بالـDomain - القيد الفريد الفعلي
     // (BranchId, BusinessDate, ShiftNumber)، لا (BranchId, BusinessDate) وحدها.
-    int? ShiftNumber = null);
+    int? ShiftNumber = null,
+    // بيعات كانت لسه بطابور الكاشير (ما وصلت للسيرفر) لحظة التقفيل - عدد وقيمة (بند 23). الكاشير بيحاول يبعت الطابور
+    // قبل التقفيل، فهاد اللي ضل عالق فعلًا. معلومة للتفسير بس: بتنحفظ مع التقفيل وبتنذكر بتنبيه العجز/الزيادة عشان
+    // الفرق ما يبين اتهام لكاشير بريء. 0 = ما في (لوحة الإدارة، أو نسخة كاشير قديمة).
+    int PendingSalesCount = 0,
+    decimal PendingSalesAmount = 0m);
 
 public sealed record CompleteCashClosingDetailResponseDto(
     Guid PaymentMethodId,
@@ -88,6 +93,11 @@ public static class CompleteCashClosingValidator
         if (command.ShiftNumber is < 1)
         {
             return Error.Validation("CashClosing.ShiftNumberInvalid", "رقم الوردية يجب أن يكون 1 على الأقل.");
+        }
+
+        if (command.PendingSalesCount < 0 || command.PendingSalesAmount < 0)
+        {
+            return Error.Validation("CashClosing.PendingSalesInvalid", "عدد وقيمة البيعات المعلّقة لا يمكن أن يكونا سالبين.");
         }
 
         foreach (var detail in command.CountedDetails)
@@ -265,7 +275,7 @@ public sealed class CompleteCashClosingHandler
 
         var cashClosing = new CashClosing(
             command.BranchId, actorUserId, command.BusinessDate, closedAtUtc, expectedCash, command.CountedCash,
-            shiftNumber);
+            shiftNumber, command.PendingSalesCount, command.PendingSalesAmount);
 
         var responseDetails = new List<CompleteCashClosingDetailResponseDto>();
 
@@ -330,7 +340,12 @@ public sealed class CompleteCashClosingHandler
                 $"تقفيل صندوق — {(isDeficit ? "عجز" : "زيادة")} {Math.Abs(cashClosing.Variance):0.000}",
                 $"الفرع: {branchName}\nقفّل: {closedBy}\nاليوم: {command.BusinessDate:yyyy-MM-dd} - وردية {cashClosing.ShiftNumber}\n" +
                 $"المتوقع: {cashClosing.ExpectedCash:0.000} - المعدود: {cashClosing.CountedCash:0.000}" +
-                (isDeficit ? "" : "\nالزيادة ممكن تعني بيعات ما انسجّلت بفاتورة."),
+                (isDeficit ? "" : "\nالزيادة ممكن تعني بيعات ما انسجّلت بفاتورة.") +
+                // بيعات لسه بطابور الكاشير لحظة التقفيل: مصاري بالدرج ما انحسبت بالمتوقع، فبتفسّر الزيادة هون
+                // وبتطلع عجز بالوردية الجاية لما توصل (بند 23) - بنذكرها عشان الفرق ما يبين اتهام لكاشير بريء.
+                (command.PendingSalesCount > 0
+                    ? $"\nملاحظة: فيه {command.PendingSalesCount} بيعة قيمتها {command.PendingSalesAmount:0.000} لسه بطابور الكاشير وما وصلت للسيرفر."
+                    : ""),
                 cancellationToken,
                 isDeficit ? NotificationSeverity.Critical : NotificationSeverity.Warning,
                 link: "/cash-closings");

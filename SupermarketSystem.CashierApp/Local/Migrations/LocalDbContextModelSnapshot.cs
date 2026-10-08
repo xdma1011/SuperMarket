@@ -232,6 +232,26 @@ namespace SupermarketSystem.CashierApp.Local.Migrations
 
                     b.ToTable("SyncStates");
                 });
+
+            modelBuilder.Entity("SupermarketSystem.CashierApp.Local.TrustedTimeAnchor", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("DeviceUtcAtSync")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("HighWaterUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ServerUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("TrustedTimeAnchors");
+                });
 #pragma warning restore 612, 618
         }
     }

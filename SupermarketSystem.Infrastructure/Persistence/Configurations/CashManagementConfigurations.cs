@@ -47,6 +47,8 @@ public class CashClosingConfiguration : IEntityTypeConfiguration<CashClosing>
         builder.Property(c => c.UpdatedAtUtc).HasColumnType("datetime2");
 
         builder.Ignore(c => c.Variance);
+        builder.Property(c => c.PendingSalesCount).HasDefaultValue(0);
+        builder.Property(c => c.PendingSalesAmount).HasColumnType("decimal(18,4)").HasDefaultValue(0m);
 
         // One closing per branch per business day PER SHIFT — enforced
         // against (BranchId, BusinessDate, ShiftNumber), not ClosedAtUtc
@@ -96,5 +98,26 @@ public class DrawerOpenEventConfiguration : IEntityTypeConfiguration<DrawerOpenE
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Branch>().WithMany().HasForeignKey(e => e.BranchId).OnDelete(DeleteBehavior.Restrict);
         // سجل تاريخي بحت - ما في أي مسار تعديل/حذف بالنموذج.
+    }
+}
+
+public class CashClosingVarianceNoteConfiguration : IEntityTypeConfiguration<CashClosingVarianceNote>
+{
+    public void Configure(EntityTypeBuilder<CashClosingVarianceNote> builder)
+    {
+        builder.ToTable("CashClosingVarianceNotes");
+        builder.HasKey(n => n.Id);
+
+        builder.Property(n => n.Reason).HasConversion<int>().IsRequired();
+        builder.Property(n => n.ExplainedAmount).HasColumnType("decimal(18,4)").IsRequired();
+        builder.Property(n => n.Note).HasMaxLength(CashClosingVarianceNote.MaxNoteLength);
+        builder.Property(n => n.RecordedAtUtc).HasColumnType("datetime2").IsRequired();
+
+        builder.HasIndex(n => n.CashClosingId);
+
+        builder.HasOne<CashClosing>().WithMany().HasForeignKey(n => n.CashClosingId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(n => n.RecordedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Branch>().WithMany().HasForeignKey(n => n.BranchId).OnDelete(DeleteBehavior.Restrict);
+        // سجل تاريخي بحت - ما في مسار تعديل/حذف.
     }
 }

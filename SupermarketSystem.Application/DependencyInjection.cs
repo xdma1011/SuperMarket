@@ -139,6 +139,8 @@ using SupermarketSystem.Application.Sales.GetCustomerDebts;
 using SupermarketSystem.Application.Sales.GetSaleInvoiceById;
 using SupermarketSystem.Application.Sales.GetSaleInvoices;
 using SupermarketSystem.Application.Sales.MarkReturnReviewed;
+using SupermarketSystem.Application.Sales.RejectedSales;
+using SupermarketSystem.Application.CashManagement.VarianceNotes;
 using SupermarketSystem.Application.Sales.ProcessReturn;
 using SupermarketSystem.Application.Sales.RecordSaleInvoicePayment;
 using SupermarketSystem.Application.Sales.VoidSale;
@@ -305,6 +307,11 @@ public static class DependencyInjection
         services.AddScoped<GetSaleInvoiceByIdHandler>();
         services.AddScoped<ProcessReturnHandler>();
         services.AddScoped<MarkReturnReviewedHandler>();
+        services.AddScoped<GetRejectedSalesHandler>();
+        services.AddScoped<RecordVarianceNoteHandler>();
+        services.AddScoped<GetVarianceNotesHandler>();
+        services.AddScoped<GetRejectedSaleByIdHandler>();
+        services.AddScoped<ResolveRejectedSaleHandler>();
         services.AddScoped<RecordSaleInvoicePaymentHandler>();
         services.AddScoped<GetCustomerDebtsHandler>();
 

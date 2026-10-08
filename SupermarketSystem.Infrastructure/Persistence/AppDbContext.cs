@@ -92,6 +92,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<SaleInvoiceItem> SaleInvoiceItems => Set<SaleInvoiceItem>();
     public DbSet<SaleInvoicePayment> SaleInvoicePayments => Set<SaleInvoicePayment>();
     public DbSet<SuspendedSale> SuspendedSales => Set<SuspendedSale>();
+    public DbSet<RejectedSaleAttempt> RejectedSaleAttempts => Set<RejectedSaleAttempt>();
     public DbSet<Discount> Discounts => Set<Discount>();
     public DbSet<Promotion> Promotions => Set<Promotion>();
     public DbSet<PromotionBranch> PromotionBranches => Set<PromotionBranch>();
@@ -112,6 +113,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     // Cash Management
     public DbSet<CashDrawerLog> CashDrawerLogs => Set<CashDrawerLog>();
     public DbSet<CashClosing> CashClosings => Set<CashClosing>();
+    public DbSet<CashClosingVarianceNote> CashClosingVarianceNotes => Set<CashClosingVarianceNote>();
     public DbSet<DrawerOpenEvent> DrawerOpenEvents => Set<DrawerOpenEvent>();
     public DbSet<Partner> Partners => Set<Partner>();
     public DbSet<PartnerWithdrawal> PartnerWithdrawals => Set<PartnerWithdrawal>();

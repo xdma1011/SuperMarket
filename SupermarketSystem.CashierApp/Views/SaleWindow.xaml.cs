@@ -187,7 +187,7 @@ public partial class SaleWindow : Window
             return;
         }
 
-        var closingWindow = new CashClosingWindow(_apiClient, _authSession.BranchId.Value, _paymentMethods) { Owner = this };
+        var closingWindow = new CashClosingWindow(_apiClient, _authSession.BranchId.Value, _paymentMethods, _dbPath) { Owner = this };
         closingWindow.ShowDialog();
     }
 
@@ -479,7 +479,7 @@ public partial class SaleWindow : Window
         }
 
         using var db = new LocalDbContext(_dbPath);
-        var promotion = PromotionPricing.ActiveFor(db, line.ProductId, DateTime.UtcNow);
+        var promotion = PromotionPricing.ActiveFor(db, line.ProductId, TrustedClock.Instance.Now());
         if (promotion is null)
         {
             return;
@@ -797,10 +797,14 @@ public partial class SaleWindow : Window
         // يجي من CartLine (اختيار FIFO تلقائي صار وقت الإضافة للسلة
         // لمنتجات "تتتبّع دفعات"، راجع AddBatchTrackedItem)، null طبيعي
         // لمنتج عادي.
+        // وقت البيع الموثوق (بند 22): من ساعة السيرفر المحفوظة محليًا، مش ساعة ويندوز - بيعة أوفلاين بتنحسب بوقتها مش بوقت وصولها.
+        var saleTimeUtc = TrustedClock.Instance.Now();
+
         var payload = new
         {
             branchId = _authSession.BranchId.Value,
             clientRequestId,
+            occurredAtUtc = saleTimeUtc,
             // بالدين: زبون صريح + allowCreditSale (السيرفر بيرفض أي دفع ناقص بدونهم).
             customerId = creditCustomer?.CustomerId,
             allowCreditSale = creditCustomer is not null,
@@ -839,7 +843,7 @@ public partial class SaleWindow : Window
             ClientRequestId = clientRequestId,
             BranchId = _authSession.BranchId.Value,
             RequestPayloadJson = payloadJson,
-            CreatedAtLocal = DateTime.UtcNow,
+            CreatedAtLocal = saleTimeUtc,
             AttemptCount = 0
         };
 
@@ -848,6 +852,8 @@ public partial class SaleWindow : Window
         using (var db = new LocalDbContext(_dbPath))
         {
             db.PendingSales.Add(pendingSale);
+            // حارس الساعة الموثوقة (HighWater) بنفس معاملة حفظ البيعة.
+            TrustedClock.Instance.Stamp(db);
             await db.SaveChangesAsync();
         }
 
@@ -894,7 +900,7 @@ public partial class SaleWindow : Window
         // المحلي (مرجع مؤقت، لحد ما يتأكد بالسيرفر لاحقًا).
         var receiptData = new Services.Printing.ReceiptData(
             InvoiceNumber: clientRequestId.ToString("N")[..8].ToUpperInvariant(),
-            CreatedAtLocal: DateTime.Now,
+            CreatedAtLocal: TrustedClock.Instance.LocalNow(),
             CashierName: _authSession.FullName ?? "",
             Lines: _cart.Select(l => new Services.Printing.ReceiptLine(
                 l.PromotionAmount > 0 ? $"{l.ProductName} (عرض: {l.PromotionTitle})" : l.ProductName,
@@ -1408,7 +1414,7 @@ public partial class SaleWindow : Window
             DrawerOpenQueue.Enqueue(LocalDirectory, new PendingDrawerOpen
             {
                 BranchId = _authSession.BranchId.Value,
-                OccurredAtUtc = DateTime.UtcNow,
+                OccurredAtUtc = TrustedClock.Instance.Now(),
                 Reason = reasonWindow.Reason
             });
         }

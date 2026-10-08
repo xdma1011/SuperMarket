@@ -6,6 +6,7 @@ using SupermarketSystem.Application.Sales.GetCustomerDebts;
 using SupermarketSystem.Application.Sales.GetSaleInvoiceById;
 using SupermarketSystem.Application.Sales.GetSaleInvoices;
 using SupermarketSystem.Application.Sales.RecordSaleInvoicePayment;
+using SupermarketSystem.Application.Sales.RejectedSales;
 using SupermarketSystem.Application.Sales.VoidSale;
 using SupermarketSystem.Domain.Sales;
 
@@ -22,9 +23,21 @@ public static class SalesEndpoints
         group.MapPost("/", async (
             CompleteSaleCommand command,
             CompleteSaleHandler handler,
+            IRejectedSaleRecorder rejectedSaleRecorder,
             CancellationToken cancellationToken) =>
         {
             var result = await handler.HandleAsync(command, cancellationToken);
+
+            // بند 24: رفض نهائي بيتسجّل (بيعة الكاشير العالقة بالطابور ما لازم تضيع بصمت)، ونجاح بيقفل أي سجل رفض
+            // سابق لنفس البيعة. كلاهما أفضل جهد ومنفصل عن معاملة البيع، وما بيغيّر الرد.
+            if (result.IsFailure)
+            {
+                await rejectedSaleRecorder.RecordRejectionAsync(command, result.Error!, CancellationToken.None);
+            }
+            else
+            {
+                await rejectedSaleRecorder.MarkAcceptedAsync(command.ClientRequestId, CancellationToken.None);
+            }
 
             return result.ToHttpResult(response =>
                 // A replay returns 200, not 201: the resource was created by
@@ -143,6 +156,43 @@ public static class SalesEndpoints
         .WithSummary("قديش إلنا عند كل زبون (بيع بالدين) + مجموع الديون الكلي.")
         .Produces<GetCustomerDebtsResponse>(StatusCodes.Status200OK);
 
+        // بيعات رفضها السيرفر نهائيًا (بند 24) - برّا المجموعة عمدًا (§3.4: صلاحية مختلفة عن بقية المبيعات).
+        // Returns.Review = صاحب المحل ومساعد الأدمن؛ الكاشير ما بيشوفها.
+        app.MapGet("/api/v1/sales/rejected", async (
+            int? pageNumber, int? pageSize, string? search, Guid? branchId, bool? includeResolved,
+            GetRejectedSalesHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var paging = PagingBinder.Build(pageNumber, pageSize, search, null, null);
+            return Results.Ok(await handler.HandleAsync(new GetRejectedSalesQuery(paging, branchId, OnlyOpen: includeResolved != true), cancellationToken));
+        })
+        .WithTags("Sales")
+        .WithName("GetRejectedSales")
+        .RequirePermission(PermissionCodes.ReturnsReview)
+        .WithSummary("بيعات رفضها السيرفر نهائيًا (عالقة بطابور الكاشير) - المفتوحة افتراضيًا.")
+        .Produces<PagedResult<RejectedSaleListItemDto>>(StatusCodes.Status200OK);
+
+        app.MapGet("/api/v1/sales/rejected/{id:guid}", async (
+            Guid id, GetRejectedSaleByIdHandler handler, CancellationToken cancellationToken) =>
+            (await handler.HandleAsync(id, cancellationToken)).ToHttpResult())
+        .WithTags("Sales")
+        .WithName("GetRejectedSaleById")
+        .RequirePermission(PermissionCodes.ReturnsReview)
+        .WithSummary("تفاصيل بيعة مرفوضة: الأصناف والدفعات بأسمائها وسبب الرفض.")
+        .Produces<RejectedSaleDetailsDto>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status404NotFound);
+
+        app.MapPost("/api/v1/sales/rejected/{id:guid}/resolve", async (
+            Guid id, ResolveRejectedSaleRequest request, ResolveRejectedSaleHandler handler, CancellationToken cancellationToken) =>
+            (await handler.HandleAsync(new ResolveRejectedSaleCommand(id, request.Note), cancellationToken)).ToHttpResult())
+        .WithTags("Sales")
+        .WithName("ResolveRejectedSale")
+        .RequirePermission(PermissionCodes.ReturnsReview)
+        .WithSummary("تعليم بيعة مرفوضة 'تمت المعالجة' + ملاحظة. بلا أي أثر مالي أو مخزني.")
+        .Produces<Guid>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status404NotFound)
+        .ProducesProblem(StatusCodes.Status409Conflict);
+
         return app;
     }
 
@@ -165,3 +215,5 @@ public static class SalesEndpoints
     public sealed record RecordSaleInvoicePaymentRequest(
         Guid PaymentMethodId, decimal Amount, string? ExternalReference, Guid ClientRequestId);
 }
+
+public sealed record ResolveRejectedSaleRequest(string? Note);

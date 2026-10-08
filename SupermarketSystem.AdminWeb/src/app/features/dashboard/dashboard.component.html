@@ -6,6 +6,12 @@
   </div>
 </div>
 
+@if (noSuccessfulBackup()) {
+  <div class="backup-warning-banner">
+    ⚠️ ما في أي نسخة احتياطية ناجحة! قاعدة البيانات بلا حماية لحد ما تنجح نسخة.
+    <a routerLink="/backup">راجع صفحة النسخ الاحتياطي</a>
+  </div>
+}
 @if (isBackupStale) {
   <div class="backup-warning-banner">
     ⚠️ آخر نسخة احتياطية ناجحة كانت بتاريخ {{ lastBackupAtUtc() | date: 'yyyy-MM-dd HH:mm' }} — أكتر من 24 ساعة.

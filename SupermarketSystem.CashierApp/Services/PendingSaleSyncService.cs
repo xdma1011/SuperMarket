@@ -79,3 +79,41 @@ public sealed class PendingSaleSyncService
 }
 
 public sealed record SyncSummary(int Sent, int Failed, int StillPending);
+
+/// <summary>
+/// ملخص الطابور المحلي لحظة تقفيل الصندوق (بند 23): عدد البيعات العالقة وقيمتها (مجموع دفعاتها). بيعة بالطابور = كاش
+/// بالدرج ما انحسب بالمتوقع بعد، فالتقفيل بيعرض "زيادة" والوردية الجاية "عجز" - الإدارة لازم تعرف السبب.
+/// </summary>
+public static class PendingQueueSummary
+{
+    public static async Task<(int Count, decimal Amount)> ComputeAsync(string dbPath, CancellationToken cancellationToken)
+    {
+        using var db = new LocalDbContext(dbPath);
+        var payloads = await db.PendingSales.AsNoTracking().Select(s => s.RequestPayloadJson).ToListAsync(cancellationToken);
+
+        var amount = 0m;
+        foreach (var payload in payloads)
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(payload);
+                if (doc.RootElement.TryGetProperty("payments", out var payments) && payments.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (var p in payments.EnumerateArray())
+                    {
+                        if (p.TryGetProperty("amount", out var a) && a.TryGetDecimal(out var value))
+                        {
+                            amount += value;
+                        }
+                    }
+                }
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // محتوى تالف: بيتعدّ بالعدد، بلا قيمة.
+            }
+        }
+
+        return (payloads.Count, amount);
+    }
+}

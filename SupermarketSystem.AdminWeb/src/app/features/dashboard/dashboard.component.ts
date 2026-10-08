@@ -74,6 +74,8 @@ export class DashboardComponent implements OnInit {
 
   /** null = لسه ما تحمّل / تعذّر الجلب (بلا تنبيه بهالحالة، تفاديًا لتنبيه كاذب). */
   readonly lastBackupAtUtc = signal<string | null>(null);
+  /** تحميل قائمة النسخ نجح وما فيها ولا نسخة ناجحة (آخر 5 محاولات) - غير "لسه ما توفرت بيانات". */
+  readonly noSuccessfulBackup = signal(false);
 
   constructor(private readonly apiClient: ApiClient) {}
 
@@ -152,6 +154,10 @@ export class DashboardComponent implements OnInit {
       const lastSuccessful = results[5].value.items.items.find(b => b.statusCode === 1);
       if (lastSuccessful) {
         this.lastBackupAtUtc.set(lastSuccessful.createdAtUtc);
+        this.noSuccessfulBackup.set(false);
+      } else {
+        // قائمة النسخ تحمّلت وما فيها نسخة ناجحة (ولا وحدة، أو آخر 5 محاولات كلها فشلت) - أخطر من "نسخة قديمة": ما في حماية أصلًا.
+        this.noSuccessfulBackup.set(true);
       }
     }
 

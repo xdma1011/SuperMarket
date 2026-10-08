@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, inject } from '@angular/core';
+import { Component, OnInit, computed, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -9,6 +9,7 @@ import { CashClosingsOperation, BranchesOperation, PaymentMethodsOperation } fro
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
 import { AuthService } from '../../core/services/auth.service';
 import { BusinessTimeService } from '../../core/services/business-time.service';
+import { PermissionsService } from '../../core/services/permissions.service';
 
 interface BranchDto {
   id: string;
@@ -30,7 +31,41 @@ interface CashClosingListItemDto {
   expectedCash: number;
   countedCash: number;
   variance: number;
+  pendingSalesCount: number;
+  pendingSalesAmount: number;
+  explainedVariance: number;
+  unexplainedVariance: number;
 }
+
+interface VarianceNoteDto {
+  id: string;
+  reasonCode: number;
+  reasonTitle: string;
+  explainedAmount: number;
+  note: string | null;
+  relatedExpenseId: string | null;
+  recordedByName: string;
+  recordedAtUtc: string;
+}
+
+interface VarianceNotesResponse {
+  cashClosingId: string;
+  variance: number;
+  explainedTotal: number;
+  unexplainedVariance: number;
+  pendingSalesCount: number;
+  pendingSalesAmount: number;
+  notes: VarianceNoteDto[];
+}
+
+// أسماء VarianceExplanationReason بالـC# - الباك إند بيقبل ويرجّع الأسماء (JsonStringEnumConverter عام).
+export const VARIANCE_REASONS: { value: string; label: string }[] = [
+  { value: 'LateSales', label: 'بيعات متأخرة (بطابور الكاشير)' },
+  { value: 'ForgottenDrawerPayment', label: 'دفعة/مصروف من الدرج ما انسجّل' },
+  { value: 'CountError', label: 'خطأ بعدّ الكاش' },
+  { value: 'Unknown', label: 'غير معروف (سألنا وما في تفسير)' },
+  { value: 'Other', label: 'سبب آخر (اكتب ملاحظة)' }
+];
 
 interface PagedResult<T> {
   items: T[];
@@ -55,6 +90,21 @@ export class CashClosingsComponent implements OnInit {
   private readonly listRequest = latestRequest();
   private readonly auth = inject(AuthService);
   private readonly businessTime = inject(BusinessTimeService);
+  private readonly permissions = inject(PermissionsService);
+  private readonly notesRequest = latestRequest();
+
+  /** تفسير الفرق = Returns.Review (صاحب المحل/مساعد الأدمن)؛ الكاشير ما بيفسّر فرق نفسه. fail-open لحد ما تتحمّل الصلاحيات (الحماية الحقيقية بالباك إند). */
+  readonly canExplain = computed(() => !this.permissions.loaded() || this.permissions.has('Returns.Review'));
+  readonly varianceReasons = VARIANCE_REASONS;
+
+  readonly explainOpenId = signal<string | null>(null);
+  readonly varianceNotes = signal<VarianceNotesResponse | null>(null);
+  readonly notesLoading = signal(false);
+  readonly noteSaving = signal(false);
+  readonly noteError = signal<string | null>(null);
+  noteReason = 'LateSales';
+  noteAmount: number | null = null;
+  noteText = '';
 
   readonly closings = signal<CashClosingListItemDto[]>([]);
   readonly totalCount = signal(0);
@@ -186,6 +236,81 @@ export class CashClosingsComponent implements OnInit {
       this.formError.set(message ?? 'تعذّر إتمام تقفيل الصندوق.');
     } finally {
       this.submitting.set(false);
+    }
+  }
+
+  async toggleExplain(closing: CashClosingListItemDto): Promise<void> {
+    if (this.explainOpenId() === closing.id) {
+      this.explainOpenId.set(null);
+      this.varianceNotes.set(null);
+      this.notesRequest.cancel();
+      return;
+    }
+
+    this.explainOpenId.set(closing.id);
+    this.varianceNotes.set(null);
+    this.noteError.set(null);
+    this.noteReason = closing.pendingSalesCount > 0 ? 'LateSales' : 'ForgottenDrawerPayment';
+    this.noteAmount = null;
+    this.noteText = '';
+    this.notesLoading.set(true);
+    try {
+      const result = await this.notesRequest.run(
+        this.apiClient.get<VarianceNotesResponse>(ApiController.CashClosings, CashClosingsOperation.VarianceNotes, { id: closing.id })
+      );
+      if (this.explainOpenId() === closing.id) this.varianceNotes.set(result);
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
+      this.noteError.set('تعذّر تحميل تفسيرات الفرق.');
+    } finally {
+      this.notesLoading.set(false);
+    }
+  }
+
+  /** المتبقي بلا تفسير بالقيمة المطلقة - بيعبّي مبلغ التفسير تلقائيًا بالكبسة. */
+  remainingToExplain(): number {
+    const notes = this.varianceNotes();
+    return notes ? Math.abs(notes.unexplainedVariance) : 0;
+  }
+
+  fillRemaining(): void {
+    this.noteAmount = this.remainingToExplain();
+  }
+
+  async saveNote(closing: CashClosingListItemDto): Promise<void> {
+    if (this.noteAmount === null || this.noteAmount < 0) {
+      this.noteError.set('اكتب المبلغ اللي بيفسّره هالسبب (صفر لو "ما في تفسير").');
+      return;
+    }
+
+    if (this.noteReason === 'Other' && !this.noteText.trim()) {
+      this.noteError.set('اكتب ملاحظة توضّح السبب.');
+      return;
+    }
+
+    this.noteSaving.set(true);
+    this.noteError.set(null);
+    try {
+      const result = await firstValueFrom(
+        this.apiClient.post<VarianceNotesResponse>(
+          ApiController.CashClosings,
+          CashClosingsOperation.VarianceNotes,
+          { reason: this.noteReason, explainedAmount: this.noteAmount, note: this.noteText.trim() || null, relatedExpenseId: null },
+          { id: closing.id }
+        )
+      );
+      this.varianceNotes.set(result);
+      this.noteAmount = null;
+      this.noteText = '';
+      await this.loadClosings();
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === 'object' && 'error' in err
+          ? (err as { error?: { detail?: string } }).error?.detail
+          : null;
+      this.noteError.set(message ?? 'تعذّر حفظ التفسير.');
+    } finally {
+      this.noteSaving.set(false);
     }
   }
 

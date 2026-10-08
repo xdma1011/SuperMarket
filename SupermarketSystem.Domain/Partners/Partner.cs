@@ -259,6 +259,30 @@ public class PartnerMonthlyStatement : AuditableEntity, IBranchOwned
     /// </summary>
     public int UncostedItemsCount { get; private set; }
 
+    /// <summary>
+    /// null = الكشف مطابق لآخر حساب. غير null = انضاف شي (مصروف/راتب/حركة رأس مال رجعية/إرجاع/إلغاء) بفترة هالشهر بعد نزول الكشف،
+    /// فالأنصبة المسجَّلة ما عادت تطابق الربح الفعلي - لازم إعادة إصدار (المراجعة النقدية 6/10/2026، بند 2). علامة بس، ما بتمنع شي (§1.6).
+    /// </summary>
+    public DateTime? StaleSinceUtc { get; private set; }
+
+    /// <summary>سبب أول علامة "قديم" (نص عربي قصير).</summary>
+    public string? StaleReason { get; private set; }
+
+    public const int MaxStaleReasonLength = 300;
+
+    /// <summary>بيعلّم الكشف قديم. لو كان قديم أصلًا بيضل على أول سبب ووقت (ما بنكرّر).</summary>
+    public bool MarkStale(DateTime utcNow, string reason)
+    {
+        if (StaleSinceUtc is not null)
+        {
+            return false;
+        }
+
+        StaleSinceUtc = utcNow;
+        StaleReason = reason.Length > MaxStaleReasonLength ? reason[..MaxStaleReasonLength] : reason;
+        return true;
+    }
+
     private readonly List<PartnerStatementLine> _lines = new();
     public IReadOnlyCollection<PartnerStatementLine> Lines => _lines.AsReadOnly();
 
@@ -282,6 +306,9 @@ public class PartnerMonthlyStatement : AuditableEntity, IBranchOwned
         int uncostedItemsCount = 0)
     {
         UncostedItemsCount = uncostedItemsCount;
+        // إعادة الإصدار بتحسب كل شي من جديد - فما عاد قديم.
+        StaleSinceUtc = null;
+        StaleReason = null;
         NetProfit = netProfit;
         UnallocatedAmount = unallocatedAmount;
         GeneratedAtUtc = generatedAtUtc;

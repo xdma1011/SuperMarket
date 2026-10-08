@@ -40,6 +40,13 @@ public class CashClosing : AuditableEntity, IBranchOwned, IHasRowVersion
     public decimal ExpectedCash { get; private set; }
     public decimal CountedCash { get; private set; }
     public decimal Variance => CountedCash - ExpectedCash;
+
+    /// <summary>
+    /// بيعات كانت لسه بطابور الكاشير (أوفلاين/عالقة) لحظة التقفيل - عدد وقيمة (بند 23، 8/10/2026). معلومة من الكاشير للتفسير فقط:
+    /// بيعة بالطابور = مصاري بالدرج ما انحسبت بالمتوقع بعد، فبتطلع "زيادة" بهالتقفيل و"عجز" بالوردية الجاية. 0 = ما في أو سجل قديم.
+    /// </summary>
+    public int PendingSalesCount { get; private set; }
+    public decimal PendingSalesAmount { get; private set; }
     public byte[]? RowVersion { get; private set; }
 
     private readonly List<CashClosingDetail> _details = new();
@@ -49,7 +56,7 @@ public class CashClosing : AuditableEntity, IBranchOwned, IHasRowVersion
 
     public CashClosing(
         Guid branchId, Guid userId, DateOnly businessDate, DateTime closedAtUtc, decimal expectedCash, decimal countedCash,
-        int shiftNumber = 1)
+        int shiftNumber = 1, int pendingSalesCount = 0, decimal pendingSalesAmount = 0m)
     {
         if (shiftNumber < 1)
         {
@@ -63,6 +70,8 @@ public class CashClosing : AuditableEntity, IBranchOwned, IHasRowVersion
         ClosedAtUtc = closedAtUtc;
         ExpectedCash = expectedCash;
         CountedCash = countedCash;
+        PendingSalesCount = Math.Max(0, pendingSalesCount);
+        PendingSalesAmount = Math.Max(0m, pendingSalesAmount);
     }
 
     public CashClosingDetail AddDetail(Guid paymentMethodId, decimal expectedAmount, decimal? countedAmount)

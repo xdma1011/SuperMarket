@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Domain.Notifications;
 using SupermarketSystem.Application.Common.Notifications;
 using SupermarketSystem.Application.Common.Interfaces;
+using SupermarketSystem.Application.Partners;
 using SupermarketSystem.Application.Common.Policies;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Domain.CashManagement;
@@ -448,6 +449,13 @@ public sealed class ProcessReturnHandler
                 cancellationToken,
                 result.Value.ReviewFlags.Count > 0 ? NotificationSeverity.Critical : NotificationSeverity.Warning,
                 link: $"/returns?search={Uri.EscapeDataString(originalInvoice.InvoiceNumber)}");
+
+            // إرجاع من فاتورة شهر نزل كشفه = صافي إيراد هالشهر تغيّر والكشف صار قديم (بند 2 بالمراجعة النقدية).
+            var (invoiceYear, invoiceMonth) = await PartnerStatementStaleness.LocalMonthAsync(_context, originalInvoice.CreatedAtUtc, cancellationToken);
+            await PartnerStatementStaleness.MarkAndNotifyAsync(
+                _context, _notificationDispatcher, _dateTimeProvider.UtcNow, originalInvoice.BranchId,
+                new[] { (invoiceYear, invoiceMonth) },
+                $"انرجّع جزء من فاتورة {originalInvoice.InvoiceNumber} ({result.Value.TotalAmount:0.000} د.أ) من هالشهر بعد نزول الكشف.", cancellationToken);
         }
 
         return result;

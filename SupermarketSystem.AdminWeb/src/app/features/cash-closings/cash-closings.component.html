@@ -34,6 +34,9 @@
           <th>الكاش المتوقع</th>
           <th>الكاش المعدود</th>
           <th>الفرق</th>
+          <th>بطابور الكاشير</th>
+          <th>غير مفسَّر</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -50,7 +53,75 @@
                 {{ c.variance | number: '1.3-3' }}
               </span>
             </td>
+            <td class="mono">
+              @if (c.pendingSalesCount > 0) {
+                {{ c.pendingSalesCount }} ({{ c.pendingSalesAmount | number: '1.3-3' }})
+              } @else {
+                —
+              }
+            </td>
+            <td class="mono">
+              @if (c.variance === 0) {
+                —
+              } @else if (c.unexplainedVariance === 0) {
+                <span class="status-chip">مفسَّر</span>
+              } @else {
+                <span class="status-chip inactive">{{ c.unexplainedVariance | number: '1.3-3' }}</span>
+              }
+            </td>
+            <td>
+              @if (c.variance !== 0 && canExplain()) {
+                <button type="button" class="btn-ghost small" (click)="toggleExplain(c)">
+                  {{ explainOpenId() === c.id ? 'إخفاء' : 'تفسير الفرق' }}
+                </button>
+              }
+            </td>
           </tr>
+          @if (explainOpenId() === c.id) {
+            <tr class="explain-row">
+              <td colspan="10">
+                <div class="explain-box">
+                  @if (notesLoading()) {
+                    <span>جارٍ التحميل…</span>
+                  }
+                  @if (varianceNotes(); as vn) {
+                    <p class="explain-summary">
+                      الفرق {{ vn.variance | number: '1.3-3' }} د.أ - المفسَّر {{ vn.explainedTotal | number: '1.3-3' }} - المتبقي بلا تفسير
+                      {{ remainingToExplain() | number: '1.3-3' }}
+                      @if (vn.pendingSalesCount > 0) {
+                        <br />الكاشير ترك {{ vn.pendingSalesCount }} بيعة ({{ vn.pendingSalesAmount | number: '1.3-3' }} د.أ) بطابوره لحظة التقفيل.
+                      }
+                    </p>
+                    @for (n of vn.notes; track n.id) {
+                      <p class="explain-note">
+                        <strong>{{ n.reasonTitle }}</strong> - {{ n.explainedAmount | number: '1.3-3' }} د.أ
+                        @if (n.note) { - {{ n.note }} }
+                        <span class="explain-by">({{ n.recordedByName }}، {{ n.recordedAtUtc | date: 'yyyy-MM-dd HH:mm' }})</span>
+                      </p>
+                    }
+                    @if (remainingToExplain() > 0) {
+                      <div class="explain-form">
+                        <select [(ngModel)]="noteReason">
+                          @for (r of varianceReasons; track r.value) {
+                            <option [value]="r.value">{{ r.label }}</option>
+                          }
+                        </select>
+                        <input type="number" min="0" step="0.001" [(ngModel)]="noteAmount" placeholder="المبلغ المفسَّر" />
+                        <button type="button" class="btn-ghost small" (click)="fillRemaining()">كل المتبقي</button>
+                        <input type="text" maxlength="500" [(ngModel)]="noteText" placeholder="ملاحظة (إلزامية لـ«سبب آخر»)" />
+                        <button type="button" class="btn-primary small" [disabled]="noteSaving()" (click)="saveNote(c)">
+                          {{ noteSaving() ? 'جارٍ الحفظ…' : 'حفظ التفسير' }}
+                        </button>
+                      </div>
+                    }
+                  }
+                  @if (noteError()) {
+                    <p class="form-error">{{ noteError() }}</p>
+                  }
+                </div>
+              </td>
+            </tr>
+          }
         }
       </tbody>
     </table>
