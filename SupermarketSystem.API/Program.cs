@@ -12,6 +12,20 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
+// سجل بملف يومي (2-أ بند 4) - بلا حزمة جديدة، راجع DailyFileLoggerProvider. المجلد الافتراضي `logs` جنب الـAPI.
+if (builder.Configuration.GetValue("Logging:File:Enabled", true))
+{
+    var logDirectory = builder.Configuration["Logging:File:Directory"];
+    if (string.IsNullOrWhiteSpace(logDirectory))
+    {
+        logDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
+    }
+
+    builder.Logging.AddProvider(new DailyFileLoggerProvider(logDirectory, builder.Configuration.GetValue("Logging:File:RetentionDays", 30)));
+    // أوامر SQL كلها (Information) بتغرق الملف بلا فايدة - الأخطاء والتحذيرات بس من EF. قابل للتجاوز بـLogging:File:LogLevel.
+    builder.Logging.AddFilter<DailyFileLoggerProvider>("Microsoft.EntityFrameworkCore", LogLevel.Warning);
+}
+
 // يسمح إرسال الـenums كنص ("Admin") لا رقم فقط (0/1) — الفرونت إند
 // (Angular) بيرسل قيم enum كنصوص مطابقة لأسمائها بـC# بالضبط، وبلا هذا
 // الإعداد، محرك System.Text.Json الافتراضي بيرفض أي enum مُرسَل كنص
