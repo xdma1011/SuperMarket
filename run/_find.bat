@@ -8,6 +8,7 @@ rem absolute path, so the repo works from wherever it was cloned:
 rem   API_PROJECT      .csproj with Sdk="Microsoft.NET.Sdk.Web"
 rem   CASHIER_PROJECT  .csproj with <UseWPF>true
 rem   TESTS_PROJECT    .csproj referencing Microsoft.NET.Test.Sdk
+rem   CASHIER_TESTS_PROJECT  .csproj with <IsCashierHeadlessTests>true (headless cashier tests)
 rem   HASHPW_PROJECT   console .csproj (OutputType Exe) using Identity.Core
 rem   ADMINWEB_DIR     folder containing angular.json
 rem   CUSTOMER_DIR     folder containing pubspec.yaml (Flutter)
@@ -24,6 +25,7 @@ for %%i in ("%REPO_ROOT%") do set "REPO_ROOT=%%~fi"
 set "API_PROJECT="
 set "CASHIER_PROJECT="
 set "TESTS_PROJECT="
+set "CASHIER_TESTS_PROJECT="
 set "HASHPW_PROJECT="
 set "ADMINWEB_DIR="
 set "CUSTOMER_DIR="
@@ -38,7 +40,7 @@ for /d %%a in ("%REPO_ROOT%\*") do (
 
 rem one line, no parentheses block: a path containing ")" (e.g. "Desktop (2)")
 rem would break a ( ... ) block when %VAR% is expanded inside it.
-endlocal & set "REPO_ROOT=%REPO_ROOT%" & set "API_PROJECT=%API_PROJECT%" & set "CASHIER_PROJECT=%CASHIER_PROJECT%" & set "TESTS_PROJECT=%TESTS_PROJECT%" & set "HASHPW_PROJECT=%HASHPW_PROJECT%" & set "ADMINWEB_DIR=%ADMINWEB_DIR%" & set "CUSTOMER_DIR=%CUSTOMER_DIR%"
+endlocal & set "REPO_ROOT=%REPO_ROOT%" & set "API_PROJECT=%API_PROJECT%" & set "CASHIER_PROJECT=%CASHIER_PROJECT%" & set "TESTS_PROJECT=%TESTS_PROJECT%" & set "CASHIER_TESTS_PROJECT=%CASHIER_TESTS_PROJECT%" & set "HASHPW_PROJECT=%HASHPW_PROJECT%" & set "ADMINWEB_DIR=%ADMINWEB_DIR%" & set "CUSTOMER_DIR=%CUSTOMER_DIR%"
 exit /b 0
 
 rem --- folders we never look inside (generated/dependency folders) ---
@@ -66,7 +68,14 @@ for %%p in ("!DIR!\*.csproj") do (
         findstr /i /c:"<UseWPF>true" "!PROJ!" >nul 2>&1
         if not errorlevel 1 if not defined CASHIER_PROJECT set "CASHIER_PROJECT=!PROJ!"
         findstr /c:"Microsoft.NET.Test.Sdk" "!PROJ!" >nul 2>&1
-        if not errorlevel 1 if not defined TESTS_PROJECT set "TESTS_PROJECT=!PROJ!"
+        if not errorlevel 1 (
+            findstr /c:"<IsCashierHeadlessTests>true" "!PROJ!" >nul 2>&1
+            if not errorlevel 1 (
+                if not defined CASHIER_TESTS_PROJECT set "CASHIER_TESTS_PROJECT=!PROJ!"
+            ) else (
+                if not defined TESTS_PROJECT set "TESTS_PROJECT=!PROJ!"
+            )
+        )
         findstr /i /c:"<OutputType>Exe" "!PROJ!" >nul 2>&1
         if not errorlevel 1 (
             findstr /c:"Microsoft.Extensions.Identity.Core" "!PROJ!" >nul 2>&1

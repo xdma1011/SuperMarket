@@ -1,0 +1,64 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    اختبارات الكاشير "بلا شاشات" (خطة الاختبار الآلي الموسّع، 8/10/2026): كود الكاشير الفعلي
+    (ApiClient، PendingSaleSyncService، CatalogSyncService، TrustedClock، PromotionPricing، Local/*)
+    مربوط هون كملفات (Link) - مش نسخة - فأي تعديل بالكاشير بيتجرّب هون تلقائيًا. الـAPI بيشتغل
+    فعليًا على Kestrel (منفذ حقيقي) وبينطفي/بيرجع وسط الاختبار (أوفلاين حقيقي، مش محاكاة).
+    قاعدة SQL Server منفصلة: اسم قاعدة الاختبار + "_cashier" (راجع TestDatabaseRedirect.cs) - عشان
+    تشغيل هالمشروع ومشروع IntegrationTests بنفس اللحظة ما يصفّروا بيانات بعض.
+    الحزم بنفس أرقام IntegrationTests والكاشير بالضبط (§1.2) - صفر حزمة جديدة على المستودع.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);NU1510;NU1902;NU1903</NoWarn>
+    <!-- علامة لـrun_find.bat: هالمشروع مش "مشروع الاختبارات الرئيسي" (5-tests-backend/8-simulation) - إله bat خاص (9-cashier-headless-tests.bat). -->
+    <IsCashierHeadlessTests>true</IsCashierHeadlessTests>
+    <!-- Smart App Control (ويندوز صاحب المشروع) لما بيمنع DLL ببصمة معيّنة بيضل يمنعها؛ بناء غير حتمي = بصمة جديدة بكل بناء
+         = فرصة جديدة. ما إله أثر على الاختبارات نفسها. -->
+    <Deterministic>false</Deterministic>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.0" />
+    <PackageReference Include="Respawn" Version="6.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SupermarketSystem.API\SupermarketSystem.API.csproj" />
+  </ItemGroup>
+
+  <!-- بنية اختبار IntegrationTests (fixture، مصنع الـAPI، بذر) كملفات مربوطة مش مرجع مشروع: Smart App Control بويندوز
+       (مفعّل على جهاز صاحب المشروع) منع تحميل نسخة SupermarketSystem.IntegrationTests.dll المنسوخة لهون (8/10/2026). -->
+  <ItemGroup>
+    <Compile Include="..\SupermarketSystem.IntegrationTests\DatabaseFixture.cs" Link="IntegrationInfra\DatabaseFixture.cs" />
+    <Compile Include="..\SupermarketSystem.IntegrationTests\CustomWebApplicationFactory.cs" Link="IntegrationInfra\CustomWebApplicationFactory.cs" />
+    <Compile Include="..\SupermarketSystem.IntegrationTests\IntegrationTestBase.cs" Link="IntegrationInfra\IntegrationTestBase.cs" />
+    <Compile Include="..\SupermarketSystem.IntegrationTests\Common\TestDataBuilder.cs" Link="IntegrationInfra\TestDataBuilder.cs" />
+  </ItemGroup>
+
+  <!-- كود الكاشير الفعلي (بلا شاشات WPF). -->
+  <ItemGroup>
+    <Compile Include="..\SupermarketSystem.CashierApp\Services\ApiClient.cs" Link="CashierCode\ApiClient.cs" />
+    <Compile Include="..\SupermarketSystem.CashierApp\Services\AppConfig.cs" Link="CashierCode\AppConfig.cs" />
+    <Compile Include="..\SupermarketSystem.CashierApp\Services\PendingSaleSyncService.cs" Link="CashierCode\PendingSaleSyncService.cs" />
+    <Compile Include="..\SupermarketSystem.CashierApp\Services\CatalogSyncService.cs" Link="CashierCode\CatalogSyncService.cs" />
+    <Compile Include="..\SupermarketSystem.CashierApp\Services\TrustedClock.cs" Link="CashierCode\TrustedClock.cs" />
+    <Compile Include="..\SupermarketSystem.CashierApp\Services\PromotionPricing.cs" Link="CashierCode\PromotionPricing.cs" />
+    <Compile Include="..\SupermarketSystem.CashierApp\Views\CartLine.cs" Link="CashierCode\CartLine.cs" />
+    <Compile Include="..\SupermarketSystem.CashierApp\Local\**\*.cs" Link="CashierCode\Local\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

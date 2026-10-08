@@ -19,3 +19,6 @@ obj/
 
 # نتائج المحاكاة العشوائية (run\8-simulation.bat) - بتنكتب كل تشغيلة على جهاز صاحب المشروع.
 run/simulation-results/
+
+# تقارير التغطية (ng test --code-coverage)
+SupermarketSystem.AdminWeb/coverage/

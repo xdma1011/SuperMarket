@@ -28,15 +28,10 @@ public sealed class BackupLifecycleTests : IntegrationTestBase
         Assert.True(result.IsSuccess, result.Error?.Message);
         Assert.False(string.IsNullOrWhiteSpace(result.Value.FileName));
 
-        // ملاحظة بيئة اختبار (لا خطأ إنتاج): FileSizeBytes بيضل 0 هون دومًا -
-        // BACKUP DATABASE ينفَّذ فعليًا وينجح (Status=Completed - نتحقق منه
-        // فوق)، بس الملف الناتج (.bak) يُكتب من منظور نظام ملفات حاوية
-        // SQL Server نفسها، لا نظام ملفات عملية الاختبار (.NET) - حاويتان
-        // منفصلتان بالكامل هون. SqlServerBackupService.cs موثّق هذا القيد
-        // بالضبط مسبقًا ("لو الاثنان نفس الجهاز... يشتغل بلا إعداد إضافي") -
-        // بمنشأة إنتاج حقيقية (API وSQL Server بنفس الجهاز أو مسار شبكة
-        // مشترك) الحجم بيكون حقيقيًا. لا نتحقق من FileSizeBytes > 0 هون عمدًا.
-        Assert.True(result.Value.FileSizeBytes >= 0);
+        // الملف (.bak) بيكتبه SQL Server من منظوره هو (حاوية Docker، أو مجلد Program Files\...\Backup الممنوع على حساب
+        // المستخدم العادي على ويندوز) فغالبًا مش ظاهر لعملية الاختبار - الحجم لازم ييجي من سجل SQL Server (msdb).
+        // كان دايمًا 0 هون، وبجهاز صاحب المشروع كمان (8/10/2026): نسخة 32MB انسجّلت "0 بايت".
+        Assert.True(result.Value.FileSizeBytes > 0, "حجم النسخة انسجّل صفر رغم إن SQL Server كتبها");
     }
 
     [Fact]
