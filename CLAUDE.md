@@ -1078,6 +1078,21 @@ Delete آخر سطر، +/− لوحة الأرقام؛ خطوط أكبر.
 - **Migrations الجديدة (بالترتيب):** `AddPartnerStatementStaleFlag`، `AddRejectedSaleAttempts`، `AddCashClosingVarianceNotesAndPendingSales`، `AddSaleInvoiceReceivedAt` (+ بند 1 `AddOpeningBalanceAndStatementCostWarning`
   لو لسه). أمر التطبيق: `dotnet ef database update --project SupermarketSystem.Infrastructure --startup-project SupermarketSystem.API`.
 
+✅ **خلص (8/10/2026) — المرحلة 2-أ من `TODO.md` (تقوية وتشغيل، 4 بنود، كل واحد commit لحاله):**
+- **فحص Migrations ناقصة عند الإقلاع:** بعد ما يبدأ الـAPI (بخلفية، ما بيأخّر شي) `GetPendingMigrationsAsync()`؛ لو في ناقص = `LogError` واضح بأسماء الـMigrations
+  وأمر `dotnet ef database update`. **ما بيطبّق شي تلقائيًا** (§1.4). فشل الفحص (القاعدة مش متاحة) = تحذير بس.
+- **سجل بملف يومي:** `API/Common/DailyFileLogger.cs` - مزوّد `ILoggerProvider` بسيط **بلا أي حزمة جديدة** (§1.2). ملف `api-yyyy-MM-dd.log` بمجلد `logs` جنب الـAPI (أو
+  `Logging:File:Directory`)، كتابة بخيط خلفي، حذف الأقدم من `Logging:File:RetentionDays` (افتراضي 30)، `Logging:File:Enabled` (افتراضي true). أوامر SQL من EF بتنفلتر
+  (Warning فما فوق) عشان ما تغرق الملف. فشل الكتابة ما بيوقف التطبيق.
+- **Rate Limiting** (`AddRateLimiter` المدمج، بلا حزمة): نافذة ثابتة دقيقة لكل IP - `auth/login` 30، `customer-auth/request-otp` و`verify-otp` 5، `POST /orders` 10؛
+  قابلة للضبط `RateLimiting:{Login|Otp|Orders}:PermitLimit` و`RateLimiting:Enabled`. تجاوز = **429** برسالة عربية + `Retry-After`. متحقَّق بتشغيل حقيقي (الطلب السادس = 429).
+  الاختبارات بتطفيه (`RateLimiting__Enabled=false` بـ`CustomWebApplicationFactory`). **تنبيه نشر:** خلف عاكس/نفق كل الطلبات ممكن تبين بنفس الـIP (لازم ForwardedHeaders).
+- **فحص نسخة الكاشير:** الكاشير بيبعت `X-Client-App: Cashier` و`X-Client-Version` (من `<Version>1.1.0</Version>` بالـcsproj - مش رقم حزمة). الإعداد `Cashier.MinimumVersion` (صفحة
+  الإعدادات الحسّاسة، فاضي = بلا فحص): نسخة أقدم = **426** `Client.UpdateRequired` برسالة "حدّث البرنامج" (الكاشير بيعرضها مرة بكل تشغيل، وبتطلع كسبب فشل للبيعة المعلّقة بدل رفض غامض).
+  **حدود:** طلب بلا ترويسة نسخة (كاشير قبل هالتحديث، الويب، تطبيق الزبائن) ما بينفحص؛ ترويسة غير مفهومة = سماح. `ClientVersionMiddleware` بيقرأ الإعداد بـscope **منفصل** -
+  لأنه قبل المصادقة، و`AppDbContext` بيجمّد فرع المستخدم وقت إنشائه (أول نسخة منه حقنت `ISettingsProvider` بالـscope العادي وكسرت 63 اختبار - انمسكت وانصلحت).
+  اختبار: `System/ClientVersionTests.cs`.
+
 📌 **مراجعة نقدية (6/10/2026) - صاحب المشروع: "كلامك صحيح... سجلهم كنقاط"، "لا تبلش، خليها للمسا". كلها متحقَّق منها بالكود، صفر تنفيذ.**
 
 🔴 **أولوية قصوى (قبل الافتتاح):**

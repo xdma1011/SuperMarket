@@ -53,6 +53,19 @@ public partial class App : Application
         _ = RefreshStoreBrandingCacheAsync(apiClient, dataDir);
         _ = RefreshPaymentSettingsCacheAsync(apiClient, dataDir);
 
+        // نسخة التطبيق أقدم من الحد الأدنى بالسيرفر (426): رسالة واحدة واضحة بكل تشغيل، مش مع كل طلب فاشل.
+        var updateRequiredShown = false;
+        apiClient.UpdateRequired += (_, message) => Dispatcher.InvokeAsync(() =>
+        {
+            if (updateRequiredShown)
+            {
+                return;
+            }
+
+            updateRequiredShown = true;
+            MessageBox.Show(message, "حدّث البرنامج", MessageBoxButton.OK, MessageBoxImage.Warning);
+        });
+
         // التوكن بيتجدّد تلقائيًا (ApiClient) - الجلسة المحلية لازم تمشي معه (الخروج بيبعت الـrefresh token الجديد).
         apiClient.TokensRefreshed += (_, tokens) => authSession.UpdateTokens(tokens);
 

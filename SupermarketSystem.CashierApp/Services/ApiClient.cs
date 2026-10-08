@@ -242,6 +242,9 @@ public sealed class ApiClient
     {
         _baseAddress = new Uri(config.ApiBaseUrl.TrimEnd('/') + "/");
         _http = new HttpClient(new TokenRefreshHandler(this) { InnerHandler = new HttpClientHandler() }) { BaseAddress = _baseAddress };
+        // نسخة التطبيق للسيرفر (2-أ بند 2): نسخة أقدم من Cashier.MinimumVersion = رد 426 "حدّث البرنامج" بدل رفض غامض.
+        _http.DefaultRequestHeaders.TryAddWithoutValidation("X-Client-App", "Cashier");
+        _http.DefaultRequestHeaders.TryAddWithoutValidation("X-Client-Version", AppVersion);
         if (!string.IsNullOrWhiteSpace(config.AccessToken))
         {
             SetAccessToken(config.AccessToken);
@@ -256,6 +259,16 @@ public sealed class ApiClient
 
     public string? AccessToken { get; private set; }
     public string? RefreshToken { get; private set; }
+
+    /// <summary>نسخة التطبيق (من الـcsproj) - بتنبعت بترويسة X-Client-Version.</summary>
+    public static string AppVersion { get; } =
+        System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+
+    /// <summary>
+    /// السيرفر رد 426 (نسخة هالكاشير أقدم من الحد الأدنى): الوسيط = رسالة السيرفر العربية. بيتطلّق مع كل رد 426 - المستقبِل مسؤول
+    /// يعرضه مرة وحدة بس.
+    /// </summary>
+    public event EventHandler<string>? UpdateRequired;
 
     /// <summary>بعد كل تجديد ناجح - AuthSession بتتحدّث منها (عشان الخروج يبعت الـrefresh token الجديد).</summary>
     public event EventHandler<RefreshTokenResponseDto>? TokensRefreshed;
@@ -375,6 +388,13 @@ public sealed class ApiClient
             }
 
             var response = await base.SendAsync(request, cancellationToken);
+            if (response.StatusCode == (HttpStatusCode)426)
+            {
+                await response.Content.LoadIntoBufferAsync();
+                _owner.UpdateRequired?.Invoke(_owner, ServerError(await response.Content.ReadAsStringAsync(cancellationToken)));
+                return response;
+            }
+
             if (response.StatusCode != HttpStatusCode.Unauthorized || isAuthCall || _owner.RefreshToken is null)
             {
                 return response;

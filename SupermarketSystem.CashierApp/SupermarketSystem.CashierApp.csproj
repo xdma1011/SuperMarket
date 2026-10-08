@@ -7,6 +7,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>SupermarketSystem.CashierApp</RootNamespace>
+    <!-- نسخة التطبيق (2-أ بند 2): بتنبعت للسيرفر بترويسة X-Client-Version، والسيرفر بيقارنها بإعداد Cashier.MinimumVersion.
+         ارفعها وقت أي تغيير بالعقد مع الـAPI بيخلّي النسخة القديمة ما تشتغل. مش رقم حزمة (§1.2). -->
+    <Version>1.1.0</Version>
     <!-- نفس تعليق SupermarketSystem.API.csproj - تحذيرات NuGet استشارية
          (SQLitePCLRaw عبر تبعية SQLite غير مباشرة) وتحذيرات pruning
          (الحزم أصلًا متوفرة بالـshared framework)، لا أخطاء بناء، بس

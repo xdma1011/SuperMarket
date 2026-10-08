@@ -59,7 +59,8 @@ public sealed class GetAdminSettingsHandler
         (OrderingPolicyKeys.DailyOrderCountAlertThreshold, "عدد طلبات نفس الزبون باليوم قبل تنبيهك (إساءة استخدام محتملة)", AdminSettingDataType.Decimal),
         (PaymentSettingsKeys.UsdToJodExchangeRate, "سعر تحويل الدولار إلى الدينار الأردني (يُستخدم بكبسات الفكة بالكاشير)", AdminSettingDataType.Decimal),
         (Partners.PartnerVerificationSettingsKeys.TelegramOtpEnabled, "سحب شريك من الكاشير: السماح بالتحقق بكود على تلغرام الشريك (يوزر وكلمة السر دايمًا شغّالين)", AdminSettingDataType.Boolean),
-        (Partners.PartnerVerificationSettingsKeys.BarcodeEnabled, "سحب شريك من الكاشير: السماح بالتحقق بباركود الشريك الشخصي (بينصدر من صفحة الشركاء)", AdminSettingDataType.Boolean)
+        (Partners.PartnerVerificationSettingsKeys.BarcodeEnabled, "سحب شريك من الكاشير: السماح بالتحقق بباركود الشريك الشخصي (بينصدر من صفحة الشركاء)", AdminSettingDataType.Boolean),
+        (ClientVersionSettingsKeys.CashierMinimumVersion, "أقل نسخة مقبولة من تطبيق الكاشير (مثلًا 1.2.0) - نسخة أقدم بتشوف رسالة \"حدّث البرنامج\" بدل ما بيعاتها تعلق. فاضي = بلا فحص", AdminSettingDataType.String)
     };
 
     private readonly IApplicationDbContext _context;

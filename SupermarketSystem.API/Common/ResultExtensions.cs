@@ -172,3 +172,53 @@ public sealed class CorrelationIdMiddleware
         }
     }
 }
+
+/// <summary>
+/// فحص نسخة الكاشير (2-أ بند 2): طلب فيه `X-Client-App: Cashier` ونسخته (`X-Client-Version`) أقل من إعداد `Cashier.MinimumVersion`
+/// = 426 Upgrade Required برسالة عربية واضحة (الكاشير بيعرضها "حدّث البرنامج"). الإعداد فاضي أو غير مفهوم = بلا فحص.
+/// طلب بلا ترويسة نسخة (كاشير قديم قبل هالميزة، لوحة الإدارة، تطبيق الزبائن) ما بينفحص - ما في طريقة نعرف نسخته.
+/// نسخة بترويسة غير مفهومة = بتنقبل (سماح؛ ما بنوقف كاشير لخطأ تنسيق).
+/// </summary>
+public sealed class ClientVersionMiddleware
+{
+    public const string AppHeader = "X-Client-App";
+    public const string VersionHeader = "X-Client-Version";
+
+    private readonly RequestDelegate _next;
+
+    public ClientVersionMiddleware(RequestDelegate next)
+    {
+        _next = next;
+    }
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        if (string.Equals(context.Request.Headers[AppHeader], "Cashier", StringComparison.OrdinalIgnoreCase)
+            && Version.TryParse(context.Request.Headers[VersionHeader], out var clientVersion))
+        {
+            // scope منفصل عمدًا (مش ISettingsProvider بالـmethod): AppDbContext بيقرأ فرع المستخدم وصلاحية الفروع وقت إنشائه
+            // مرة وحدة لكل scope، وهاد الـmiddleware قبل المصادقة - لو انحقن بـscope الطلب كان رح يتجمّد بلا فرع ويكسر كل فلاتر
+            // الفروع لباقي الطلب (انمسك بالاختبارات). الإعداد نفسه بيجي من كاش IMemoryCache المشترك فالكلفة بس إنشاء scope.
+            using var scope = context.RequestServices.GetRequiredService<IServiceScopeFactory>().CreateScope();
+            var settings = scope.ServiceProvider.GetRequiredService<SupermarketSystem.Application.Common.Interfaces.ISettingsProvider>();
+            var minimumText = await settings.GetStringAsync(
+                SupermarketSystem.Application.Common.Interfaces.ClientVersionSettingsKeys.CashierMinimumVersion, string.Empty, context.RequestAborted);
+            if (Version.TryParse(minimumText?.Trim(), out var minimum) && clientVersion < minimum)
+            {
+                context.Response.StatusCode = StatusCodes.Status426UpgradeRequired;
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    type = "https://tools.ietf.org/html/rfc7231#section-6.5.15",
+                    title = "لازم تحدّث البرنامج",
+                    status = StatusCodes.Status426UpgradeRequired,
+                    code = "Client.UpdateRequired",
+                    detail = $"نسخة الكاشير عندك ({clientVersion}) أقدم من أقل نسخة مقبولة ({minimum}). حدّث البرنامج من الإدارة قبل ما تكمل - بيعاتك المحفوظة ما بتضيع وبتنبعت بعد التحديث.",
+                    minimumVersion = minimum.ToString()
+                }, context.RequestAborted);
+                return;
+            }
+        }
+
+        await _next(context);
+    }
+}

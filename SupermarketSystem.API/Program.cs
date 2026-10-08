@@ -107,6 +107,7 @@ app.UseSwaggerUI();
 // already carry it.
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseMiddleware<ClientVersionMiddleware>();
 
 // CORS لازم يسبق المصادقة والتخويل — طلبات preflight (OPTIONS) لازم
 // تنعالج وترجع هيدرات CORS الصحيحة قبل ما توصل لأي فحص هوية أو صلاحية.
