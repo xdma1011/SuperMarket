@@ -171,6 +171,14 @@ public sealed class PartnerStatementGenerator
         }
 
         var netProfit = Math.Round(profitResult.Value.NetProfit, 3, MidpointRounding.AwayFromZero);
+
+        // بنود استُبعدت من الربح لأن ما إلها تكلفة معروفة (بضاعة افتتاح ما انسجّلت...) - الربح على الأغلب مبالغ فيه. بنحفظ العدد
+        // بالكشف وبننبّه (مش بنمنع - §1.6)، عشان ما ينسحب رأس مال كأنه ربح بدون ما حدا ينتبه (المراجعة النقدية 6/10/2026، بند 1).
+        var profit = profitResult.Value;
+        var uncostedItems = profit.ItemsExcludedNoCostHistory
+            + profit.StocktakeMovementsExcludedNoCostHistory
+            + profit.WasteMovementsExcludedNoCostHistory
+            + profit.ComplimentaryMovementsExcludedNoCostHistory;
         var lines = new List<(Guid PartnerId, PartnerType Type, decimal? CapitalBalance, decimal SharePercent, decimal ShareAmount)>();
 
         // (2) المضاربين.
@@ -241,7 +249,7 @@ public sealed class PartnerStatementGenerator
             _context.PartnerStatementLines.RemoveRange(statement.Lines.ToList());
         }
 
-        statement.SetContent(netProfit, unallocated, _dateTimeProvider.UtcNow, isAutomatic, lines);
+        statement.SetContent(netProfit, unallocated, _dateTimeProvider.UtcNow, isAutomatic, lines, uncostedItems);
 
         // الأسطر معرّفها بينولد بالكود (Entity)، فـEF بيفكّر السطر الجديد جوّا كشف موجود "صف موجود" وبيعمل
         // UPDATE بدل INSERT (كان بيطلع Concurrency 409 بإعادة الإصدار) - فبنعلّمها جديدة صراحة.

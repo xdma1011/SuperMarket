@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, inject } from '@angular/core';
+import { Component, OnInit, signal, inject, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom, forkJoin } from 'rxjs';
@@ -8,6 +8,7 @@ import { ApiController } from '../../core/api/api-controller.enum';
 import { PurchaseInvoicesOperation, ProductsOperation, SuppliersOperation, BranchesOperation, PaymentMethodsOperation } from '../../core/api/operations';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
 import { AuthService } from '../../core/services/auth.service';
+import { PermissionsService } from '../../core/services/permissions.service';
 
 interface PurchaseInvoiceListItemDto {
   id: string;
@@ -18,6 +19,8 @@ interface PurchaseInvoiceListItemDto {
   totalAmount: number;
   totalPaidAmount: number;
   createdAtUtc: string;
+  /** رصيد افتتاحي: بلا مورد ولا دين ولا دفعات. */
+  isOpeningBalance?: boolean;
 }
 
 interface SupplierDto {
@@ -82,6 +85,12 @@ interface PagedResult<T> {
 export class PurchasingComponent implements OnInit {
   private readonly loadRequest = latestRequest();
   private readonly auth = inject(AuthService);
+  private readonly permissions = inject(PermissionsService);
+
+  /** رصيد الافتتاح بيزيد مخزون بتكلفة بلا مورد - لصاحب المحل بس (Finance.Manage)، الباك إند بيفرضها كمان. */
+  readonly canRecordOpeningBalance = computed(() => this.permissions.loaded() && this.permissions.has('Finance.Manage'));
+  /** النموذج المفتوح هو "رصيد افتتاحي" مش فاتورة شراء عادية. */
+  readonly openingMode = signal(false);
 
   readonly invoices = signal<PurchaseInvoiceListItemDto[]>([]);
   readonly totalCount = signal(0);
@@ -168,6 +177,14 @@ export class PurchasingComponent implements OnInit {
   }
 
   openForm(): void {
+    this.openingMode.set(false);
+    this.formOpen.set(true);
+    this.formError.set(null);
+    this.lines = [];
+  }
+
+  openOpeningForm(): void {
+    this.openingMode.set(true);
     this.formOpen.set(true);
     this.formError.set(null);
     this.lines = [];
@@ -175,6 +192,7 @@ export class PurchasingComponent implements OnInit {
 
   closeForm(): void {
     this.formOpen.set(false);
+    this.openingMode.set(false);
     this.supplierInvoiceReference = '';
     this.dueDate = '';
     this.lines = [];
@@ -230,8 +248,9 @@ export class PurchasingComponent implements OnInit {
   }
 
   async submit(): Promise<void> {
-    if (!this.selectedSupplierId || !this.selectedBranchId || this.lines.length === 0) {
-      this.formError.set('حدّد المورد والفرع، وأضف سطرًا واحدًا على الأقل.');
+    const opening = this.openingMode();
+    if ((!opening && !this.selectedSupplierId) || !this.selectedBranchId || this.lines.length === 0) {
+      this.formError.set(opening ? 'حدّد الفرع، وأضف سطرًا واحدًا على الأقل.' : 'حدّد المورد والفرع، وأضف سطرًا واحدًا على الأقل.');
       return;
     }
 
@@ -250,23 +269,35 @@ export class PurchasingComponent implements OnInit {
     this.formError.set(null);
 
     try {
-      await firstValueFrom(
-        this.apiClient.post(ApiController.PurchaseInvoices, PurchaseInvoicesOperation.Complete, {
-          branchId: this.selectedBranchId,
-          supplierId: this.selectedSupplierId,
-          supplierInvoiceReference: this.supplierInvoiceReference.trim() || null,
-          dueDate: this.dueDate || null,
-          items: this.lines.map(l => ({
-            productId: l.productId,
-            productUnitId: l.unitId,
-            quantity: l.quantity,
-            unitCost: l.unitCost,
-            existingProductBatchId: null,
-            newBatchNumber: l.isBatchTracked ? l.newBatchNumber.trim() : null,
-            newBatchExpiryDate: l.isBatchTracked && l.newBatchExpiryDate ? l.newBatchExpiryDate : null
-          }))
-        })
-      );
+      const items = this.lines.map(l => ({
+        productId: l.productId,
+        productUnitId: l.unitId,
+        quantity: l.quantity,
+        unitCost: l.unitCost,
+        existingProductBatchId: null,
+        newBatchNumber: l.isBatchTracked ? l.newBatchNumber.trim() : null,
+        newBatchExpiryDate: l.isBatchTracked && l.newBatchExpiryDate ? l.newBatchExpiryDate : null
+      }));
+
+      if (opening) {
+        await firstValueFrom(
+          this.apiClient.post(ApiController.PurchaseInvoices, PurchaseInvoicesOperation.OpeningBalance, {
+            branchId: this.selectedBranchId,
+            note: this.supplierInvoiceReference.trim() || null,
+            items
+          })
+        );
+      } else {
+        await firstValueFrom(
+          this.apiClient.post(ApiController.PurchaseInvoices, PurchaseInvoicesOperation.Complete, {
+            branchId: this.selectedBranchId,
+            supplierId: this.selectedSupplierId,
+            supplierInvoiceReference: this.supplierInvoiceReference.trim() || null,
+            dueDate: this.dueDate || null,
+            items
+          })
+        );
+      }
 
       this.closeForm();
       await this.loadAll();
@@ -282,7 +313,8 @@ export class PurchasingComponent implements OnInit {
   }
 
   remainingDebt(invoice: PurchaseInvoiceListItemDto): number {
-    return invoice.totalAmount - invoice.totalPaidAmount;
+    // الرصيد الافتتاحي بلا مورد - ما عليه دين أبدًا.
+    return invoice.isOpeningBalance ? 0 : invoice.totalAmount - invoice.totalPaidAmount;
   }
 
   openPaymentModal(invoice: PurchaseInvoiceListItemDto): void {

@@ -32,8 +32,8 @@ public sealed class GetSupplierDebtsHandler
     public async Task<GetSupplierDebtsResponse> HandleAsync(CancellationToken cancellationToken)
     {
         var invoices = await _context.PurchaseInvoices.AsNoTracking()
-            .Where(pi => pi.Status == PurchaseInvoiceStatus.Received)
-            .Select(pi => new { pi.SupplierId, pi.TotalAmount, pi.TotalPaidAmount })
+            .Where(pi => pi.Status == PurchaseInvoiceStatus.Received && pi.SupplierId != null)
+            .Select(pi => new { SupplierId = pi.SupplierId!.Value, pi.TotalAmount, pi.TotalPaidAmount })
             .ToListAsync(cancellationToken);
 
         var supplierNames = await _context.Suppliers.AsNoTracking()

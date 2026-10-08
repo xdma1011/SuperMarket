@@ -43,8 +43,9 @@ public sealed class GetSupplierPriceComparisonHandler
     {
         var paging = query.Paging.Normalized();
 
+        // الرصيد الافتتاحي (بلا مورد) خارج المقارنة - مش سعر مورد.
         var invoices = _context.PurchaseInvoices.AsNoTracking()
-            .Where(pi => pi.Status == PurchaseInvoiceStatus.Received);
+            .Where(pi => pi.Status == PurchaseInvoiceStatus.Received && pi.SupplierId != null);
 
         if (query.FromUtc is { } fromUtc)
         {
@@ -68,7 +69,7 @@ public sealed class GetSupplierPriceComparisonHandler
             .Skip(paging.Skip)
             .Take(paging.PageSize)
             .Join(_context.Suppliers.AsNoTracking(),
-                x => x.pi.SupplierId, s => s.Id,
+                x => x.pi.SupplierId, s => (Guid?)s.Id,
                 (x, s) => new SupplierPriceComparisonItemDto(
                     s.Id, s.Name, x.i.UnitCost, x.i.Quantity, x.pi.CreatedAtUtc, x.pi.InvoiceNumber)
                 {

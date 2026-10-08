@@ -253,6 +253,12 @@ public class PartnerMonthlyStatement : AuditableEntity, IBranchOwned
     public DateTime GeneratedAtUtc { get; private set; }
     public bool IsAutomatic { get; private set; }
 
+    /// <summary>
+    /// عدد البنود اللي استُبعدت من حساب الربح لأن ما إلها تكلفة معروفة (أسطر بيع + جرد + تلف + ضيافة) وقت إصدار الكشف.
+    /// أكبر من صفر = الربح مبالغ فيه على الأغلب (بضاعة افتتاح ما انسجّلت كرصيد افتتاحي) - الكشف بينزل مع تنبيه، ما بينمنع (§1.6).
+    /// </summary>
+    public int UncostedItemsCount { get; private set; }
+
     private readonly List<PartnerStatementLine> _lines = new();
     public IReadOnlyCollection<PartnerStatementLine> Lines => _lines.AsReadOnly();
 
@@ -272,8 +278,10 @@ public class PartnerMonthlyStatement : AuditableEntity, IBranchOwned
 
     /// <summary>بيستبدل محتوى الكشف كامل (أول إصدار أو إعادة إصدار).</summary>
     public void SetContent(decimal netProfit, decimal unallocatedAmount, DateTime generatedAtUtc, bool isAutomatic,
-        IEnumerable<(Guid PartnerId, PartnerType Type, decimal? CapitalBalance, decimal SharePercent, decimal ShareAmount)> lines)
+        IEnumerable<(Guid PartnerId, PartnerType Type, decimal? CapitalBalance, decimal SharePercent, decimal ShareAmount)> lines,
+        int uncostedItemsCount = 0)
     {
+        UncostedItemsCount = uncostedItemsCount;
         NetProfit = netProfit;
         UnallocatedAmount = unallocatedAmount;
         GeneratedAtUtc = generatedAtUtc;

@@ -46,6 +46,8 @@ public class PurchaseInvoiceConfiguration : IEntityTypeConfiguration<PurchaseInv
         builder.Property(p => p.DueDate).HasColumnType("date");
         builder.Property(p => p.Status).HasConversion<int>().IsRequired();
         builder.Property(p => p.TotalAmount).HasColumnType("decimal(18,4)").IsRequired();
+        // رصيد افتتاحي (بلا مورد) - الصفوف القديمة كلها false.
+        builder.Property(p => p.IsOpeningBalance).IsRequired().HasDefaultValue(false);
         builder.Property(p => p.RowVersion).IsRowVersion();
         builder.Property(p => p.CreatedAtUtc).HasColumnType("datetime2").IsRequired();
         builder.Property(p => p.UpdatedAtUtc).HasColumnType("datetime2");

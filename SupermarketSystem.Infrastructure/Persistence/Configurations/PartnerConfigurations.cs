@@ -86,6 +86,7 @@ public class PartnerMonthlyStatementConfiguration : IEntityTypeConfiguration<Par
         builder.Property(s => s.NetProfit).HasColumnType("decimal(18,4)").IsRequired();
         builder.Property(s => s.UnallocatedAmount).HasColumnType("decimal(18,4)").IsRequired();
         builder.Property(s => s.GeneratedAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(s => s.UncostedItemsCount).IsRequired().HasDefaultValue(0);
         builder.Property(s => s.CreatedAtUtc).HasColumnType("datetime2").IsRequired();
         builder.Property(s => s.UpdatedAtUtc).HasColumnType("datetime2");
 

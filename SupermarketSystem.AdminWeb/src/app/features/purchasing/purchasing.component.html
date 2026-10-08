@@ -5,6 +5,9 @@
     <span class="subtitle">كل فاتورة شراء مستلمة تزيد المخزون تلقائيًا.</span>
   </div>
   <div class="head-actions">
+    @if (canRecordOpeningBalance()) {
+      <button type="button" class="btn-outline" (click)="openOpeningForm()" title="بضاعة موجودة بالمحل قبل تشغيل النظام، بتكلفتها">رصيد افتتاحي</button>
+    }
     <button type="button" class="btn-primary" (click)="openForm()">فاتورة شراء جديدة</button>
   </div>
 </div>
@@ -31,11 +34,19 @@
         @for (inv of invoices(); track inv.id) {
           <tr>
             <td class="mono">{{ inv.invoiceNumber }}</td>
-            <td>{{ inv.supplierName }}</td>
+            <td>
+              @if (inv.isOpeningBalance) {
+                <span class="paid-chip">رصيد افتتاحي</span>
+              } @else {
+                {{ inv.supplierName }}
+              }
+            </td>
             <td>{{ inv.supplierInvoiceReference || '—' }}</td>
             <td class="mono">{{ inv.totalAmount | number: '1.3-3' }}</td>
             <td class="mono">
-              @if (remainingDebt(inv) > 0) {
+              @if (inv.isOpeningBalance) {
+                —
+              } @else if (remainingDebt(inv) > 0) {
                 <span class="debt-chip">{{ remainingDebt(inv) | number: '1.3-3' }}</span>
               } @else {
                 <span class="paid-chip">مسدَّدة</span>
@@ -75,8 +86,12 @@
     <div class="modal-card wide" (click)="$event.stopPropagation()">
       <div class="modal-head">
         <div class="modal-title-group">
-          <h2>فاتورة شراء جديدة</h2>
-          <span class="modal-hint">المخزون يزيد تلقائيًا فور التسجيل.</span>
+          <h2>{{ openingMode() ? 'رصيد افتتاحي' : 'فاتورة شراء جديدة' }}</h2>
+          <span class="modal-hint">
+            {{ openingMode()
+              ? 'بضاعة موجودة بالمحل قبل تشغيل النظام، بتكلفتها. بلا مورد ولا دين. سجّله قبل أول بيعة، وإلا بيعات الأصناف قبله بتنحسب بلا تكلفة.'
+              : 'المخزون يزيد تلقائيًا فور التسجيل.' }}
+          </span>
         </div>
         <button type="button" class="icon-btn" (click)="closeForm()" aria-label="إغلاق">×</button>
       </div>
@@ -86,14 +101,16 @@
       }
 
       <div class="modal-fields">
-        <label class="field">
-          <span>المورد</span>
-          <select [(ngModel)]="selectedSupplierId">
-            @for (s of suppliers(); track s.id) {
-              <option [value]="s.id">{{ s.name }}</option>
-            }
-          </select>
-        </label>
+        @if (!openingMode()) {
+          <label class="field">
+            <span>المورد</span>
+            <select [(ngModel)]="selectedSupplierId">
+              @for (s of suppliers(); track s.id) {
+                <option [value]="s.id">{{ s.name }}</option>
+              }
+            </select>
+          </label>
+        }
         <label class="field">
           <span>الفرع</span>
           <select [(ngModel)]="selectedBranchId">
@@ -103,13 +120,16 @@
           </select>
         </label>
         <label class="field">
-          <span>مرجع فاتورة المورد (اختياري)</span>
-          <input type="text" [(ngModel)]="supplierInvoiceReference" placeholder="رقم الفاتورة عند المورد" />
+          <span>{{ openingMode() ? 'ملاحظة (اختياري)' : 'مرجع فاتورة المورد (اختياري)' }}</span>
+          <input type="text" [(ngModel)]="supplierInvoiceReference"
+            [placeholder]="openingMode() ? 'مثلًا: جرد افتتاح المحل' : 'رقم الفاتورة عند المورد'" />
         </label>
-        <label class="field">
-          <span>تاريخ استحقاق الدفع (اختياري)</span>
-          <input type="date" [(ngModel)]="dueDate" />
-        </label>
+        @if (!openingMode()) {
+          <label class="field">
+            <span>تاريخ استحقاق الدفع (اختياري)</span>
+            <input type="date" [(ngModel)]="dueDate" />
+          </label>
+        }
       </div>
 
       <div class="line-adder">
@@ -166,7 +186,7 @@
 
       <div class="modal-actions">
         <button type="button" class="btn-primary" [disabled]="submitting() || lines.length === 0" (click)="submit()">
-          {{ submitting() ? 'جارٍ التسجيل…' : 'تسجيل الفاتورة' }}
+          {{ submitting() ? 'جارٍ التسجيل…' : (openingMode() ? 'تسجيل الرصيد الافتتاحي' : 'تسجيل الفاتورة') }}
         </button>
         <button type="button" class="btn-ghost" (click)="closeForm()">إلغاء</button>
       </div>

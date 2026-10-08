@@ -39,16 +39,26 @@ public sealed record CompletePurchaseInvoiceCommand(
 
 public sealed record CompletePurchaseInvoiceResponse(Guid PurchaseInvoiceId, string InvoiceNumber, decimal TotalAmount);
 
+/// <summary>
+/// رصيد افتتاحي (بضاعة موجودة قبل تشغيل النظام، بتكلفتها) - بلا مورد ولا دين ولا دفعات. مسار داخلي منفصل عن
+/// <see cref="CompletePurchaseInvoiceCommand"/> عمدًا (مش علم بطلب الشراء): صلاحية Purchasing.Create لحالها ما بتكفي، وإلا موظف مشتريات
+/// كان يضيف مخزون وهمي بتكلفة يخفي فيه عجز. الـendpoint بيطلب Finance.Manage (صاحب المحل).
+/// </summary>
+public sealed record RecordOpeningBalanceCommand(
+    Guid BranchId,
+    IReadOnlyList<CompletePurchaseInvoiceItemDto> Items,
+    string? Note = null);
+
 public static class CompletePurchaseInvoiceValidator
 {
-    public static Error? Validate(CompletePurchaseInvoiceCommand command)
+    public static Error? Validate(CompletePurchaseInvoiceCommand command, bool requireSupplier = true)
     {
         if (command.BranchId == Guid.Empty)
         {
             return Error.Validation("PurchaseInvoice.BranchRequired", "A branch is required.");
         }
 
-        if (command.SupplierId == Guid.Empty)
+        if (requireSupplier && command.SupplierId == Guid.Empty)
         {
             return Error.Validation("PurchaseInvoice.SupplierRequired", "A supplier is required.");
         }
@@ -134,11 +144,26 @@ public sealed class CompletePurchaseInvoiceHandler
         _settingsProvider = settingsProvider;
     }
 
-    public async Task<Result<CompletePurchaseInvoiceResponse>> HandleAsync(
+    public Task<Result<CompletePurchaseInvoiceResponse>> HandleAsync(
         CompletePurchaseInvoiceCommand command,
+        CancellationToken cancellationToken) =>
+        HandleCoreAsync(command, isOpeningBalance: false, cancellationToken);
+
+    /// <summary>رصيد افتتاحي: نفس مسار الشراء (مخزون + حركة + دفعة/تكلفة) بس بلا مورد، وبتنبيه "مهم" دايمًا.</summary>
+    public Task<Result<CompletePurchaseInvoiceResponse>> HandleOpeningBalanceAsync(
+        RecordOpeningBalanceCommand command,
+        CancellationToken cancellationToken) =>
+        HandleCoreAsync(
+            new CompletePurchaseInvoiceCommand(command.BranchId, Guid.Empty, command.Note, command.Items),
+            isOpeningBalance: true,
+            cancellationToken);
+
+    private async Task<Result<CompletePurchaseInvoiceResponse>> HandleCoreAsync(
+        CompletePurchaseInvoiceCommand command,
+        bool isOpeningBalance,
         CancellationToken cancellationToken)
     {
-        var validationError = CompletePurchaseInvoiceValidator.Validate(command);
+        var validationError = CompletePurchaseInvoiceValidator.Validate(command, requireSupplier: !isOpeningBalance);
         if (validationError is not null)
         {
             return Result.Failure<CompletePurchaseInvoiceResponse>(validationError);
@@ -151,7 +176,8 @@ public sealed class CompletePurchaseInvoiceHandler
                 Error.NotFound("PurchaseInvoice.BranchNotFound", $"Branch '{command.BranchId}' was not found."));
         }
 
-        var supplierExists = await _context.Suppliers.AsNoTracking().AnyAsync(s => s.Id == command.SupplierId, cancellationToken);
+        var supplierExists = isOpeningBalance
+            || await _context.Suppliers.AsNoTracking().AnyAsync(s => s.Id == command.SupplierId, cancellationToken);
         if (!supplierExists)
         {
             return Result.Failure<CompletePurchaseInvoiceResponse>(
@@ -257,7 +283,8 @@ public sealed class CompletePurchaseInvoiceHandler
             PurchasingPolicyKeys.PriceIncreaseWarningThresholdPercent, 15m, cancellationToken);
 
         var averageRecentCostByProduct = new Dictionary<Guid, decimal>();
-        foreach (var productId in productIds)
+        // الرصيد الافتتاحي أول تكلفة معروفة للصنف - ما في "معتاد" نقارنه فيه.
+        foreach (var productId in isOpeningBalance ? new List<Guid>() : productIds)
         {
             // تكلفة الحبة (الوحدة الأساسية) - كانت تقارن سعر كرتونة بسعر حبة، فشراء بالكرتونة بعد الحبة كان دايمًا
             // "أعلى من المعتاد" (إنذار كاذب + مراجعة). راجع PurchaseCostBasis.
@@ -284,8 +311,10 @@ public sealed class CompletePurchaseInvoiceHandler
 
         // --- Build the aggregate + its inventory effects, all in one graph ---
 
-        var purchaseInvoice = new Domain.Purchasing.PurchaseInvoice(
-            command.BranchId, command.SupplierId, invoiceNumber, command.SupplierInvoiceReference, command.DueDate);
+        var purchaseInvoice = isOpeningBalance
+            ? Domain.Purchasing.PurchaseInvoice.CreateOpeningBalance(command.BranchId, invoiceNumber, command.SupplierInvoiceReference)
+            : new Domain.Purchasing.PurchaseInvoice(
+                command.BranchId, command.SupplierId, invoiceNumber, command.SupplierInvoiceReference, command.DueDate);
 
         var actorUserId = _currentUser.UserId ?? Domain.Identity.User.SystemUserId;
         var occurredAtUtc = _dateTimeProvider.UtcNow;
@@ -355,6 +384,21 @@ public sealed class CompletePurchaseInvoiceHandler
         _context.StockMovements.AddRange(newStockMovements);
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // رصيد افتتاحي: بيزيد مخزون بتكلفة بلا مورد، فهو بالضبط الطريقة اللي بتخفي عجز لو اتساء استعمالها - تنبيه "مهم" دايمًا (§1.6: سماح مع تعليم).
+        if (isOpeningBalance)
+        {
+            var userName = await AlertText.UserNameAsync(_context, _currentUser.UserId, cancellationToken);
+            var branchName = await AlertText.BranchNameAsync(_context, command.BranchId, cancellationToken);
+            await _notificationDispatcher.NotifyAsync(
+                $"تم إدخال رصيد افتتاحي — {purchaseInvoice.InvoiceNumber}",
+                $"الفرع: {branchName}\nالمستخدم: {userName}\nعدد الأصناف: {command.Items.Count}\nالقيمة بالتكلفة: {purchaseInvoice.TotalAmount:0.000} د.أ",
+                cancellationToken,
+                NotificationSeverity.Warning,
+                link: "/purchases");
+
+            return Result.Success(new CompletePurchaseInvoiceResponse(purchaseInvoice.Id, purchaseInvoice.InvoiceNumber, purchaseInvoice.TotalAmount));
+        }
 
         // سعر شراء أعلى بشكل ملحوظ من المعتاد - ممكن غلط إدخال، وممكن تواطؤ مع مورد (فاتورة
         // مضخّمة). كان بيطلع بقائمة المراجعات بس؛ هلق بينبّه فورًا كمان.

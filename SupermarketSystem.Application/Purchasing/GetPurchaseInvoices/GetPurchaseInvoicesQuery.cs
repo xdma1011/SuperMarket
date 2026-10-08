@@ -14,7 +14,8 @@ public sealed record PurchaseInvoiceListItemDto(
     int Status,
     decimal TotalAmount,
     decimal TotalPaidAmount,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    bool IsOpeningBalance = false);
 
 public sealed class GetPurchaseInvoicesHandler
 {
@@ -41,13 +42,16 @@ public sealed class GetPurchaseInvoicesHandler
 
         var totalCount = await invoices.CountAsync(cancellationToken);
 
-        var items = await invoices
-            .Skip(paging.Skip)
-            .Take(paging.PageSize)
-            .Join(_context.Suppliers.AsNoTracking(), pi => pi.SupplierId, s => s.Id,
-                (pi, s) => new PurchaseInvoiceListItemDto(
-                    pi.Id, pi.InvoiceNumber, pi.SupplierInvoiceReference, s.Name,
-                    (int)pi.Status, pi.TotalAmount, pi.TotalPaidAmount, pi.CreatedAtUtc))
+        // Left join: فاتورة الرصيد الافتتاحي بلا مورد (SupplierId = null) وما لازم تختفي من القائمة.
+        var items = await (
+            from pi in invoices.Skip(paging.Skip).Take(paging.PageSize)
+            join s in _context.Suppliers.AsNoTracking() on pi.SupplierId equals (Guid?)s.Id into suppliers
+            from s in suppliers.DefaultIfEmpty()
+            orderby pi.CreatedAtUtc descending, pi.Id descending
+            select new PurchaseInvoiceListItemDto(
+                pi.Id, pi.InvoiceNumber, pi.SupplierInvoiceReference,
+                pi.IsOpeningBalance ? "رصيد افتتاحي" : (s == null ? "(غير معروف)" : s.Name),
+                (int)pi.Status, pi.TotalAmount, pi.TotalPaidAmount, pi.CreatedAtUtc, pi.IsOpeningBalance))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<PurchaseInvoiceListItemDto>(items, totalCount, paging.PageNumber, paging.PageSize);

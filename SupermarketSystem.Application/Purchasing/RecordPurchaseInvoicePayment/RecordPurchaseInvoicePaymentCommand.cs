@@ -93,6 +93,12 @@ public sealed class RecordPurchaseInvoicePaymentHandler
                 Error.NotFound("Payment.InvoiceNotFound", $"فاتورة الشراء '{command.PurchaseInvoiceId}' غير موجودة."));
         }
 
+        if (invoice.IsOpeningBalance)
+        {
+            return Result.Failure<RecordPurchaseInvoicePaymentResponse>(
+                Error.Validation("Payment.OpeningBalanceInvoice", "فاتورة الرصيد الافتتاحي بلا مورد، فما بتقبل دفعات."));
+        }
+
         var paymentMethod = await _context.PaymentMethods.AsNoTracking()
             .FirstOrDefaultAsync(pm => pm.Id == command.PaymentMethodId && pm.IsActive, cancellationToken);
         if (paymentMethod is null)

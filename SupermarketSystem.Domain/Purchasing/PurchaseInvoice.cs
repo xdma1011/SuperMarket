@@ -20,7 +20,19 @@ public enum PurchaseInvoiceStatus
 public class PurchaseInvoice : AuditableEntity, IBranchOwned, IHasRowVersion
 {
     public Guid BranchId { get; private set; }
-    public Guid SupplierId { get; private set; }
+    /// <summary>
+    /// null فقط لفاتورة الرصيد الافتتاحي (<see cref="IsOpeningBalance"/>) - بضاعة موجودة بالمحل قبل بدء النظام، بلا مورد.
+    /// أي فاتورة شراء عادية لازم يكون إلها مورد.
+    /// </summary>
+    public Guid? SupplierId { get; private set; }
+
+    /// <summary>
+    /// رصيد افتتاحي (6/10/2026، المراجعة النقدية بند 1): بضاعة موجودة بالمحل قبل تشغيل النظام، بتكلفتها. بدونها كل بيعة منها
+    /// بتنحسب ربح 100% (ما في تكلفة معروفة) وكشف الشركاء بيوزّع رأس مال كأنه ربح. بتدخل المخزون وبتغذّي المتوسط المرجّح
+    /// للتكلفة زي أي شراء، بس: بلا مورد، بلا دين، بلا دفعات، وما بتطلع بتقارير الموردين.
+    /// </summary>
+    public bool IsOpeningBalance { get; private set; }
+
     public string InvoiceNumber { get; private set; } = null!;
     public string? SupplierInvoiceReference { get; private set; }
     public PurchaseInvoiceStatus Status { get; private set; }
@@ -68,6 +80,22 @@ public class PurchaseInvoice : AuditableEntity, IBranchOwned, IHasRowVersion
         DueDate = dueDate;
     }
 
+    /// <summary>فاتورة الرصيد الافتتاحي: بلا مورد ولا مهلة سداد. <paramref name="note"/> ملاحظة حرة (مثلًا "جرد افتتاح المحل").</summary>
+    public static PurchaseInvoice CreateOpeningBalance(Guid branchId, string invoiceNumber, string? note)
+    {
+        return new PurchaseInvoice
+        {
+            BranchId = branchId,
+            SupplierId = null,
+            InvoiceNumber = invoiceNumber,
+            SupplierInvoiceReference = note,
+            Status = PurchaseInvoiceStatus.Draft,
+            TotalAmount = 0,
+            TotalPaidAmount = 0,
+            IsOpeningBalance = true
+        };
+    }
+
     public PurchaseInvoiceItem AddItem(
         Guid productId, Guid productUnitId, Guid? productBatchId, decimal quantity, decimal unitCost, bool needsReview = false)
     {
@@ -112,6 +140,11 @@ public class PurchaseInvoice : AuditableEntity, IBranchOwned, IHasRowVersion
     /// </summary>
     public PurchaseInvoicePayment AddPayment(Guid paymentMethodId, decimal amount, Guid userId, Guid branchId, string? externalReference, Guid clientRequestId)
     {
+        if (IsOpeningBalance)
+        {
+            throw new DomainException("An opening-balance invoice has no supplier, so it cannot receive supplier payments.");
+        }
+
         if (TotalPaidAmount + amount > TotalAmount)
         {
             throw new DomainException("This payment would cause total payments to exceed the invoice total.");

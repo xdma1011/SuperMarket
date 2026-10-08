@@ -1054,6 +1054,14 @@ public sealed class RandomStoreSimulationTests : IntegrationTestBase
         }
 
         Check("مجموع الأنصبة = صافي الربح", net, lines.Values.Sum(l => D(l, "shareAmount")) + D(statement, "unallocatedAmount"));
+
+        // البنود بلا تكلفة معروفة لازم تنحفظ بالكشف (تحذير "الربح مبالغ فيه") بنفس مجموع بنود كشف الربح الأربعة.
+        var statementProfit = await GetAsync(_admin, $"/api/v1/finance/profit-statement?branchId={_branchId}&year={previous.Year}&month={previous.Month}", "كشف الربح للتحقق من بنود الكشف");
+        var expectedUncosted = statementProfit.GetProperty("itemsExcludedNoCostHistory").GetInt32()
+            + statementProfit.GetProperty("stocktakeMovementsExcludedNoCostHistory").GetInt32()
+            + statementProfit.GetProperty("wasteMovementsExcludedNoCostHistory").GetInt32()
+            + statementProfit.GetProperty("complimentaryMovementsExcludedNoCostHistory").GetInt32();
+        Check("كشف الشركاء: عدد البنود بلا تكلفة", expectedUncosted, statement.GetProperty("uncostedItemsCount").GetInt32());
         Log($"كشف {previous:yyyy-MM}: صافي {net:0.000} ← أحمد {ahmad.Shares:0.000}، سامي {sami.Shares:0.000}، المضارب {mudarib.Shares:0.000}");
     }
 

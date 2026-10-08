@@ -84,6 +84,25 @@ public static class PurchasingEndpoints
         .WithSummary("قديش عليك لكل مورد (فواتير Received فقط) + مجموع الديون الكلي.")
         .Produces<GetSupplierDebtsResponse>(StatusCodes.Status200OK);
 
+        // رصيد افتتاحي: خارج مجموعة purchaseInvoices عمدًا (§3.4 - الفلاتر بتتراكم): صلاحيتها Finance.Manage (صاحب المحل) لحالها،
+        // مش Purchasing.Create، لأن بتضيف مخزون بتكلفة بلا مورد.
+        app.MapPost("/api/v1/purchase-invoices/opening-balance", async (
+            RecordOpeningBalanceCommand command,
+            CompletePurchaseInvoiceHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await handler.HandleOpeningBalanceAsync(command, cancellationToken);
+            return result.ToHttpResult(response =>
+                Results.Created($"/api/v1/purchase-invoices/{response.PurchaseInvoiceId}", response));
+        })
+        .WithName("RecordOpeningBalance")
+        .WithTags("Purchasing")
+        .RequirePermission(PermissionCodes.FinanceManage)
+        .WithSummary("رصيد افتتاحي: بضاعة موجودة قبل تشغيل النظام بتكلفتها - بلا مورد ولا دين. بتزيد المخزون وبتغذّي متوسط التكلفة.")
+        .Produces<CompletePurchaseInvoiceResponse>(StatusCodes.Status201Created)
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status404NotFound);
+
         return app;
     }
 

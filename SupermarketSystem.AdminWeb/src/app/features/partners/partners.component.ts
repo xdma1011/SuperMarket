@@ -54,6 +54,8 @@ export interface PartnerStatementSummaryDto {
   generatedAtUtc: string;
   isAutomatic: boolean;
   partnerCount: number;
+  /** بنود استُبعدت من الربح لأن ما إلها تكلفة معروفة - أكبر من صفر = الربح على الأغلب مبالغ فيه. */
+  uncostedItemsCount?: number;
 }
 
 export interface PartnerStatementDto extends PartnerStatementSummaryDto {

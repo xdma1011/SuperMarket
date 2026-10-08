@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Application.Common.Interfaces;
+using SupermarketSystem.Application.Common.Notifications;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Domain.Common;
+using SupermarketSystem.Domain.Notifications;
 using SupermarketSystem.Domain.Partners;
 
 namespace SupermarketSystem.Application.Partners;
@@ -273,11 +275,11 @@ public sealed record PartnerStatementLineDto(
 
 public sealed record PartnerStatementDto(
     Guid Id, Guid BranchId, string BranchName, int Year, int Month, decimal NetProfit, decimal UnallocatedAmount,
-    DateTime GeneratedAtUtc, bool IsAutomatic, IReadOnlyList<PartnerStatementLineDto> Lines);
+    DateTime GeneratedAtUtc, bool IsAutomatic, IReadOnlyList<PartnerStatementLineDto> Lines, int UncostedItemsCount = 0);
 
 public sealed record PartnerStatementSummaryDto(
     Guid Id, Guid BranchId, string BranchName, int Year, int Month, decimal NetProfit, decimal UnallocatedAmount,
-    DateTime GeneratedAtUtc, bool IsAutomatic, int PartnerCount);
+    DateTime GeneratedAtUtc, bool IsAutomatic, int PartnerCount, int UncostedItemsCount = 0);
 
 public sealed record GeneratePartnerStatementCommand(Guid BranchId, int Year, int Month);
 
@@ -288,12 +290,16 @@ public sealed class GeneratePartnerStatementHandler
     private readonly IApplicationDbContext _context;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ICurrentUserContext _currentUser;
+    private readonly INotificationDispatcher _notificationDispatcher;
 
-    public GeneratePartnerStatementHandler(IApplicationDbContext context, IDateTimeProvider dateTimeProvider, ICurrentUserContext currentUser)
+    public GeneratePartnerStatementHandler(
+        IApplicationDbContext context, IDateTimeProvider dateTimeProvider, ICurrentUserContext currentUser,
+        INotificationDispatcher notificationDispatcher)
     {
         _context = context;
         _dateTimeProvider = dateTimeProvider;
         _currentUser = currentUser;
+        _notificationDispatcher = notificationDispatcher;
     }
 
     /// <summary>إصدار يدوي (أو إعادة إصدار لو موجود) - بيحسب الربح من جديد وبيستبدل الأنصبة.</summary>
@@ -310,6 +316,8 @@ public sealed class GeneratePartnerStatementHandler
         {
             return Result.Failure<PartnerStatementDto>(generated.Error!);
         }
+
+        await PartnerStatementAlerts.NotifyIfUncostedAsync(_context, _notificationDispatcher, generated.Value, cancellationToken);
 
         var dto = await GetPartnerStatementByIdHandler.LoadAsync(_context, generated.Value, cancellationToken);
         return dto is null
@@ -337,7 +345,7 @@ public sealed class GetPartnerStatementsHandler
 
         var rows = await statements
             .OrderByDescending(s => s.Year).ThenByDescending(s => s.Month)
-            .Select(s => new { s.Id, s.BranchId, s.Year, s.Month, s.NetProfit, s.UnallocatedAmount, s.GeneratedAtUtc, s.IsAutomatic, Count = s.Lines.Count })
+            .Select(s => new { s.Id, s.BranchId, s.Year, s.Month, s.NetProfit, s.UnallocatedAmount, s.GeneratedAtUtc, s.IsAutomatic, s.UncostedItemsCount, Count = s.Lines.Count })
             .Take(60)
             .ToListAsync(cancellationToken);
 
@@ -348,7 +356,7 @@ public sealed class GetPartnerStatementsHandler
 
         return rows.Select(r => new PartnerStatementSummaryDto(
             r.Id, r.BranchId, branchNames.GetValueOrDefault(r.BranchId, ""), r.Year, r.Month, r.NetProfit, r.UnallocatedAmount,
-            r.GeneratedAtUtc, r.IsAutomatic, r.Count)).ToList();
+            r.GeneratedAtUtc, r.IsAutomatic, r.Count, r.UncostedItemsCount)).ToList();
     }
 }
 
@@ -389,7 +397,39 @@ public sealed class GetPartnerStatementByIdHandler
                 .Select(l => new PartnerStatementLineDto(
                     l.PartnerId, names.GetValueOrDefault(l.PartnerId, "(شريك محذوف)"), (int)l.PartnerType, PartnerTitles.Type(l.PartnerType),
                     l.CapitalBalance, l.SharePercent, l.ShareAmount))
-                .ToList());
+                .ToList(),
+            statement.UncostedItemsCount);
+    }
+}
+
+/// <summary>
+/// تنبيه "خطير" لما كشف شركاء نزل وفيه بنود بلا تكلفة معروفة (الربح مبالغ فيه على الأغلب - بضاعة افتتاح ما انسجّلت، المراجعة
+/// النقدية 6/10/2026 بند 1). الكشف بينزل كالعادة والتنبيه بس بيعلّم (§1.6: سماح مع تعليم، مش منع).
+/// </summary>
+public static class PartnerStatementAlerts
+{
+    public static async Task NotifyIfUncostedAsync(
+        IApplicationDbContext context, INotificationDispatcher dispatcher, Guid statementId, CancellationToken cancellationToken)
+    {
+        var statement = await context.PartnerMonthlyStatements.IgnoreQueryFilters().AsNoTracking()
+            .Where(s => s.Id == statementId)
+            .Select(s => new { s.BranchId, s.Year, s.Month, s.NetProfit, s.UncostedItemsCount })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (statement is null || statement.UncostedItemsCount <= 0)
+        {
+            return;
+        }
+
+        var branchName = await AlertText.BranchNameAsync(context, statement.BranchId, cancellationToken);
+        await dispatcher.NotifyAsync(
+            $"كشف الشركاء {statement.Month}/{statement.Year} فيه بنود بلا تكلفة — راجعه قبل السحب",
+            $"الفرع: {branchName}\n"
+            + $"عدد البنود بلا تكلفة معروفة: {statement.UncostedItemsCount} (بيع/جرد/تلف/ضيافة)\n"
+            + $"صافي الربح بالكشف: {statement.NetProfit:0.000} د.أ — على الأغلب مبالغ فيه لأنها بتتحسب بلا تكلفة.\n"
+            + "الحل: سجّل بضاعة الافتتاح كرصيد افتتاحي (صفحة المشتريات) ثم أعد إصدار الكشف.",
+            cancellationToken,
+            NotificationSeverity.Critical,
+            link: "/partners?tab=statements");
     }
 }
 

@@ -7,6 +7,7 @@ describe('PurchaseInvoicesOperation enum', () => {
     expect(PurchaseInvoicesOperation.List).toBe('');
     expect(PurchaseInvoicesOperation.RecordPayment).toBe('{purchaseInvoiceId}/payments');
     expect(PurchaseInvoicesOperation.SupplierDebts).toBe('supplier-debts');
+    expect(PurchaseInvoicesOperation.OpeningBalance).toBe('opening-balance');
   });
 });
 

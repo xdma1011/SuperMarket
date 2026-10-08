@@ -56,7 +56,7 @@ public sealed class GetSupplierPaymentDueHandler
             .OrderBy(pi => pi.DueDate)
             .Skip(paging.Skip)
             .Take(paging.PageSize)
-            .Join(_context.Suppliers.AsNoTracking(), pi => pi.SupplierId, s => s.Id,
+            .Join(_context.Suppliers.AsNoTracking(), pi => pi.SupplierId, s => (Guid?)s.Id,
                 (pi, s) => new
                 {
                     pi.Id,

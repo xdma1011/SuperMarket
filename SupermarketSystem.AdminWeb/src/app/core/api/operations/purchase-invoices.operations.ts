@@ -3,7 +3,9 @@ export enum PurchaseInvoicesOperation {
   Complete = '',
   List = '',
   RecordPayment = '{purchaseInvoiceId}/payments',
-  SupplierDebts = 'supplier-debts'
+  SupplierDebts = 'supplier-debts',
+  /** رصيد افتتاحي (بضاعة موجودة قبل تشغيل النظام) - Finance.Manage */
+  OpeningBalance = 'opening-balance'
 }
 
 /** ApiController.PurchaseInvoices - PurchaseInvoiceDraftEndpoints (نفس المسار الأساسي، مسار فرعي drafts/...) */

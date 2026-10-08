@@ -143,7 +143,12 @@
                   <td class="mono">{{ s.month }}/{{ s.year }}</td>
                   <td class="money" [class.negative]="s.netProfit < 0">{{ s.netProfit | number: '1.3-3' }}</td>
                   <td class="money">{{ s.unallocatedAmount | number: '1.3-3' }}</td>
-                  <td>{{ s.partnerCount }}</td>
+                  <td>
+                    {{ s.partnerCount }}
+                    @if ((s.uncostedItemsCount ?? 0) > 0) {
+                      <span class="chip" title="فيه بنود بلا تكلفة معروفة - الربح مبالغ فيه على الأغلب">⚠ بنود بلا تكلفة</span>
+                    }
+                  </td>
                   <td>{{ s.generatedAtUtc | date: 'yyyy-MM-dd HH:mm' }} <span class="chip">{{ s.isAutomatic ? 'تلقائي' : 'يدوي' }}</span></td>
                   <td><button type="button" class="btn-link" (click)="openStatement(s)">عرض</button></td>
                 </tr>
@@ -159,6 +164,12 @@
         <div class="panel-head">
           <h2>كشف {{ st.month }}/{{ st.year }} - صافي الربح <span class="money-strong" [class.negative]="st.netProfit < 0">{{ st.netProfit | number: '1.3-3' }}</span> د.أ</h2>
         </div>
+        @if ((st.uncostedItemsCount ?? 0) > 0) {
+          <div class="alert-banner warn">
+            ⚠ في {{ st.uncostedItemsCount }} بند بلا تكلفة معروفة (بيع/جرد/تلف/ضيافة) انحسبت بلا تكلفة، فصافي الربح على الأغلب
+            <strong>مبالغ فيه</strong>. سجّل بضاعة الافتتاح كـ«رصيد افتتاحي» من صفحة المشتريات، ثم أعد إصدار الكشف قبل ما حدا يسحب.
+          </div>
+        }
         @if (st.unallocatedAmount !== 0) {
           <div class="alert-banner warn">{{ st.unallocatedAmount | number: '1.3-3' }} د.أ ما انوزّعت - ما في شركاء رأس مال بالفرع.</div>
         }
