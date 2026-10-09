@@ -72,7 +72,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 final order = orders[index];
                 return Card(
                   child: ListTile(
-                    title: Text('${order.itemsCount} صنف - ${order.estimatedTotal.toStringAsFixed(2)} د.أ'),
+                    title: Text('${order.itemsCount} صنف - ${order.estimatedTotal.toStringAsFixed(3)} د.أ'),
                     subtitle: Text(DateFormat('yyyy-MM-dd HH:mm').format(order.createdAtUtc.toLocal())),
                     trailing: Chip(
                       label: Text(orderStatusLabel(order.status), style: const TextStyle(color: Colors.white, fontSize: 12)),

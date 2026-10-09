@@ -77,7 +77,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   contentPadding: EdgeInsets.zero,
                   title: Text(item.productName),
                   subtitle: Text('${item.quantity.toStringAsFixed(0)} ${item.unitName}'),
-                  trailing: Text('${(item.quantity * item.estimatedUnitPrice).toStringAsFixed(2)} د.أ'),
+                  trailing: Text('${(item.quantity * item.estimatedUnitPrice).toStringAsFixed(3)} د.أ'),
                 ),
               ),
               if (order.status == OrderStatus.completed && order.rating == null) ...[

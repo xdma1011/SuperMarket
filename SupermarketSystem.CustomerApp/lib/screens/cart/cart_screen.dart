@@ -22,7 +22,7 @@ class CartScreen extends StatelessWidget {
                 final item = cart.items[index];
                 return ListTile(
                   title: Text(item.product.name),
-                  subtitle: Text('${item.product.price.toStringAsFixed(2)} د.أ / ${item.product.baseUnitName}'),
+                  subtitle: Text('${item.product.price.toStringAsFixed(3)} د.أ / ${item.product.baseUnitName}'),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -46,7 +46,7 @@ class CartScreen extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('الإجمالي التقديري', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text('${cart.estimatedTotal.toStringAsFixed(2)} د.أ', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                      Text('${cart.estimatedTotal.toStringAsFixed(3)} د.أ', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                     ],
                   ),
                   const SizedBox(height: 4),

@@ -121,7 +121,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 Positioned(
                   top: 8,
                   right: 8,
-                  child: CircleAvatar(radius: 8, backgroundColor: Colors.red, child: Text('$cartCount', style: const TextStyle(color: Colors.white, fontSize: 10))),
+                  // الشارة للعرض بس - بلا IgnorePointer كانت تبلع الضغطة فوق زر السلة (انمسك بتجربة Chrome 9/10/2026).
+                  child: IgnorePointer(
+                    child: CircleAvatar(radius: 8, backgroundColor: Colors.red, child: Text('$cartCount', style: const TextStyle(color: Colors.white, fontSize: 10))),
+                  ),
                 ),
             ],
           ),

@@ -40,6 +40,10 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
       if (!result.telegramLinked) {
         setState(() {
           _telegramDeepLink = result.telegramDeepLink;
+          // بلا رابط (بوت تلغرام مش مضبوط بإعدادات المحل): قبل كانت الشاشة توقف بلا ولا كلمة - انمسك باختبار التكامل 9/10/2026.
+          if (result.telegramDeepLink == null) {
+            _error = 'الدخول برقم الهاتف مش متاح حاليًا (تلغرام المحل مش مضبوط). تواصل مع المحل.';
+          }
           _loading = false;
         });
         return;

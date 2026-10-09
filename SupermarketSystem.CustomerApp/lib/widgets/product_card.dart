@@ -27,7 +27,7 @@ class ProductCard extends StatelessWidget {
               children: [
                 Text(product.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
-                Text('${product.price.toStringAsFixed(2)} د.أ / ${product.baseUnitName}', style: const TextStyle(color: Colors.green)),
+                Text('${product.price.toStringAsFixed(3)} د.أ / ${product.baseUnitName}', style: const TextStyle(color: Colors.green)),
                 const SizedBox(height: 4),
                 SizedBox(
                   width: double.infinity,
