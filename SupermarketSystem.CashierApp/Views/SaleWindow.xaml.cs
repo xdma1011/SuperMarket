@@ -468,16 +468,11 @@ public partial class SaleWindow : Window
     }
 
     /// <summary>
-    /// عرض الكمية الشغّال هلق (ساعة الجهاز) - بالوحدة الأساسية بس، نفس PROMOTION ASSUMPTION بالسيرفر. بينحفظ على
+    /// عرض الكمية الشغّال هلق (ساعة الجهاز) - بيتحسب بالوحدة الأساسية (كرتونة = كمية × معامل)، نفس PROMOTION UNITS بالسيرفر. بينحفظ على
     /// السطر، والمبلغ بينحسب مع كل تغيير كمية (CartLine.PromotionAmount).
     /// </summary>
     private void AttachPromotion(CartLine line, LocalProductUnit unit)
     {
-        if (!unit.IsBaseUnit)
-        {
-            return;
-        }
-
         using var db = new LocalDbContext(_dbPath);
         var promotion = PromotionPricing.ActiveFor(db, line.ProductId, TrustedClock.Instance.Now());
         if (promotion is null)
@@ -516,6 +511,7 @@ public partial class SaleWindow : Window
                 UnitName = unit.UnitName,
                 Quantity = quantity,
                 UnitPrice = baseUnitPrice * unit.ConversionFactorToBase,
+                ConversionFactorToBase = unit.ConversionFactorToBase,
                 CatalogVersion = catalogVersion
             };
             AttachPromotion(newLine, unit);
@@ -591,6 +587,7 @@ public partial class SaleWindow : Window
             UnitName = unit.UnitName,
             Quantity = quantity,
             UnitPrice = batchBaseUnitPrice * unit.ConversionFactorToBase,
+            ConversionFactorToBase = unit.ConversionFactorToBase,
             CatalogVersion = batchCatalogVersion,
             NeedsReview = needsReview
         };

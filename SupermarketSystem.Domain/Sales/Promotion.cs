@@ -23,7 +23,7 @@ public class Promotion : AuditableEntity, IHasRowVersion
     public Guid ProductId { get; private set; }
     public string Title { get; private set; } = null!;
 
-    /// <summary>N بـ"N بسعر كذا" - يُطبَّق حصرًا على الوحدة الأساسية للمنتج (راجع تعليق CompleteSaleCommand PROMOTION ASSUMPTION).</summary>
+    /// <summary>N بـ"N بسعر كذا" - معرَّف بالوحدة الأساسية للمنتج؛ بيع بوحدة أكبر (كرتونة) بينحوَّل للوحدة الأساسية (كمية × معامل) وبينحسب العرض عليها (راجع PROMOTION UNITS بـCompleteSaleCommand).</summary>
     public int BundleQuantity { get; private set; }
 
     /// <summary>السعر الإجمالي لشراء BundleQuantity حبة دفعة وحدة.</summary>

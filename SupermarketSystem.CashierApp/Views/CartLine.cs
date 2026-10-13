@@ -10,10 +10,13 @@ public sealed class CartLine
     public string UnitName { get; set; } = string.Empty;
     public decimal Quantity { get; set; }
     public decimal UnitPrice { get; set; }
+
+    /// <summary>معامل تحويل وحدة السطر للوحدة الأساسية (كرتونة 12 = 12، الحبة = 1) - العرض بيتحسب بالوحدة الأساسية (PROMOTION UNITS بالسيرفر). الافتراضي 1 لفواتير معلّقة قديمة.</summary>
+    public decimal ConversionFactorToBase { get; set; } = 1m;
     public decimal LineTotal => Quantity * UnitPrice - PromotionAmount;
 
     /// <summary>
-    /// عرض الكمية الشغّال لحظة إضافة الصنف (29/9/2026) - بالوحدة الأساسية بس (نفس السيرفر). الحساب بنفس معادلة
+    /// عرض الكمية الشغّال لحظة إضافة الصنف (29/9/2026) - بيتحسب بالوحدة الأساسية (كمية × معامل التحويل) زي السيرفر. الحساب بنفس معادلة
     /// السيرفر (PromotionPricing)، والسطر بيبعت PromotionId بس لو العرض انطبق فعلًا (الكمية بتكفي حزمة) - السيرفر
     /// بيحترم هالقرار (OFFLINE PROMOTION)، فالمبلغ اللي دفعه الزبون بيطابق الفاتورة.
     /// </summary>
@@ -25,7 +28,9 @@ public sealed class CartLine
 
     public decimal PromotionAmount => PromotionId is null
         ? 0m
-        : Services.PromotionPricing.PromotionAmount(Quantity, UnitPrice, PromotionBundleQuantity, PromotionBundlePrice, PromotionMaxQuantity);
+        : Services.PromotionPricing.PromotionAmount(
+            Quantity * ConversionFactorToBase, ConversionFactorToBase > 0 ? UnitPrice / ConversionFactorToBase : UnitPrice,
+            PromotionBundleQuantity, PromotionBundlePrice, PromotionMaxQuantity);
 
     public Guid? AppliedPromotionId => PromotionAmount > 0 ? PromotionId : null;
 

@@ -393,10 +393,10 @@ public sealed class CompleteSaleHandler
             .Select(p => new { p.Id, p.Name, p.Status, p.IsBatchTracked })
             .ToDictionaryAsync(p => p.Id, cancellationToken);
 
-        // PROMOTION ASSUMPTION: عرض الكمية (Promotion) يُطبَّق حصرًا لو
-        // الكاشير باع بالوحدة الأساسية للمنتج (IsBaseUnit) - لو باع بوحدة
-        // تانية (كرتونة مثلًا، بمعامل تحويل مختلف)، العرض ما ينطبق إطلاقًا
-        // (قرار مبسَّط مقصود، تفاديًا لتعقيد "شو معنى N بوحدة غير أساسية").
+        // PROMOTION UNITS (9/10/2026، قرار صاحب المشروع): عرض الكمية ("N بسعر كذا") معرَّف بالوحدة الأساسية. لو الكاشير باع بوحدة
+        // أكبر (كرتونة = 12 حبة مثلًا) بنحوّل كمية السطر للوحدة الأساسية (كمية × معامل التحويل) وبنحسب العرض عليها بسعر الحبة العادي،
+        // فكرتونة 12 علبة فول بعرض "3 بدينار" (والحبة 0.500) = 4 حزم = 4.000 بدل 6.000. نفس الحاسبة بدون أي مفهوم سعر جديد؛ للوحدة
+        // الأساسية المعامل 1 فالسلوك القديم بالضبط. سقف الكمية بالفاتورة (MaxQuantityPerInvoice) بالوحدة الأساسية لكل سطر.
         // نفس المبدأ: أقصى عرض واحد نشط فعليًا لكل (منتج، فرع) بنفس اللحظة
         // - لو تصادف أكتر من صف (خطأ إداري بإدخال عروض متداخلة تواريخها)،
         // نأخذ الأقدم إنشاءً بهدوء بدل ما نفشل البيع بالكامل.
@@ -556,7 +556,7 @@ public sealed class CompleteSaleHandler
             Guid? promotionId = null;
             string? promotionTitleSnapshot = null;
 
-            if (atCost is null && unit.IsBaseUnit && item.CatalogVersion is not null)
+            if (atCost is null && item.CatalogVersion is not null)
             {
                 // سطر من الكاشير - OFFLINE PROMOTION فوق.
                 if (item.PromotionId is { } claimedId)
@@ -568,7 +568,7 @@ public sealed class CompleteSaleHandler
                     }
 
                     var claimedOutcome = PromotionPricingCalculator.Calculate(
-                        item.Quantity, unitPrice, claimed.BundleQuantity, claimed.BundlePrice, claimed.MaxQuantityPerInvoice);
+                        item.Quantity * unit.ConversionFactorToBase, baseSellingPrice, claimed.BundleQuantity, claimed.BundlePrice, claimed.MaxQuantityPerInvoice);
                     if (claimedOutcome.PromotionAmount > 0)
                     {
                         promotionAmount = claimedOutcome.PromotionAmount;
@@ -583,10 +583,10 @@ public sealed class CompleteSaleHandler
                     }
                 }
             }
-            else if (atCost is null && unit.IsBaseUnit && promotionByProduct.TryGetValue(item.ProductId, out var promo))
+            else if (atCost is null && promotionByProduct.TryGetValue(item.ProductId, out var promo))
             {
                 var outcome = PromotionPricingCalculator.Calculate(
-                    item.Quantity, unitPrice, promo.BundleQuantity, promo.BundlePrice, promo.MaxQuantityPerInvoice);
+                    item.Quantity * unit.ConversionFactorToBase, baseSellingPrice, promo.BundleQuantity, promo.BundlePrice, promo.MaxQuantityPerInvoice);
 
                 if (outcome.PromotionAmount > 0)
                 {
