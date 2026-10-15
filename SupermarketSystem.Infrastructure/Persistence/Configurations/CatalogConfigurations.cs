@@ -72,6 +72,7 @@ public class ProductBarcodeConfiguration : IEntityTypeConfiguration<ProductBarco
         builder.HasKey(b => b.Id);
 
         builder.Property(b => b.BarcodeValue).IsRequired().HasMaxLength(100);
+        builder.Property(b => b.CreatedAtUtc).HasColumnType("datetime2").IsRequired();
         builder.HasIndex(b => b.BarcodeValue).IsUnique();
 
         builder.HasOne<ProductUnit>()

@@ -42,7 +42,8 @@ public sealed class UpdateProductUnitBarcodeHandler
             return Result.Failure(Error.NotFound("ProductUnit.NotFound", "الوحدة غير موجودة لهذا المنتج."));
         }
 
-        var existingBarcode = product.Barcodes.FirstOrDefault(b => b.ProductUnitId == command.ProductUnitId);
+        var existingBarcode = product.Barcodes.Where(b => b.ProductUnitId == command.ProductUnitId)
+            .OrderBy(b => b.CreatedAtUtc).ThenBy(b => b.Id).FirstOrDefault();
         var newValue = command.BarcodeValue?.Trim();
 
         if (string.IsNullOrWhiteSpace(newValue))

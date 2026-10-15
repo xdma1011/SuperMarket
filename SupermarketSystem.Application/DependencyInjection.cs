@@ -65,6 +65,8 @@ using SupermarketSystem.Application.Catalog.CreateProduct;
 using SupermarketSystem.Application.Catalog.CreateProductBranch;
 using SupermarketSystem.Application.Catalog.AddProductUnit;
 using SupermarketSystem.Application.Catalog.UpdateProductUnitBarcode;
+using SupermarketSystem.Application.Catalog.AddProductBarcode;
+using SupermarketSystem.Application.Catalog.RemoveProductBarcode;
 using SupermarketSystem.Application.Catalog.GetProductBranches;
 using SupermarketSystem.Application.Catalog.GetProductByBarcode;
 using SupermarketSystem.Application.Catalog.GetProductUnits;
@@ -212,6 +214,8 @@ public static class DependencyInjection
         services.AddScoped<GetProductBranchesHandler>();
         services.AddScoped<AddProductUnitHandler>();
         services.AddScoped<UpdateProductUnitBarcodeHandler>();
+        services.AddScoped<AddProductBarcodeHandler>();
+        services.AddScoped<RemoveProductBarcodeHandler>();
         services.AddScoped<SetProductComplimentaryAllowedHandler>();
         services.AddScoped<SetProductBranchAvailabilityHandler>();
         services.AddScoped<CreatePromotionHandler>();

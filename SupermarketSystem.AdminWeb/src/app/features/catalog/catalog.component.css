@@ -296,3 +296,14 @@ td.negative { color: var(--red); font-weight: 600; }
 .toggle-chip.quiet { background: transparent; border-color: transparent; color: var(--ink-2); font-weight: 500; }
 .toggle-chip.quiet:hover { border-color: var(--line); color: var(--accent); }
 .btn-sm { height: 30px; padding: 0 12px; font-size: 12px; border-radius: 9px; }
+
+.extra-barcodes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 0 10px; }
+.extra-barcode-chip {
+  display: inline-flex; align-items: center; gap: 6px; background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 8px; padding: 3px 8px; font-size: 12px;
+}
+.chip-remove { border: 0; background: transparent; color: var(--red); cursor: pointer; font-size: 12px; padding: 0 2px; }
+.extra-barcode-input {
+  height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2);
+  font-size: 12px; color: var(--ink); min-width: 190px;
+}

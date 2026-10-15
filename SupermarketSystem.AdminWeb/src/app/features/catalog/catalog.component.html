@@ -247,6 +247,24 @@
                   <button type="button" class="link-btn" (click)="startEditUnitBarcode(u)">تعديل الباركود</button>
                 }
               </div>
+
+              <div class="extra-barcodes">
+                @for (b of u.extraBarcodes ?? []; track b.id) {
+                  <span class="extra-barcode-chip mono">
+                    {{ b.value }}
+                    <button type="button" class="chip-remove" [disabled]="extraBarcodeSaving()" (click)="removeExtraBarcode(b.id)" title="حذف الباركود" aria-label="حذف الباركود">✕</button>
+                  </span>
+                }
+                <input
+                  type="text"
+                  class="extra-barcode-input mono"
+                  [(ngModel)]="extraBarcodeInputs[u.id]"
+                  placeholder="باركود إضافي (بلد/موزّع تاني)"
+                  [disabled]="extraBarcodeSaving()"
+                  (keydown.enter)="addExtraBarcode(u)"
+                />
+                <button type="button" class="link-btn" [disabled]="extraBarcodeSaving()" (click)="addExtraBarcode(u)">إضافة باركود</button>
+              </div>
             }
           </div>
 

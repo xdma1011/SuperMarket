@@ -313,7 +313,7 @@ public sealed class ScanLookupHandler
                 orderby p.Name
                 select new ScanLookupItemDto(
                     p.Id, u.Id, p.Name, u.UnitName, pb.SellingPrice * u.ConversionFactorToBase, p.IsBatchTracked,
-                    _context.ProductBarcodes.Where(b => b.ProductUnitId == u.Id).Select(b => b.BarcodeValue).FirstOrDefault()))
+                    _context.ProductBarcodes.Where(b => b.ProductUnitId == u.Id).OrderBy(b => b.CreatedAtUtc).ThenBy(b => b.Id).Select(b => b.BarcodeValue).FirstOrDefault()))
             .Take(MaxNameResults)
             .ToListAsync(cancellationToken);
     }

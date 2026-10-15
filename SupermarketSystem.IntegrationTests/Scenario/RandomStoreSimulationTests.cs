@@ -515,8 +515,9 @@ public sealed class RandomStoreSimulationTests : IntegrationTestBase
             var factor = useCarton ? product.CartonFactor : 1m;
             var qty = useCarton ? Int(1, (int)Math.Min(2, Math.Floor(available / factor))) : Int(1, (int)Math.Min(6, available));
             var unitPrice = product.Price * factor;
-            var promo = !useCarton && product.Promo is { } p
-                ? PromotionPricingCalculator.Calculate(qty, product.Price, p.Qty, p.Price, null).PromotionAmount
+            // عرض الكمية بالوحدة الأساسية دايمًا (PROMOTION UNITS 9/10): كرتونة = كمية × معامل بسعر الحبة العادي.
+            var promo = product.Promo is { } p
+                ? PromotionPricingCalculator.Calculate(qty * factor, product.Price, p.Qty, p.Price, null).PromotionAmount
                 : 0m;
             decimal? cost = batch is not null ? batch.UnitCost * factor : product.AverageCost * factor;
             lines.Add(new SimLine

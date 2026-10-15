@@ -47,6 +47,8 @@ interface ProductUnitDto {
   conversionFactorToBase: number;
   isBaseUnit: boolean;
   barcodeValue: string | null;
+  /** باركودات إضافية لنفس الوحدة (نسخ بلدان/موزّعين مختلفين) - الأساسي هو barcodeValue. */
+  extraBarcodes?: { id: string; value: string }[] | null;
 }
 
 interface ProductBranchItemDto {
@@ -641,6 +643,55 @@ export class CatalogComponent implements OnInit {
       this.unitBarcodeError.set(message ?? 'تعذّر تحديث الباركود.');
     } finally {
       this.unitBarcodeSaving.set(false);
+    }
+  }
+
+  // === باركودات إضافية لنفس الوحدة (نفس الصنف من دول/موزّعين مختلفين = باركودات مختلفة، نفس السعر والمخزون والعروض) ===
+
+  /** مفتاح الوحدة -> قيمة الباركود الجديد المكتوبة بحقل الإضافة. */
+  extraBarcodeInputs: Record<string, string> = {};
+  readonly extraBarcodeSaving = signal(false);
+
+  async addExtraBarcode(unit: ProductUnitDto): Promise<void> {
+    const value = (this.extraBarcodeInputs[unit.id] ?? '').trim();
+    if (!value) {
+      this.unitBarcodeError.set('اكتب الباركود أو امسحه أول.');
+      return;
+    }
+
+    this.extraBarcodeSaving.set(true);
+    this.unitBarcodeError.set(null);
+    try {
+      await firstValueFrom(
+        this.apiClient.post(ApiController.Products, ProductsOperation.AddUnitBarcode, { barcodeValue: value },
+          { productId: this.editingProductId, unitId: unit.id })
+      );
+      this.extraBarcodeInputs[unit.id] = '';
+      await this.loadProductUnits(this.editingProductId);
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === 'object' && 'error' in err
+          ? (err as { error?: { detail?: string } }).error?.detail
+          : null;
+      this.unitBarcodeError.set(message ?? 'تعذّرت إضافة الباركود.');
+    } finally {
+      this.extraBarcodeSaving.set(false);
+    }
+  }
+
+  async removeExtraBarcode(barcodeId: string): Promise<void> {
+    this.extraBarcodeSaving.set(true);
+    this.unitBarcodeError.set(null);
+    try {
+      await firstValueFrom(
+        this.apiClient.delete(ApiController.Products, ProductsOperation.RemoveBarcode,
+          { productId: this.editingProductId, barcodeId })
+      );
+      await this.loadProductUnits(this.editingProductId);
+    } catch {
+      this.unitBarcodeError.set('تعذّر حذف الباركود.');
+    } finally {
+      this.extraBarcodeSaving.set(false);
     }
   }
 

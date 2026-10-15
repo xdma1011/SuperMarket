@@ -7,6 +7,8 @@ using SupermarketSystem.Application.Catalog.GetProductCategories;
 using SupermarketSystem.Application.Catalog.GetProducts;
 using SupermarketSystem.Application.Catalog.AddProductUnit;
 using SupermarketSystem.Application.Catalog.UpdateProductUnitBarcode;
+using SupermarketSystem.Application.Catalog.AddProductBarcode;
+using SupermarketSystem.Application.Catalog.RemoveProductBarcode;
 using SupermarketSystem.Application.Catalog.GetProductBranches;
 using SupermarketSystem.Application.Catalog.GetProductByBarcode;
 using SupermarketSystem.Application.Catalog.GetProductUnits;
@@ -182,6 +184,31 @@ public static class CatalogEndpoints
         .Produces(StatusCodes.Status204NoContent)
         .ProducesProblem(StatusCodes.Status404NotFound)
         .ProducesProblem(StatusCodes.Status409Conflict);
+
+        products.MapPost("/{productId:guid}/units/{unitId:guid}/barcodes", async (
+            Guid productId,
+            Guid unitId,
+            AddProductBarcodeRequest request,
+            AddProductBarcodeHandler handler,
+            CancellationToken cancellationToken) =>
+            (await handler.HandleAsync(new AddProductBarcodeCommand(productId, unitId, request.BarcodeValue), cancellationToken)).ToHttpResult())
+        .WithName("AddProductBarcode")
+        .WithSummary("يضيف باركودًا إضافيًا لوحدة موجودة (نفس الصنف بباركودات مختلفة: بلد تصنيع/موزّع/طبعة) - فريد بكل النظام.")
+        .Produces<AddProductBarcodeResponse>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status404NotFound)
+        .ProducesProblem(StatusCodes.Status409Conflict);
+
+        products.MapDelete("/{productId:guid}/barcodes/{barcodeId:guid}", async (
+            Guid productId,
+            Guid barcodeId,
+            RemoveProductBarcodeHandler handler,
+            CancellationToken cancellationToken) =>
+            (await handler.HandleAsync(new RemoveProductBarcodeCommand(productId, barcodeId), cancellationToken)).ToHttpResult())
+        .WithName("RemoveProductBarcode")
+        .WithSummary("يحذف باركودًا (إضافي أو أساسي) من صنف - الصنف والمبيعات القديمة ما بتتأثر.")
+        .Produces(StatusCodes.Status204NoContent)
+        .ProducesProblem(StatusCodes.Status404NotFound);
 
         products.MapPost("/{productId:guid}/complimentary-allowed", async (
             Guid productId,
@@ -398,6 +425,7 @@ public static class CatalogEndpoints
     public sealed record UpdateProductRequest(string Name, Guid CategoryId, decimal? SuggestedRetailPrice, int? ExpectedShelfLifeDays);
     public sealed record AddProductUnitRequest(string UnitName, decimal ConversionFactorToBase, string? BarcodeValue);
     public sealed record UpdateProductUnitBarcodeRequest(string? BarcodeValue);
+    public sealed record AddProductBarcodeRequest(string BarcodeValue);
 
     public sealed record CreatePromotionRequest(
         string Title, int BundleQuantity, decimal BundlePrice, decimal? MaxQuantityPerInvoice,

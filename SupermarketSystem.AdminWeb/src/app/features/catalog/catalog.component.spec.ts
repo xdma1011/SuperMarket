@@ -28,7 +28,7 @@ describe('CatalogComponent', () => {
   }
 
   beforeEach(async () => {
-    apiClientSpy = jasmine.createSpyObj('ApiClient', ['get', 'post', 'put']);
+    apiClientSpy = jasmine.createSpyObj('ApiClient', ['get', 'post', 'put', 'delete']);
     apiClientSpy.get.and.returnValue(of({ items: [], totalCount: 0 }));
 
     await TestBed.configureTestingModule({
@@ -425,6 +425,56 @@ describe('CatalogComponent', () => {
       await component.saveUnitBarcode({ id: 'u1', unitName: 'كيلو', conversionFactorToBase: 1, isBaseUnit: true, barcodeValue: null });
 
       expect(component.unitBarcodeError()).toBe('الباركود مستخدم بوحدة أخرى.');
+    });
+  });
+
+  describe('باركودات إضافية لنفس الوحدة - addExtraBarcode / removeExtraBarcode', () => {
+    const unit = { id: 'u1', unitName: 'حبة', conversionFactorToBase: 1, isBaseUnit: true, barcodeValue: '111', extraBarcodes: [] };
+
+    it('addExtraBarcode يرفض باركود فاضي بلا نداء للسيرفر', async () => {
+      component.extraBarcodeInputs['u1'] = '   ';
+
+      await component.addExtraBarcode(unit);
+
+      expect(component.unitBarcodeError()).toBe('اكتب الباركود أو امسحه أول.');
+      expect(apiClientSpy.post).not.toHaveBeenCalled();
+    });
+
+    it('addExtraBarcode بيبعت الباركود مقصوصًا ويصفّر الحقل ويعيد تحميل الوحدات', async () => {
+      component.editingProductId = 'p1';
+      component.extraBarcodeInputs['u1'] = ' 222 ';
+      apiClientSpy.post.and.returnValue(of({ barcodeId: 'b2' }));
+      apiClientSpy.get.and.returnValue(of([{ ...unit, extraBarcodes: [{ id: 'b2', value: '222' }] }]));
+
+      await component.addExtraBarcode(unit);
+
+      const args = apiClientSpy.post.calls.mostRecent().args;
+      expect(args[2]).toEqual({ barcodeValue: '222' });
+      expect(args[3]).toEqual({ productId: 'p1', unitId: 'u1' });
+      expect(component.extraBarcodeInputs['u1']).toBe('');
+      expect(component.productUnits()[0].extraBarcodes?.length).toBe(1);
+    });
+
+    it('addExtraBarcode بيعرض رسالة السيرفر لو الباركود مستخدم', async () => {
+      component.extraBarcodeInputs['u1'] = '333';
+      apiClientSpy.post.and.returnValue(throwError(() => ({ error: { detail: "الباركود '333' مسجَّل أصلًا لصنف آخر." } })));
+
+      await component.addExtraBarcode(unit);
+
+      expect(component.unitBarcodeError()).toBe("الباركود '333' مسجَّل أصلًا لصنف آخر.");
+    });
+
+    it('removeExtraBarcode بيحذف ويعيد التحميل، وبيعرض رسالة عربية عند الفشل', async () => {
+      component.editingProductId = 'p1';
+      apiClientSpy.delete.and.returnValue(of({}));
+      apiClientSpy.get.and.returnValue(of([unit]));
+
+      await component.removeExtraBarcode('b2');
+      expect(apiClientSpy.delete.calls.mostRecent().args[2]).toEqual({ productId: 'p1', barcodeId: 'b2' });
+
+      apiClientSpy.delete.and.returnValue(throwError(() => new Error('x')));
+      await component.removeExtraBarcode('b2');
+      expect(component.unitBarcodeError()).toBe('تعذّر حذف الباركود.');
     });
   });
 

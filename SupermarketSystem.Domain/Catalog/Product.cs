@@ -180,6 +180,12 @@ public class ProductBarcode : Entity
     public string BarcodeValue { get; private set; } = null!;
     public Guid ProductUnitId { get; private set; }
 
+    /// <summary>
+    /// ترتيب الإضافة (9/10/2026): الوحدة صارت تاخد أكتر من باركود (نفس الصنف من بلد/موزّع تاني)، والباركود "الأساسي" = الأقدم
+    /// إضافة. قبلها كان الترتيب بالـId (Guid عشوائي) فبيصلح لباركود واحد بس. السجلات القديمة أخدت تاريخ ثابت بالـMigration.
+    /// </summary>
+    public DateTime CreatedAtUtc { get; private set; }
+
     private ProductBarcode() { } // EF Core
 
     internal ProductBarcode(Guid productId, string barcodeValue, Guid productUnitId)
@@ -187,6 +193,7 @@ public class ProductBarcode : Entity
         ProductId = productId;
         BarcodeValue = barcodeValue;
         ProductUnitId = productUnitId;
+        CreatedAtUtc = DateTime.UtcNow;
     }
 
     public void ChangeValue(string barcodeValue) => BarcodeValue = barcodeValue;

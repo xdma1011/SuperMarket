@@ -13,6 +13,8 @@ export enum ProductsOperation {
   AddUnit = '{productId}/units',
   GetUnits = '{productId}/units',
   UpdateUnitBarcode = '{productId}/units/{unitId}/barcode',
+  AddUnitBarcode = '{productId}/units/{unitId}/barcodes',
+  RemoveBarcode = '{productId}/barcodes/{barcodeId}',
   GetByBarcode = 'by-barcode/{barcodeValue}',
   SetComplimentaryAllowed = '{productId}/complimentary-allowed',
   GetBranches = '{productId}/branches',
