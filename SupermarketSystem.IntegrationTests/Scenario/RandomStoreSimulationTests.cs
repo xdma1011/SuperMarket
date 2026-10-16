@@ -145,6 +145,7 @@ public sealed class RandomStoreSimulationTests : IntegrationTestBase
 
     private Random _rng = null!;
     private int _seed;
+    private readonly Dictionary<Guid, decimal> _seededOpeningStock = new();
     private int _phase = 1;
     private int _checks;
     private readonly List<string> _failures = new();
@@ -330,6 +331,13 @@ public sealed class RandomStoreSimulationTests : IntegrationTestBase
         CheckTrue("كشف الشركاء لهالشهر مرفوض لأنه ما خلص", currentStatement.StatusCode == HttpStatusCode.UnprocessableEntity,
             ((int)currentStatement.StatusCode).ToString());
         await CloseDrawerAsync();
+
+        // مدقّق الثوابت المستقل (16/10/2026): القاعدة متسقة مع نفسها بعد كل الفوضى (مخزون = حركاته، مدفوع/مرتجع = مجموع سجلاته...).
+        using (var auditScope = CreateScope())
+        {
+            var violations = await Chaos.InvariantAuditor.AuditAsync(CreateDbContext(auditScope), _seededOpeningStock);
+            CheckTrue("مدقّق الثوابت: ولا خرق بنيوي بالقاعدة", violations.Count == 0, string.Join(" | ", violations.Take(5)));
+        }
     }
 
     private async Task<DateTime> LocalNowAsync()
@@ -371,6 +379,7 @@ public sealed class RandomStoreSimulationTests : IntegrationTestBase
         // صنف رصيده قديم بلا ولا فاتورة شراء (تكلفة غير معروفة - بيتستبعد من التكلفة بالكشف، مش صفر)
         var unknown = await CreateProductAsync(categoryId, "صنف قديم بلا فاتورة", Money(0.250m, 2.000m, 0.050m), 0m, false, false, noCost: true);
         unknown.Stock = Int(20, 60);
+        _seededOpeningStock[unknown.Id] = unknown.Stock; // مبذور مباشرة بلا حركة مخزون - المدقّق بيعدّه افتتاحي
         using (var scope = CreateScope())
         {
             await TestDataBuilder.SetStockAsync(CreateDbContext(scope), unknown.Id, _branchId, unknown.Stock);

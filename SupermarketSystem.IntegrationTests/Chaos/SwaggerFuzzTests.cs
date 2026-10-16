@@ -25,58 +25,7 @@ public sealed class SwaggerFuzzTests : IntegrationTestBase
         "/backups", "/auth/logout", "/auth/sessions", "/auth/login", "/auth/refresh", "bootstrap-admin", "/telegram/webhook", "/swagger", "/health"
     };
 
-    private sealed record Operation(string Method, string Path, List<(string Name, string In, JsonNode? Schema)> Parameters, JsonNode? BodySchema);
-
-    private JsonObject _doc = null!;
-
-    private JsonNode? Resolve(JsonNode? schema)
-    {
-        for (var depth = 0; depth < 8 && schema is JsonObject o && o["$ref"] is JsonValue r; depth++)
-        {
-            var name = r.GetValue<string>().Split('/').Last();
-            schema = _doc["components"]!["schemas"]![name];
-        }
-
-        return schema;
-    }
-
-    private JsonNode? Sample(JsonNode? schemaNode, int depth = 0)
-    {
-        var schema = Resolve(schemaNode) as JsonObject;
-        if (schema is null || depth > 4) return null;
-        if (schema["allOf"] is JsonArray allOf && allOf.Count > 0) return Sample(allOf[0], depth);
-        if (schema["oneOf"] is JsonArray oneOf && oneOf.Count > 0) return Sample(oneOf[0], depth);
-        if (schema["anyOf"] is JsonArray anyOf && anyOf.Count > 0) return Sample(anyOf.FirstOrDefault(x => x is JsonObject xo && xo["type"]?.GetValue<string>() != "null") ?? anyOf[0], depth);
-
-        if (schema["enum"] is JsonArray en && en.Count > 0) return en[0]!.DeepClone();
-        var type = schema["type"]?.ToString();
-        var format = schema["format"]?.ToString();
-        switch (type)
-        {
-            case "string":
-                return format switch
-                {
-                    "uuid" => Guid.NewGuid().ToString(),
-                    "date-time" => DateTime.UtcNow.ToString("o"),
-                    "date" => DateTime.UtcNow.ToString("yyyy-MM-dd"),
-                    "time" => "10:00:00",
-                    _ => "نص"
-                };
-            case "integer": return 1;
-            case "number": return 1.5;
-            case "boolean": return false;
-            case "array": return new JsonArray(Sample(schema["items"], depth + 1));
-            default:
-                if (schema["properties"] is JsonObject props)
-                {
-                    var obj = new JsonObject();
-                    foreach (var p in props) obj[p.Key] = Sample(p.Value, depth + 1);
-                    return obj;
-                }
-
-                return new JsonObject();
-        }
-    }
+    private SwaggerModel _model = null!;
 
     /// <summary>كل مسارات الحقول القابلة للتحوير (ورقة بالـJSON) مع نوعها.</summary>
     private static IEnumerable<(string[] Path, JsonNode Value)> Leaves(JsonNode? node, List<string> path)
@@ -152,44 +101,6 @@ public sealed class SwaggerFuzzTests : IntegrationTestBase
         if (current is JsonArray a) a[int.Parse(last)] = value; else current[last] = value;
     }
 
-    private string FillPath(Operation op, Guid? idOverride = null)
-    {
-        var path = op.Path;
-        foreach (var (name, location, schema) in op.Parameters.Where(p => p.In == "path"))
-        {
-            var sample = Sample(schema)?.ToString() ?? "x";
-            if (idOverride is { } g && Guid.TryParse(sample, out _)) sample = g.ToString();
-            path = path.Replace("{" + name + "}", Uri.EscapeDataString(sample));
-        }
-
-        var query = op.Parameters.Where(p => p.In == "query").Select(p => $"{p.Name}={Uri.EscapeDataString(Sample(p.Schema)?.ToString() ?? "x")}").ToList();
-        return query.Count > 0 ? path + "?" + string.Join("&", query) : path;
-    }
-
-    private List<Operation> LoadOperations(JsonObject doc)
-    {
-        var ops = new List<Operation>();
-        foreach (var pathEntry in (JsonObject)doc["paths"]!)
-        {
-            foreach (var methodEntry in (JsonObject)pathEntry.Value!)
-            {
-                var method = methodEntry.Key.ToUpperInvariant();
-                if (method is not ("GET" or "POST" or "PUT" or "DELETE" or "PATCH")) continue;
-                var op = (JsonObject)methodEntry.Value!;
-                var parameters = new List<(string, string, JsonNode?)>();
-                foreach (var p in (op["parameters"] as JsonArray) ?? [])
-                {
-                    parameters.Add((p!["name"]!.GetValue<string>(), p["in"]!.GetValue<string>(), p["schema"]));
-                }
-
-                JsonNode? body = op["requestBody"]?["content"]?["application/json"]?["schema"];
-                ops.Add(new Operation(method, pathEntry.Key, parameters, body));
-            }
-        }
-
-        return ops;
-    }
-
     [Fact]
     public async Task فز_عنيف_ولا_endpoint_بيرجع_خطأ_سيرفر_5xx_تحت_قيم_عدائية()
     {
@@ -197,9 +108,9 @@ public sealed class SwaggerFuzzTests : IntegrationTestBase
         var admin = await CreateAuthenticatedClientAsync();
         var swagger = await admin.GetAsync("/swagger/v1/swagger.json");
         Assert.True(swagger.IsSuccessStatusCode, "المخطط لازم يتحمّل");
-        _doc = (JsonObject)JsonNode.Parse(await swagger.Content.ReadAsStringAsync())!;
+        _model = new SwaggerModel((JsonObject)JsonNode.Parse(await swagger.Content.ReadAsStringAsync())!);
 
-        var operations = LoadOperations(_doc)
+        var operations = _model.LoadOperations()
             .Where(o => !SkipPathFragments.Any(f => o.Path.Contains(f, StringComparison.OrdinalIgnoreCase)))
             .ToList();
         _output.WriteLine($"عدد العمليات: {operations.Count}");
@@ -208,7 +119,7 @@ public sealed class SwaggerFuzzTests : IntegrationTestBase
         var failures = new List<string>();
         var requestCount = 0;
 
-        async Task SendAsync(Operation op, string url, string? body, string label)
+        async Task SendAsync(SwaggerModel.Operation op, string url, string? body, string label)
         {
             requestCount++;
             using var request = new HttpRequestMessage(new HttpMethod(op.Method), url);
@@ -239,8 +150,8 @@ public sealed class SwaggerFuzzTests : IntegrationTestBase
 
         foreach (var op in operations)
         {
-            var baseline = Sample(op.BodySchema);
-            var url = FillPath(op);
+            var baseline = _model.Sample(op.BodySchema);
+            var url = _model.FillPath(op);
 
             // 1) الطلب السليم أولًا + أجسام كاملة عدائية.
             await SendAsync(op, url, baseline?.ToJsonString() ?? (op.Method == "GET" ? null : "{}"), "baseline");
@@ -266,7 +177,7 @@ public sealed class SwaggerFuzzTests : IntegrationTestBase
             // 3) باراميترات query/path عدائية.
             foreach (var p in op.Parameters.Where(p => p.In is "query" or "path"))
             {
-                var sample = Sample(p.Schema) ?? "x";
+                var sample = _model.Sample(p.Schema) ?? "x";
                 foreach (var hostile in Hostile(sample.DeepClone()).Take(10))
                 {
                     var text = hostile?.ToString() ?? "";
@@ -275,12 +186,12 @@ public sealed class SwaggerFuzzTests : IntegrationTestBase
                     var path = op.Path;
                     foreach (var pp in op.Parameters.Where(x => x.In == "path"))
                     {
-                        var v = pp.Name == p.Name ? text : (Sample(pp.Schema)?.ToString() ?? "x");
+                        var v = pp.Name == p.Name ? text : (_model.Sample(pp.Schema)?.ToString() ?? "x");
                         path = path.Replace("{" + pp.Name + "}", Uri.EscapeDataString(v));
                     }
 
                     var query = op.Parameters.Where(x => x.In == "query")
-                        .Select(x => $"{x.Name}={Uri.EscapeDataString(x.Name == p.Name ? text : (Sample(x.Schema)?.ToString() ?? "x"))}");
+                        .Select(x => $"{x.Name}={Uri.EscapeDataString(x.Name == p.Name ? text : (_model.Sample(x.Schema)?.ToString() ?? "x"))}");
                     var finalUrl = path + (query.Any() ? "?" + string.Join("&", query) : "");
                     await SendAsync(op, finalUrl, baseline?.ToJsonString(), $"param:{p.Name}={Trim(hostile)}");
                 }
