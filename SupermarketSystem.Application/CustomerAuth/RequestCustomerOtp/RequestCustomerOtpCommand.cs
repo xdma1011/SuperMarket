@@ -45,7 +45,7 @@ public sealed class RequestCustomerOtpHandler
     public async Task<Result<RequestCustomerOtpResponse>> HandleAsync(
         RequestCustomerOtpCommand command, CancellationToken cancellationToken)
     {
-        var phone = command.Phone.Trim();
+        var phone = command.Phone?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(phone))
         {
             return Result.Failure<RequestCustomerOtpResponse>(

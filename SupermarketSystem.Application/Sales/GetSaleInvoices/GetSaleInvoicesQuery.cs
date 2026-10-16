@@ -128,7 +128,9 @@ public sealed class GetSaleInvoicesHandler
         // فواتير فيها صنف اسمه أو باركوده بيطابق - "هل الحليب فات بفاتورة بين 14:25 و14:40؟"
         if (!string.IsNullOrWhiteSpace(query.ProductSearch))
         {
-            var productPattern = $"%{query.ProductSearch.Trim()}%";
+            var productTerm = query.ProductSearch.Trim();
+            // أطول من 100 حرف ما بيطابق اسم صنف حقيقي، وبيكسر LIKE بالقاعدة (8152) - كشفها الفز العنيف.
+            var productPattern = $"%{(productTerm.Length > 100 ? productTerm[..100] : productTerm)}%";
             var matchingProductIds = _context.Products.IgnoreQueryFilters().AsNoTracking()
                 .Where(p => EF.Functions.Like(p.Name, productPattern))
                 .Select(p => p.Id)

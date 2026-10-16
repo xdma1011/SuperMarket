@@ -66,6 +66,10 @@ public sealed class ExceptionHandlingMiddleware
     // SQL Server error numbers for unique index/constraint violations.
     private const int SqlUniqueIndexViolation = 2601;
     private const int SqlUniqueConstraintViolation = 2627;
+    // 8152 = رسالة التقصير القديمة، 2628 = نفسها بـSQL Server 2019+ (بتسمّي الجدول والعمود).
+    private const int SqlStringTruncation = 8152;
+    private const int SqlStringTruncationVerbose = 2628;
+    private const int SqlForeignKeyViolation = 547;
 
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
@@ -93,6 +97,25 @@ public sealed class ExceptionHandlingMiddleware
             _logger.LogWarning(ex, "Unique constraint violation on {Path}", context.Request.Path);
             await WriteProblemAsync(context, StatusCodes.Status409Conflict, "Conflict.DuplicateValue",
                 "A record with the same unique value already exists.");
+        }
+        catch (SupermarketSystem.Domain.Common.DomainException ex)
+        {
+            // قاعدة دومين انكسرت (قيمة خارج المدى، حالة غير مسموحة...) - مدخل غلط من العميل، مش عطل بالسيرفر.
+            // رسالة الدومين مكتوبة للمستخدم (عربي) وبلا تفاصيل داخلية.
+            _logger.LogWarning(ex, "Domain rule violation on {Path}", context.Request.Path);
+            await WriteProblemAsync(context, StatusCodes.Status422UnprocessableEntity, "BusinessRule.Violation", ex.Message);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is Microsoft.Data.SqlClient.SqlException { Number: SqlStringTruncation or SqlStringTruncationVerbose })
+        {
+            _logger.LogWarning(ex, "String truncation on {Path}", context.Request.Path);
+            await WriteProblemAsync(context, StatusCodes.Status400BadRequest, "Request.ValueTooLong",
+                "قيمة نصية أطول من المسموح.");
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is Microsoft.Data.SqlClient.SqlException { Number: SqlForeignKeyViolation })
+        {
+            _logger.LogWarning(ex, "Foreign key violation on {Path}", context.Request.Path);
+            await WriteProblemAsync(context, StatusCodes.Status409Conflict, "Conflict.ReferenceInvalid",
+                "السجل مرتبط بسجلات أخرى أو يشير إلى سجل غير موجود.");
         }
         catch (BadHttpRequestException ex)
         {

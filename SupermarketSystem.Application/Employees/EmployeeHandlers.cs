@@ -367,6 +367,12 @@ public sealed class GetEmployeePaymentsHandler
 
         if (query.Year is { } year)
         {
+            // سنة خارج المنطق (0، 99999...) كانت ترمي ArgumentOutOfRange من DateTime (500) - ما في دفعات فيها أكيد.
+            if (year is < 2000 or > 2200)
+            {
+                return Array.Empty<EmployeePaymentDto>();
+            }
+
             var from = new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Utc);
             var to = from.AddYears(1);
             payments = payments.Where(p => (p.PeriodYear == year) || (p.PeriodYear == null && p.OccurredAtUtc >= from && p.OccurredAtUtc < to));

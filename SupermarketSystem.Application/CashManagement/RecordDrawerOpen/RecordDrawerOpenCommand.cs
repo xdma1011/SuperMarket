@@ -52,6 +52,12 @@ public sealed class RecordDrawerOpenHandler
         var userId = _currentUser.UserId
             ?? throw new InvalidOperationException("لا يمكن تسجيل فتح صندوق بلا هوية مستخدم مصادَق عليها.");
 
+        // فرع مش موجود (أدمن عابر للفروع بيبعت Guid عشوائي) كان بيوصل لقيد المفتاح الأجنبي ويرجع 500.
+        if (!await _context.Branches.AsNoTracking().AnyAsync(b => b.Id == command.BranchId, cancellationToken))
+        {
+            return Result.Failure<RecordDrawerOpenResponse>(Error.NotFound("DrawerOpen.BranchNotFound", "الفرع غير موجود."));
+        }
+
         if (command.ClientRequestId is { } requestId)
         {
             var existing = await _context.DrawerOpenEvents.AsNoTracking()

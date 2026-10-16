@@ -20,7 +20,7 @@ public sealed class CreateUnitOfMeasureHandler
 
     public async Task<Result<CreateUnitOfMeasureResponse>> HandleAsync(CreateUnitOfMeasureCommand command, CancellationToken cancellationToken)
     {
-        var name = command.Name.Trim();
+        var name = command.Name?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(name))
         {
             return Result.Failure<CreateUnitOfMeasureResponse>(

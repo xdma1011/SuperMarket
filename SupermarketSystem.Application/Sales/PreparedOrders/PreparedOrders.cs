@@ -279,7 +279,8 @@ public sealed class ScanLookupHandler
     public async Task<IReadOnlyList<ScanLookupItemDto>> HandleAsync(ScanLookupQuery query, CancellationToken cancellationToken)
     {
         var term = query.Term?.Trim();
-        if (string.IsNullOrEmpty(term) || query.BranchId == Guid.Empty)
+        // باركود/اسم أطول من 100 حرف ما بيطابق شي حقيقي (حقل الباركود أصغر) - بلاش LIKE بنص ضخم.
+        if (string.IsNullOrEmpty(term) || term.Length > 100 || query.BranchId == Guid.Empty)
         {
             return Array.Empty<ScanLookupItemDto>();
         }

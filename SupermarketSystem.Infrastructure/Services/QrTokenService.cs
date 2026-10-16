@@ -30,6 +30,11 @@ public sealed class QrTokenService : IQrTokenService
 
     public Guid? ValidateCustomerQrToken(string token)
     {
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return null;
+        }
+
         var parts = token.Split('.', 2);
         if (parts.Length != 2)
         {

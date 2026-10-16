@@ -34,6 +34,9 @@ if (builder.Configuration.GetValue("Logging:File:Enabled", true))
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    // حقل غير nullable بالـrecord (string مثلًا) + null بالـJSON = 400 واضح بدل NullReferenceException (500) جوّا
+    // الـhandler. كشفها الفز العنيف (Chaos/SwaggerFuzzTests): null بأي حقل نصي إلزامي كان يكسر عشرات الـendpoints.
+    options.SerializerOptions.RespectNullableAnnotations = true;
 });
 
 builder.Services.AddHealthChecks()

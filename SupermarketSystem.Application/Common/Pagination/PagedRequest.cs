@@ -18,6 +18,7 @@ public sealed record PagedRequest
 {
     private const int MaxPageSize = 100;
     private const int DefaultPageSize = 20;
+    private const int MaxSearchLength = 100;
 
     public int PageNumber { get; init; } = 1;
     public int PageSize { get; init; } = DefaultPageSize;
@@ -33,6 +34,8 @@ public sealed record PagedRequest
     public PagedRequest Normalized() => this with
     {
         PageNumber = PageNumber < 1 ? 1 : PageNumber,
+        // بحث بآلاف الأحرف بيضيّع وقت LIKE بلا فايدة (وكشفه الفز العنيف) - الباقي بعد 100 حرف ما بيغيّر نتيجة بحث حقيقي.
+        Search = Search is { Length: > MaxSearchLength } ? Search[..MaxSearchLength] : Search,
         PageSize = PageSize switch
         {
             < 1 => DefaultPageSize,

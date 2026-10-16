@@ -55,7 +55,7 @@ public sealed class QuoteAtCostWithdrawalHandler
     }
 
     public async Task<Result<AtCostQuoteDto>> HandleAsync(QuoteAtCostWithdrawalQuery query, CancellationToken cancellationToken) =>
-        await QuoteAsync(query.BranchId, query.Items.Select(i => new AtCostItemRequest(i.ProductId, i.ProductUnitId, i.Quantity)).ToList(), cancellationToken);
+        await QuoteAsync(query.BranchId, (query.Items ?? Array.Empty<PreparedOrderItemRequest>()).Select(i => new AtCostItemRequest(i.ProductId, i.ProductUnitId, i.Quantity)).ToList(), cancellationToken);
 
     internal async Task<Result<AtCostQuoteDto>> QuoteAsync(Guid branchId, IReadOnlyList<AtCostItemRequest> items, CancellationToken cancellationToken)
     {

@@ -139,7 +139,7 @@ public sealed class PartnerStatementGenerator
 
     public async Task<Result<Guid>> GenerateAsync(Guid branchId, int year, int month, bool isAutomatic, CancellationToken cancellationToken)
     {
-        if (month is < 1 or > 12 || year < 2000)
+        if (month is < 1 or > 12 || year is < 2000 or > 2200)
         {
             return Result.Failure<Guid>(Error.Validation("PartnerStatement.InvalidPeriod", "الشهر مش صحيح."));
         }

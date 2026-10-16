@@ -36,8 +36,9 @@ public sealed class VerifyCustomerOtpHandler
     public async Task<Result<VerifyCustomerOtpResponse>> HandleAsync(
         VerifyCustomerOtpCommand command, CancellationToken cancellationToken)
     {
-        var phone = command.Phone.Trim();
-        var codeHash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(command.Code.Trim())));
+        // حقل ناقص من الـJSON ({}) بيوصل null رغم الـnon-nullable - كان NRE (500) لحد ما كشفه الفز العنيف.
+        var phone = command.Phone?.Trim() ?? string.Empty;
+        var codeHash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes((command.Code ?? string.Empty).Trim())));
         var now = _dateTimeProvider.UtcNow;
 
         var otpCode = await _context.CustomerOtpCodes
