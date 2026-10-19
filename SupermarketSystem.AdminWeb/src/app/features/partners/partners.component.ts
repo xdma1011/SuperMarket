@@ -35,6 +35,23 @@ export interface PartnerDto {
   telegramLinked?: boolean;
   hasCashierBarcode?: boolean;
   cashierBarcodeIssuedAtUtc?: string | null;
+  /** مجموع اللي انعاد استثماره من أرباحه برأس ماله (16/10/2026). */
+  reinvestedTotal?: number;
+}
+
+/** معاينة إعادة الاستثمار (بلا كتابة): الرصيد ورأس المال والنسبة قبل/بعد. */
+export interface ReinvestPreviewDto {
+  partnerId: string;
+  partnerName: string;
+  amount: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  capitalBefore: number;
+  capitalAfter: number;
+  sharePercentBefore: number;
+  sharePercentAfter: number;
+  canReinvest: boolean;
+  blockedReason: string | null;
 }
 
 /** كرت الباركود بعد الإصدار - الأرقام بتبين هون مرة وحدة بس (السيرفر بيحفظ hash). */
@@ -125,6 +142,7 @@ interface UserOption {
 export class PartnersComponent implements OnInit {
   private readonly ledgerRequest = latestRequest();
   private readonly statementRequest = latestRequest();
+  private readonly reinvestPreviewRequest = latestRequest();
   private readonly apiClient = inject(ApiClient);
   private readonly auth = inject(AuthService);
   /** اختياري: "?tab=withdrawals" من كبسة تنبيه سحب شريك. */
@@ -153,6 +171,16 @@ export class PartnersComponent implements OnInit {
   readonly issuedCard = signal<IssuedBarcodeCard | null>(null);
   private readonly sanitizer = inject(DomSanitizer);
   readonly ledger = signal<PartnerLedgerDto | null>(null);
+
+  // إعادة استثمار الربح برأس المال (16/10/2026): معاينة ← كتابة اسم الشريك + كلمة السر ← تنفيذ. مفتاح عدم التكرار ثابت لحد ما تنجح.
+  readonly reinvestTarget = signal<PartnerDto | null>(null);
+  readonly reinvestPreview = signal<ReinvestPreviewDto | null>(null);
+  readonly reinvestError = signal<string | null>(null);
+  reinvestAmount: number | null = null;
+  reinvestNotes = '';
+  reinvestConfirmName = '';
+  reinvestPassword = '';
+  private reinvestRequestId = '';
 
   // الكشوف
   readonly statements = signal<PartnerStatementSummaryDto[]>([]);
@@ -330,6 +358,93 @@ export class PartnersComponent implements OnInit {
 
   closeLedger(): void {
     this.ledger.set(null);
+  }
+
+  // ===== إعادة استثمار الربح برأس المال =====
+
+  canReinvest(partner: PartnerDto): boolean {
+    return partner.isActive && partner.typeCode === 1 && partner.currentBalance > 0;
+  }
+
+  openReinvest(partner: PartnerDto): void {
+    this.clearMessages();
+    this.reinvestTarget.set(partner);
+    this.reinvestPreview.set(null);
+    this.reinvestError.set(null);
+    this.reinvestAmount = null;
+    this.reinvestNotes = '';
+    this.reinvestConfirmName = '';
+    this.reinvestPassword = '';
+    this.reinvestRequestId = crypto.randomUUID();
+  }
+
+  closeReinvest(): void {
+    this.reinvestPreview.set(null);
+    this.reinvestTarget.set(null);
+    this.reinvestPassword = '';
+    this.reinvestConfirmName = '';
+    this.reinvestPreviewRequest.cancel();
+  }
+
+  /** "كل الرصيد": بيقرّب لتحت لأقرب 3 خانات عشان ما يتجاوز الرصيد. */
+  async reinvestAll(): Promise<void> {
+    const target = this.reinvestTarget();
+    if (!target) return;
+    this.reinvestAmount = Math.floor(target.currentBalance * 1000) / 1000;
+    await this.loadReinvestPreview();
+  }
+
+  async loadReinvestPreview(): Promise<void> {
+    const target = this.reinvestTarget();
+    this.reinvestError.set(null);
+    this.reinvestPreview.set(null);
+    if (!target || !this.reinvestAmount || this.reinvestAmount <= 0) {
+      this.reinvestPreviewRequest.cancel();
+      return;
+    }
+    try {
+      this.reinvestPreview.set(await this.reinvestPreviewRequest.run(
+        this.apiClient.get<ReinvestPreviewDto>(ApiController.Partners, PartnersOperation.ReinvestPreview, { id: target.id }, { amount: this.reinvestAmount })
+      ));
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
+      this.reinvestError.set(this.errorDetail(err) ?? 'تعذّرت المعاينة.');
+    }
+  }
+
+  /** زر التنفيذ بيفتح بس لما: المعاينة لنفس المبلغ ومسموحة + اسم الشريك مكتوب بالحرف + كلمة سر مكتوبة. */
+  reinvestReady(): boolean {
+    const target = this.reinvestTarget();
+    const preview = this.reinvestPreview();
+    if (!target || !preview || !preview.canReinvest || this.submitting()) return false;
+    if (!this.reinvestAmount || Math.abs(preview.amount - this.reinvestAmount) > 0.0005) return false;
+    return this.reinvestConfirmName.trim() === target.fullName.trim() && this.reinvestPassword.length > 0;
+  }
+
+  async confirmReinvest(): Promise<void> {
+    const target = this.reinvestTarget();
+    if (!target || !this.reinvestReady() || !this.reinvestAmount) return;
+
+    this.submitting.set(true);
+    this.reinvestError.set(null);
+    try {
+      await firstValueFrom(this.apiClient.post(ApiController.Partners, PartnersOperation.Reinvest, {
+        amount: this.reinvestAmount,
+        password: this.reinvestPassword,
+        notes: this.reinvestNotes.trim() || null,
+        clientRequestId: this.reinvestRequestId
+      }, { id: target.id }));
+      const amount = this.reinvestAmount;
+      this.closeReinvest();
+      this.successMessage.set(`انعاد استثمار ${amount.toFixed(3)} د.أ من رصيد ${target.fullName} برأس ماله.`);
+      await this.reloadAll();
+    } catch (err) {
+      // كلمة السر ما بتضل بالذاكرة بعد أي محاولة؛ والمفتاح بيضل نفسه (لو الطلب نجح فعلًا وانقطع الرد، إعادة الإرسال ما بتكرر).
+      this.reinvestPassword = '';
+      this.reinvestError.set(this.errorDetail(err) ?? 'تعذّرت إعادة الاستثمار.');
+    } finally {
+      this.submitting.set(false);
+    }
   }
 
   // ===== تحقق الشريك بالكاشير (29/9/2026) =====

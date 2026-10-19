@@ -81,6 +81,19 @@ internal static class InvariantAuditor
         var dupSales = invoices.GroupBy(i => i.InvoiceNumber).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
         if (dupSales.Count > 0) violations.Add("أرقام فواتير بيع مكررة: " + string.Join(',', dupSales));
 
+        // 5) إعادة استثمار الشريك: كل إعادة إلها إيداع رأس مال بنفس المبلغ والشريك والفرع، وما بتتجاوز رصيده (أنصبة − سحوبات − بضاعة بسعر التكلفة) بالمجموع.
+        var reinvestments = await db.PartnerReinvestments.IgnoreQueryFilters().AsNoTracking()
+            .Select(r => new { r.Id, r.PartnerId, r.BranchId, r.Amount, r.CapitalTransactionId }).ToListAsync();
+        var capitalIds = reinvestments.Select(r => r.CapitalTransactionId).ToList();
+        var capitals = (await db.CapitalTransactions.IgnoreQueryFilters().AsNoTracking().Where(c => capitalIds.Contains(c.Id))
+            .Select(c => new { c.Id, c.PartnerId, c.BranchId, c.Amount, c.Type }).ToListAsync()).ToDictionary(c => c.Id);
+        foreach (var r in reinvestments)
+        {
+            if (!capitals.TryGetValue(r.CapitalTransactionId, out var c)
+                || c.Type != SupermarketSystem.Domain.Finance.CapitalTransactionType.Deposit || c.Amount != r.Amount || c.PartnerId != r.PartnerId || c.BranchId != r.BranchId)
+                violations.Add($"إعادة استثمار {r.Id}: إيداع رأس المال المرتبط ناقص أو غير مطابق");
+        }
+
         return violations;
     }
 }

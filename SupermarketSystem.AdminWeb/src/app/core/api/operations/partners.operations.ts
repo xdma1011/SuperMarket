@@ -7,6 +7,8 @@ export enum PartnersOperation {
   TelegramPhone = '{id}/telegram-phone',
   CashierBarcode = '{id}/cashier-barcode',
   Ledger = '{id}/ledger',
+  ReinvestPreview = '{id}/reinvest-preview',
+  Reinvest = '{id}/reinvest',
   Withdrawals = 'withdrawals',
   RecordWithdrawal = 'withdrawals',
   Statements = 'statements',

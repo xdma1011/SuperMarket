@@ -66,3 +66,5 @@
 .barcode-card { overflow-x: auto; text-align: center; padding: 8px 0; background: #fff; border-radius: 8px; }
 .barcode-card :where(svg) { max-width: 100%; height: auto; }
 .barcode-digits { text-align: center; font-family: ui-monospace, monospace; font-size: 1.1rem; letter-spacing: 2px; }
+
+.reinvest-confirm { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; padding: 12px; border: 1px dashed var(--accent); border-radius: 12px; background: var(--accent-soft); }

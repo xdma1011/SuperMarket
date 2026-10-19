@@ -237,6 +237,54 @@ public class PartnerWithdrawal : Entity, IBranchOwned
 }
 
 /// <summary>
+/// إعادة استثمار ربح الشريك برأس ماله (16/10/2026): مبلغ من رصيده المتراكم (أنصبة − سحوبات) بيتحوّل لرأس مال إله - بلا أي حركة نقد
+/// (الفلوس أصلًا بالمحل). أثره: رصيده بينقص بالمبلغ، ورأس ماله بيزيد (CapitalTransaction Deposit مربوطة هون)، فنسبته من أرباح الشهور
+/// الجاية بتزيد (النسبة بتنحسب برأس المال آخر الشهر). شريك رأس مال بس. سجل تاريخي بحت - تصحيح غلط = حركة سحب رأس مال معاكسة.
+/// </summary>
+public class PartnerReinvestment : Entity, IBranchOwned
+{
+    public const int MaxNotesLength = 500;
+
+    public Guid BranchId { get; private set; }
+    public Guid PartnerId { get; private set; }
+    public decimal Amount { get; private set; }
+    public DateTime OccurredAtUtc { get; private set; }
+    public string? Notes { get; private set; }
+    public Guid RecordedByUserId { get; private set; }
+
+    /// <summary>حركة رأس المال (Deposit) اللي انولدت مع هالإعادة - نفس المبلغ ونفس الشريك.</summary>
+    public Guid CapitalTransactionId { get; private set; }
+
+    public Guid ClientRequestId { get; private set; }
+
+    private PartnerReinvestment() { } // EF Core
+
+    public PartnerReinvestment(
+        Guid branchId, Guid partnerId, decimal amount, DateTime occurredAtUtc, string? notes, Guid recordedByUserId,
+        Guid capitalTransactionId, Guid clientRequestId)
+    {
+        if (amount <= 0)
+        {
+            throw new DomainException("Reinvestment amount must be positive.");
+        }
+
+        if (clientRequestId == Guid.Empty)
+        {
+            throw new DomainException("A client request id is required.");
+        }
+
+        BranchId = branchId;
+        PartnerId = partnerId;
+        Amount = amount;
+        OccurredAtUtc = occurredAtUtc;
+        Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        RecordedByUserId = recordedByUserId;
+        CapitalTransactionId = capitalTransactionId;
+        ClientRequestId = clientRequestId;
+    }
+}
+
+/// <summary>
 /// الكشف الشهري لفرع: ربح الشهر (Snapshot مجمَّد) موزَّع على الشركاء. واحد بس لكل (فرع، سنة، شهر) - بينزل
 /// تلقائيًا ببداية الشهر، والإدارة بتقدر تعيد إصداره (فاتورة شراء متأخرة غيّرت الربح مثلًا).
 /// </summary>

@@ -127,4 +127,120 @@ describe('PartnersComponent', () => {
     expect(api.post).not.toHaveBeenCalled();
     expect(component.errorMessage()).toContain('2.000');
   });
+
+  describe('إعادة استثمار الربح برأس المال', () => {
+    const PREVIEW = {
+      partnerId: 'p1', partnerName: 'أحمد', amount: 0.5, balanceBefore: 0.6, balanceAfter: 0.1, capitalBefore: 3000, capitalAfter: 3000.5,
+      sharePercentBefore: 75, sharePercentAfter: 75.01, canReinvest: true, blockedReason: null
+    };
+
+    function mockPreview(preview: unknown = PREVIEW): void {
+      api.get.and.callFake(((controller: string, operation: string) => {
+        if (operation === '{id}/reinvest-preview') return of(preview);
+        if (controller === 'partners' && operation === '') return of([AHMAD]);
+        return of([]);
+      }) as unknown as typeof api.get);
+    }
+
+    it('الزر بس للشريك رأس مال فعّال برصيد موجب', () => {
+      expect(component.canReinvest(AHMAD)).toBeTrue();
+      expect(component.canReinvest({ ...AHMAD, typeCode: 2 })).toBeFalse();
+      expect(component.canReinvest({ ...AHMAD, isActive: false })).toBeFalse();
+      expect(component.canReinvest({ ...AHMAD, currentBalance: 0 })).toBeFalse();
+      expect(component.canReinvest({ ...AHMAD, currentBalance: -3 })).toBeFalse();
+    });
+
+    it('التنفيذ مقفول لحد المعاينة + اسم الشريك بالضبط + كلمة السر', async () => {
+      mockPreview();
+      component.openReinvest(AHMAD);
+      expect(component.reinvestReady()).toBeFalse();
+
+      component.reinvestAmount = 0.5;
+      await component.loadReinvestPreview();
+      expect(component.reinvestPreview()?.canReinvest).toBeTrue();
+      expect(component.reinvestReady()).toBeFalse(); // لا اسم ولا كلمة سر
+
+      component.reinvestConfirmName = 'أحمد ';
+      expect(component.reinvestReady()).toBeFalse(); // لا كلمة سر
+      component.reinvestPassword = 'x';
+      expect(component.reinvestReady()).toBeTrue();
+
+      component.reinvestConfirmName = 'احمد'; // اسم غلط (همزة)
+      expect(component.reinvestReady()).toBeFalse();
+    });
+
+    it('تغيير المبلغ بعد المعاينة بيقفل التنفيذ لحد معاينة جديدة', async () => {
+      mockPreview();
+      component.openReinvest(AHMAD);
+      component.reinvestAmount = 0.5;
+      await component.loadReinvestPreview();
+      component.reinvestConfirmName = 'أحمد';
+      component.reinvestPassword = 'x';
+      expect(component.reinvestReady()).toBeTrue();
+      component.reinvestAmount = 0.6;
+      expect(component.reinvestReady()).toBeFalse();
+    });
+
+    it('معاينة مرفوضة (سبب) = التنفيذ مقفول حتى لو الاسم وكلمة السر مكتوبين', async () => {
+      mockPreview({ ...PREVIEW, canReinvest: false, blockedReason: 'المبلغ أكبر من رصيد الشريك' });
+      component.openReinvest(AHMAD);
+      component.reinvestAmount = 5;
+      await component.loadReinvestPreview();
+      component.reinvestConfirmName = 'أحمد';
+      component.reinvestPassword = 'x';
+      expect(component.reinvestReady()).toBeFalse();
+    });
+
+    it('"كل الرصيد" بيقرّب لتحت ما بيتجاوز الرصيد', async () => {
+      mockPreview();
+      component.openReinvest({ ...AHMAD, currentBalance: 2.2509 });
+      await component.reinvestAll();
+      expect(component.reinvestAmount).toBe(2.25);
+    });
+
+    it('التنفيذ بيبعت المبلغ وكلمة السر ومفتاح عدم التكرار، وبيسكّر النافذة وبيمسح كلمة السر', async () => {
+      mockPreview();
+      api.post.and.returnValue(of({}));
+      component.openReinvest(AHMAD);
+      component.reinvestAmount = 0.5;
+      component.reinvestNotes = ' توسعة ';
+      await component.loadReinvestPreview();
+      component.reinvestConfirmName = 'أحمد';
+      component.reinvestPassword = 'secret';
+      await component.confirmReinvest();
+
+      const [controller, operation, body, route] = api.post.calls.mostRecent().args as unknown as [string, string, Record<string, unknown>, Record<string, string>];
+      expect(controller).toBe('partners');
+      expect(operation).toBe('{id}/reinvest');
+      expect(route).toEqual({ id: 'p1' });
+      expect(body['amount']).toBe(0.5);
+      expect(body['password']).toBe('secret');
+      expect(body['notes']).toBe('توسعة');
+      expect(typeof body['clientRequestId']).toBe('string');
+      expect(component.reinvestTarget()).toBeNull();
+      expect(component.reinvestPassword).toBe('');
+      expect(component.successMessage()).toContain('0.500');
+    });
+
+    it('كلمة سر غلط: بتبين الرسالة، بتنمسح كلمة السر، والنافذة بتضل والمفتاح نفسه', async () => {
+      mockPreview();
+      api.post.and.returnValue(throwError(() => ({ error: { detail: 'كلمة السر غير صحيحة' } })));
+      component.openReinvest(AHMAD);
+      component.reinvestAmount = 0.5;
+      await component.loadReinvestPreview();
+      component.reinvestConfirmName = 'أحمد';
+      component.reinvestPassword = 'غلط';
+      await component.confirmReinvest();
+      const firstId = (api.post.calls.mostRecent().args[2] as Record<string, unknown>)['clientRequestId'];
+
+      expect(component.reinvestError()).toBe('كلمة السر غير صحيحة');
+      expect(component.reinvestPassword).toBe('');
+      expect(component.reinvestTarget()).not.toBeNull();
+      expect(component.reinvestReady()).toBeFalse(); // لازم يكتب كلمة السر من جديد
+
+      component.reinvestPassword = 'تاني';
+      await component.confirmReinvest();
+      expect((api.post.calls.mostRecent().args[2] as Record<string, unknown>)['clientRequestId']).toBe(firstId);
+    });
+  });
 });

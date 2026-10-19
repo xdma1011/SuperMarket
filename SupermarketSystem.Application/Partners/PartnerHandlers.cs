@@ -16,7 +16,8 @@ public sealed record PartnerDto(
     Guid Id, Guid BranchId, string FullName, int TypeCode, string TypeTitle,
     Guid? UserId, string? Username, decimal? SpeculativeProfitPercent, bool IsActive, string? Notes,
     decimal CapitalBalance, decimal SharesTotal, decimal WithdrawalsTotal, decimal AtCostDeductedTotal, decimal CurrentBalance,
-    string? TelegramPhone = null, bool TelegramLinked = false, bool HasCashierBarcode = false, DateTime? CashierBarcodeIssuedAtUtc = null);
+    string? TelegramPhone = null, bool TelegramLinked = false, bool HasCashierBarcode = false, DateTime? CashierBarcodeIssuedAtUtc = null,
+    decimal ReinvestedTotal = 0m);
 
 public sealed record GetPartnersQuery(Guid? BranchId);
 
@@ -88,7 +89,7 @@ public sealed class GetPartnersHandler
                 capital.GetValueOrDefault(p.Id), b.SharesTotal, b.WithdrawalsTotal, b.AtCostDeductedTotal, b.Current,
                 p.TelegramPhone,
                 PartnerVerificationSecrets.PhoneKey(p.TelegramPhone) is { } key && linkedPhones.Contains(key),
-                p.CashierBarcodeHash is not null, p.CashierBarcodeIssuedAtUtc);
+                p.CashierBarcodeHash is not null, p.CashierBarcodeIssuedAtUtc, b.ReinvestedTotal);
         }).ToList();
     }
 }
@@ -479,6 +480,15 @@ public sealed class GetPartnerLedgerHandler
             w.OccurredAtUtc, "withdrawal", "سحب",
             PartnerTitles.Source(w.Source) + (w.RecordedAtCashier ? " (من الكاشير)" : "") + (w.Notes is null ? "" : $" - {w.Notes}"),
             -w.Amount)));
+
+        var reinvestments = await _context.PartnerReinvestments.AsNoTracking()
+            .Where(r => r.PartnerId == partnerId)
+            .Select(r => new { r.OccurredAtUtc, r.Amount, r.Notes })
+            .ToListAsync(cancellationToken);
+        raw.AddRange(reinvestments.Select(r => (
+            r.OccurredAtUtc, "reinvest", "إعادة استثمار برأس المال",
+            "تحوّل من الرصيد لرأس مال الشريك" + (r.Notes is null ? "" : $" - {r.Notes}"),
+            -r.Amount)));
 
         var atCost = await PartnerLedger.LoadAtCostDeductionsAsync(_context, new[] { (partner.Id, partner.BranchId, partner.UserId) }, cancellationToken);
         raw.AddRange(atCost.Select(a => (a.CreatedAtUtc, "at-cost", "بضاعة بسعر التكلفة", $"فاتورة {a.InvoiceNumber} (اخصمها مني)", -a.Remaining)));

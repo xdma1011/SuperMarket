@@ -73,6 +73,25 @@ public static class PartnersEndpoints
             .WithSummary("كشف حساب شريك: أنصبة، سحوبات، بضاعة بسعر التكلفة - برصيد متراكم.")
             .Produces<PartnerLedgerDto>(StatusCodes.Status200OK);
 
+        group.MapGet("/{partnerId:guid}/reinvest-preview", async (Guid partnerId, decimal amount, GetReinvestPreviewHandler handler, CancellationToken cancellationToken) =>
+                (await handler.HandleAsync(new GetReinvestPreviewQuery(partnerId, amount), cancellationToken)).ToHttpResult(r => Results.Ok(r)))
+            .WithName("GetPartnerReinvestPreview")
+            .WithSummary("معاينة إعادة استثمار ربح الشريك برأس ماله: الرصيد ورأس المال ونسبته من الأرباح قبل وبعد - بلا أي كتابة.")
+            .Produces<ReinvestPreviewDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
+        group.MapPost("/{partnerId:guid}/reinvest", async (Guid partnerId, ReinvestPartnerProfitRequest request, ReinvestPartnerProfitHandler handler, CancellationToken cancellationToken) =>
+            {
+                var result = await handler.HandleAsync(
+                    new ReinvestPartnerProfitCommand(partnerId, request.Amount, request.Password, request.Notes, request.ClientRequestId), cancellationToken);
+                return result.ToHttpResult(r => r.WasReplay ? Results.Ok(r) : Results.Created($"/api/v1/partners/{partnerId}/ledger", r));
+            })
+            .WithName("ReinvestPartnerProfit")
+            .WithSummary("إعادة استثمار جزء من رصيد الشريك برأس ماله (بلا حركة نقد) - بتطلب كلمة سر المستخدم الحالي، وبتزيد نسبته من أرباح الشهور الجاية.")
+            .Produces<ReinvestPartnerProfitResponse>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+
         group.MapGet("/withdrawals", async (Guid? branchId, Guid? partnerId, GetPartnerWithdrawalsHandler handler, CancellationToken cancellationToken) =>
                 Results.Ok(await handler.HandleAsync(new GetPartnerWithdrawalsQuery(branchId, partnerId), cancellationToken)))
             .WithName("GetPartnerWithdrawals")
@@ -163,4 +182,6 @@ public static class PartnersEndpoints
     public sealed record UpdatePartnerRequest(string FullName, Guid? UserId, decimal? SpeculativeProfitPercent, string? Notes);
 
     public sealed record SetPartnerActiveRequest(bool IsActive);
+
+    public sealed record ReinvestPartnerProfitRequest(decimal Amount, string? Password, string? Notes, Guid ClientRequestId);
 }

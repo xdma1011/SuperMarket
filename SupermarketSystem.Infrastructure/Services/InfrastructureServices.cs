@@ -124,3 +124,29 @@ public sealed class DocumentNumberGenerator : IDocumentNumberGenerator
         return $"{prefix}-{sequenceValue:D6}";
     }
 }
+
+/// <summary>
+/// قفل صف الشريك (UPDLOCK + HOLDLOCK) لحد commit/rollback المعاملة الجارية - لازم يُستدعى جوّا <see cref="ITransactionalExecutor"/>.
+/// بيسلسل عمليات الشريك الواحد اللي بتحسب رصيدًا غير مخزَّن (إعادة استثمار الرصيد برأس المال): الطلب التاني بيستنى الأول يخلص
+/// وبعدين بيقرأ الرصيد المحدّث، فما في تجاوز رصيد تحت التزامن.
+/// </summary>
+public sealed class PartnerLock : SupermarketSystem.Application.Partners.IPartnerLock
+{
+    private readonly AppDbContext _context;
+
+    public PartnerLock(AppDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task LockAsync(Guid partnerId, CancellationToken cancellationToken)
+    {
+        if (_context.Database.CurrentTransaction is null)
+        {
+            throw new InvalidOperationException("قفل الشريك لازم يكون جوّا معاملة (ITransactionalExecutor).");
+        }
+
+        await _context.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT 1 FROM [Partners] WITH (UPDLOCK, HOLDLOCK) WHERE [Id] = {partnerId}", cancellationToken);
+    }
+}

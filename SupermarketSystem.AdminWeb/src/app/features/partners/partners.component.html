@@ -67,7 +67,7 @@
                   <td>{{ p.typeTitle }}</td>
                   <td class="money">
                     @if (p.typeCode === 2) { {{ p.speculativeProfitPercent | number: '1.0-2' }}% من الربح }
-                    @else { {{ p.capitalBalance | number: '1.3-3' }} }
+                    @else { {{ p.capitalBalance | number: '1.3-3' }} @if (p.reinvestedTotal) { <small class="sub">منها {{ p.reinvestedTotal | number: '1.3-3' }} أُعيد استثمارها</small> } }
                   </td>
                   <td class="money">{{ p.sharesTotal | number: '1.3-3' }}</td>
                   <td class="money">{{ p.withdrawalsTotal | number: '1.3-3' }}</td>
@@ -75,6 +75,9 @@
                   <td class="money-strong" [class.negative]="p.currentBalance < 0">{{ p.currentBalance | number: '1.3-3' }}</td>
                   <td class="actions">
                     <button type="button" class="btn-link" (click)="openLedger(p)">كشف حساب</button>
+                    @if (canReinvest(p)) {
+                      <button type="button" class="btn-link" (click)="openReinvest(p)">إعادة استثمار</button>
+                    }
                     <button type="button" class="btn-link" (click)="openPartnerForm(p)">تعديل</button>
                     <button type="button" class="btn-link" (click)="toggleActive(p)">{{ p.isActive ? 'إيقاف' : 'تفعيل' }}</button>
                     <button type="button" class="btn-link" (click)="issueBarcode(p)">{{ p.hasCashierBarcode ? 'باركود جديد' : 'باركود شخصي' }}</button>
@@ -355,6 +358,66 @@
       <div class="modal-actions">
         <button type="button" class="btn-link" (click)="closePartnerForm()">إلغاء</button>
         <button type="button" class="btn-primary" [disabled]="submitting()" (click)="savePartner()">حفظ</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (reinvestTarget(); as target) {
+  <div class="modal-backdrop">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="reinvest-title">
+      <h2 id="reinvest-title">إعادة استثمار ربح {{ target.fullName }} برأس ماله</h2>
+      <p class="hint">
+        المبلغ بينتقل من رصيد الشريك (<strong>{{ target.currentBalance | number: '1.3-3' }} د.أ</strong>) لرأس ماله بدون أي حركة نقد، فنسبته من
+        أرباح الشهور الجاية بتزيد. النسبة بتنحسب برأس المال <strong>آخر الشهر</strong>، يعني الإعادة بنص الشهر بتأثر على ربح هالشهر كله.
+        هاد الإجراء ما بيتراجع بزر - التراجع بحركة سحب رأس مال من المالية.
+      </p>
+      <div class="form-grid">
+        <label class="field">
+          <span>المبلغ (د.أ)</span>
+          <input type="number" min="0" step="0.001" dir="ltr" [(ngModel)]="reinvestAmount" (change)="loadReinvestPreview()" />
+        </label>
+        <div class="field">
+          <span>&nbsp;</span>
+          <button type="button" class="btn-link" (click)="reinvestAll()">كل الرصيد ({{ target.currentBalance | number: '1.3-3' }})</button>
+        </div>
+        <label class="field wide">
+          <span>ملاحظة (اختياري)</span>
+          <input type="text" maxlength="500" [(ngModel)]="reinvestNotes" />
+        </label>
+      </div>
+
+      @if (reinvestPreview(); as pv) {
+        @if (pv.canReinvest) {
+          <table class="data-table">
+            <thead><tr><th></th><th>قبل</th><th>بعد</th></tr></thead>
+            <tbody>
+              <tr><td>رصيد الشريك</td><td class="money">{{ pv.balanceBefore | number: '1.3-3' }}</td><td class="money">{{ pv.balanceAfter | number: '1.3-3' }}</td></tr>
+              <tr><td>رأس ماله</td><td class="money">{{ pv.capitalBefore | number: '1.3-3' }}</td><td class="money-strong">{{ pv.capitalAfter | number: '1.3-3' }}</td></tr>
+              <tr><td>نسبته من الأرباح</td><td class="money">{{ pv.sharePercentBefore | number: '1.0-2' }}%</td><td class="money-strong">{{ pv.sharePercentAfter | number: '1.0-2' }}%</td></tr>
+            </tbody>
+          </table>
+          <div class="reinvest-confirm">
+            <label class="field">
+              <span>للتأكيد اكتب اسم الشريك بالضبط: <strong>{{ target.fullName }}</strong></span>
+              <input type="text" autocomplete="off" [(ngModel)]="reinvestConfirmName" />
+            </label>
+            <label class="field">
+              <span>كلمة سر حسابك أنت (للتأكد إنك أنت اللي بتنفّذ)</span>
+              <input type="password" autocomplete="current-password" dir="ltr" [(ngModel)]="reinvestPassword" />
+            </label>
+          </div>
+        } @else {
+          <div class="alert-banner">{{ pv.blockedReason }}</div>
+        }
+      }
+      @if (reinvestError()) {
+        <div class="alert-banner">{{ reinvestError() }}</div>
+      }
+
+      <div class="modal-actions">
+        <button type="button" class="btn-link" (click)="closeReinvest()">إلغاء</button>
+        <button type="button" class="btn-primary" [disabled]="!reinvestReady()" (click)="confirmReinvest()">تنفيذ إعادة الاستثمار</button>
       </div>
     </div>
   </div>

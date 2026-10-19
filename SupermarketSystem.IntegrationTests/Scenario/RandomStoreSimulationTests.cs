@@ -130,6 +130,8 @@ public sealed class RandomStoreSimulationTests : IntegrationTestBase
         public decimal Capital { get; set; }
         public decimal Shares { get; set; }
         public decimal Withdrawals { get; set; }
+        /// <summary>اللي انعاد استثماره من رصيده برأس ماله (16/10/2026) - بينقص الرصيد ويزيد رأس المال.</summary>
+        public decimal Reinvested { get; set; }
         public bool LinkedToAdmin { get; init; }
     }
 
@@ -146,6 +148,7 @@ public sealed class RandomStoreSimulationTests : IntegrationTestBase
     private Random _rng = null!;
     private int _seed;
     private readonly Dictionary<Guid, decimal> _seededOpeningStock = new();
+    private bool _wrongReinvestPasswordTried;
     private int _phase = 1;
     private int _checks;
     private readonly List<string> _failures = new();
@@ -306,6 +309,8 @@ public sealed class RandomStoreSimulationTests : IntegrationTestBase
 
         _phase = 2;
         await PartnersAndStatementAsync(previous, phase1);
+        // محاولة إعادة استثمار بداية المرحلة 2 (قبل السحوبات اللي ممكن تستنزف الرصيد) + عشوائية بعدين. شهر خسارة = ما في رصيد موجب = ما بتصير.
+        await PartnerReinvestAsync();
 
         // ---------------- المرحلة 2 ("هالشهر") ----------------
         var phase2Start = DateTime.UtcNow;
@@ -480,7 +485,8 @@ public sealed class RandomStoreSimulationTests : IntegrationTestBase
             (40, SaleAsync), (10, () => PurchaseAsync(null)), (5, SupplierPaymentAsync), (4, CreditPaymentAsync), (4, VoidAsync),
             (7, ReturnAsync), (4, WasteAsync), (3, ComplimentaryAsync), (5, ExpenseAsync), (2, SalaryAsync), (2, AdvanceAsync),
             (3, PriceChangeAsync), (3, AtCostAsync), (3, StocktakeAsync), (3, async () => { await CloseDrawerAsync(); return true; }),
-            (_phase == 2 ? 4 : 0, async () => { await PartnerWithdrawalAsync(); return _partners.Count > 0; })
+            (_phase == 2 ? 4 : 0, async () => { await PartnerWithdrawalAsync(); return _partners.Count > 0; }),
+            (_phase == 2 ? 2 : 0, PartnerReinvestAsync)
         };
 
         // عملية ما إلها ظروف (مثلًا ما في فاتورة ترجعها) بتنعاد بعملية تانية
@@ -1109,14 +1115,58 @@ public sealed class RandomStoreSimulationTests : IntegrationTestBase
         Log($"{partner.Name} سحب {amount:0.000} {(fromDrawer ? "من الصندوق" : "من جيب صاحب المحل")} (نصيبه {partner.Shares:0.000})");
     }
 
+    /// <summary>
+    /// إعادة استثمار ربح شريك رأس مال برأس ماله (16/10/2026): جزء عشوائي من رصيده المتوقع (الحَكَم بيحسبه من الصفر)، وأحيانًا محاولات
+    /// لازم تنرفض بلا أي أثر (كلمة سر غلط، أكتر من الرصيد). الرصيد المتوقع بعدها = نصيب − سحوبات − إعادة استثمار، ورأس المال + المبلغ.
+    /// </summary>
+    private async Task<bool> PartnerReinvestAsync()
+    {
+        var atCostDeducted = _sales.Where(s => s.IsAtCost && s.DeductFromShare && !s.Voided).Sum(s => s.Total - s.Returned - s.Paid);
+        decimal BalanceOf(SimPartner p) => p.Shares - p.Withdrawals - p.Reinvested - (p.LinkedToAdmin ? atCostDeducted : 0m);
+        var candidates = _partners.Where(p => !p.IsSpeculative && BalanceOf(p) > 0.010m).ToList();
+        if (candidates.Count == 0)
+        {
+            return false;
+        }
+
+        var partner = Pick(candidates);
+        var balance = BalanceOf(partner);
+
+        // محاولات لازم تنرفض بلا أي أثر. كلمة السر الغلط مرة وحدة بالتشغيلة بس: 5 غلطات خلال 15 دقيقة بتقفل حساب الأدمن (مقصود)، والمحاكاة سريعة.
+        if (!_wrongReinvestPasswordTried)
+        {
+            _wrongReinvestPasswordTried = true;
+            var wrong = await _admin.PostAsJsonAsync($"/api/v1/partners/{partner.Id}/reinvest",
+                new { amount = Math.Round(balance / 2, 3, MidpointRounding.ToZero), password = "كلمة سر غلط", notes = (string?)null, clientRequestId = Guid.NewGuid() });
+            CheckTrue("إعادة استثمار بكلمة سر غلط مرفوضة (403)", wrong.StatusCode == HttpStatusCode.Forbidden, ((int)wrong.StatusCode).ToString());
+        }
+
+        var tooMuch = await _admin.PostAsJsonAsync($"/api/v1/partners/{partner.Id}/reinvest",
+            new { amount = balance + 0.001m, password = DatabaseFixture.AdminPassword, notes = (string?)null, clientRequestId = Guid.NewGuid() });
+        CheckTrue("إعادة استثمار أكتر من الرصيد مرفوضة (422)", tooMuch.StatusCode == HttpStatusCode.UnprocessableEntity, ((int)tooMuch.StatusCode).ToString());
+
+        var amount = Chance(0.2) ? Math.Round(balance, 3, MidpointRounding.ToZero) : Math.Max(0.001m, Math.Round(balance * (decimal)(0.1 + 0.8 * _rng.NextDouble()), 3, MidpointRounding.ToZero));
+        var response = await PostAsync(_admin, $"/api/v1/partners/{partner.Id}/reinvest",
+            new { amount, password = DatabaseFixture.AdminPassword, notes = (string?)null, clientRequestId = Guid.NewGuid() }, "إعادة استثمار");
+        partner.Reinvested += amount;
+        partner.Capital += amount;
+        Check($"رصيد {partner.Name} بعد إعادة الاستثمار (من الرد)", balance - amount, D(response, "newBalance"));
+        Log($"{partner.Name} أعاد استثمار {amount:0.000} من رصيده {balance:0.000} (رأس ماله صار {partner.Capital:0.000})");
+        return true;
+    }
+
     private async Task VerifyPartnersAsync()
     {
         var atCostDeducted = _sales.Where(s => s.IsAtCost && s.DeductFromShare && !s.Voided).Sum(s => s.Total - s.Returned - s.Paid);
         var rows = (await GetAsync(_admin, $"/api/v1/partners?branchId={_branchId}", "الشركاء")).EnumerateArray().ToDictionary(p => p.GetProperty("id").GetGuid());
         foreach (var partner in _partners)
         {
-            var expected = partner.Shares - partner.Withdrawals - (partner.LinkedToAdmin ? atCostDeducted : 0m);
-            Check($"رصيد {partner.Name} (نصيب − سحوبات{(partner.LinkedToAdmin ? " − اخصمها مني" : "")})", expected, D(rows[partner.Id], "currentBalance"));
+            var expected = partner.Shares - partner.Withdrawals - partner.Reinvested - (partner.LinkedToAdmin ? atCostDeducted : 0m);
+            Check($"رصيد {partner.Name} (نصيب − سحوبات − إعادة استثمار{(partner.LinkedToAdmin ? " − اخصمها مني" : "")})", expected, D(rows[partner.Id], "currentBalance"));
+            if (!partner.IsSpeculative)
+            {
+                Check($"رأس مال {partner.Name} (إيداعات + إعادة استثمار)", partner.Capital, D(rows[partner.Id], "capitalBalance"));
+            }
         }
 
         var receivables = (await GetAsync(_admin, $"/api/v1/partners/owner-receivables?branchId={_branchId}", "مستحق لصاحب المحل")).EnumerateArray();

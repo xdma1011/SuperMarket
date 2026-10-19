@@ -76,6 +76,29 @@ public class PartnerWithdrawalConfiguration : IEntityTypeConfiguration<PartnerWi
     }
 }
 
+public class PartnerReinvestmentConfiguration : IEntityTypeConfiguration<PartnerReinvestment>
+{
+    public void Configure(EntityTypeBuilder<PartnerReinvestment> builder)
+    {
+        builder.ToTable("PartnerReinvestments");
+        builder.HasKey(r => r.Id);
+
+        builder.Property(r => r.Amount).HasColumnType("decimal(18,4)").IsRequired();
+        builder.Property(r => r.OccurredAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(r => r.Notes).HasMaxLength(PartnerReinvestment.MaxNotesLength);
+
+        builder.HasIndex(r => r.ClientRequestId).IsUnique();
+        builder.HasIndex(r => r.CapitalTransactionId).IsUnique();
+        builder.HasIndex(r => new { r.PartnerId, r.OccurredAtUtc });
+
+        builder.HasOne<Partner>().WithMany().HasForeignKey(r => r.PartnerId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Branch>().WithMany().HasForeignKey(r => r.BranchId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(r => r.RecordedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<SupermarketSystem.Domain.Finance.CapitalTransaction>().WithMany().HasForeignKey(r => r.CapitalTransactionId).OnDelete(DeleteBehavior.Restrict);
+        // سجل تاريخي بحت - تصحيح غلط = سحب رأس مال معاكس، مش تعديل/حذف.
+    }
+}
+
 public class PartnerMonthlyStatementConfiguration : IEntityTypeConfiguration<PartnerMonthlyStatement>
 {
     public void Configure(EntityTypeBuilder<PartnerMonthlyStatement> builder)

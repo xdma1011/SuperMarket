@@ -67,6 +67,7 @@ public static class DependencyInjection
         services.AddScoped<ISaleInvoiceOperations, SaleInvoiceOperations>();
         services.AddScoped<IRejectedSaleRecorder, RejectedSaleRecorder>();
         services.AddScoped<ITransactionalExecutor, TransactionalExecutor>();
+        services.AddScoped<SupermarketSystem.Application.Partners.IPartnerLock, PartnerLock>();
 
         // مُرسِل تلغرام — HttpClient مخصص (typed client)، بلا base address
         // ثابت (الرابط الكامل يُبنى بالتوكن جوّا SendAsync نفسها).

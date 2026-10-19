@@ -105,6 +105,7 @@ public interface IApplicationDbContext
     DbSet<DrawerOpenEvent> DrawerOpenEvents { get; }
     DbSet<Partner> Partners { get; }
     DbSet<PartnerWithdrawal> PartnerWithdrawals { get; }
+    DbSet<PartnerReinvestment> PartnerReinvestments { get; }
     DbSet<PartnerOtpChallenge> PartnerOtpChallenges { get; }
     DbSet<PartnerMonthlyStatement> PartnerMonthlyStatements { get; }
     DbSet<PartnerStatementLine> PartnerStatementLines { get; }
