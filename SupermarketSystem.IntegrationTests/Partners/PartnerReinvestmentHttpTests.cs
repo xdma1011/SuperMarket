@@ -270,6 +270,26 @@ public sealed class PartnerReinvestmentHttpTests : IntegrationTestBase
         Assert.Equal(HttpStatusCode.Created, ok.StatusCode);
     }
 
+    /// <summary>
+    /// ما في تراجع جاهز (قرار نهائي بالتصميم). المسار الوحيد المتاح حاليًا = سحب رأس مال من المالية، وهو بينقص رأس المال بس
+    /// <b>ما بيرجّع الرصيد</b> - الاختبار بيثبّت هالحد عشان ما حدا يفترض عكس ذلك.
+    /// </summary>
+    [Fact]
+    public async Task سحب_رأس_مال_من_المالية_بعد_إعادة_الاستثمار_بينقص_رأس_المال_بس_وما_بيرجّع_الرصيد()
+    {
+        var s = await SetUpAsync();
+        await ReadJsonAsync(await ReinvestAsync(s.Admin, s.Ahmad, 2.000m, DatabaseFixture.AdminPassword), "إعادة استثمار");
+
+        await ReadJsonAsync(await s.Admin.PostAsJsonAsync("/api/v1/finance/capital-transactions", new
+        {
+            branchId = Fixture.TestBranchId, type = "Withdrawal", amount = 2.000m, occurredAtUtc = DateTime.UtcNow, notes = "تراجع", partnerId = s.Ahmad
+        }, StringEnums), "سحب رأس مال");
+
+        var partner = await PartnerAsync(s.Admin, s.Ahmad);
+        Assert.Equal(10m, partner.GetProperty("capitalBalance").GetDecimal());
+        Assert.Equal(0.250m, partner.GetProperty("currentBalance").GetDecimal()); // الرصيد ما رجع
+    }
+
     [Fact]
     public async Task مبلغ_أكبر_من_الرصيد_أو_صفر_أو_شريك_مضارب_أو_موقوف_أو_رصيد_سالب_مرفوض()
     {
