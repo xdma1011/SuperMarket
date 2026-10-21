@@ -149,6 +149,9 @@ public sealed class RandomStoreSimulationTests : IntegrationTestBase
     private int _seed;
     private readonly Dictionary<Guid, decimal> _seededOpeningStock = new();
     private bool _wrongReinvestPasswordTried;
+    private int _reinvestCount;
+    private int _reversalCount;
+    private readonly List<(SimPartner Partner, Guid Id, decimal Amount)> _openReinvestments = new();
     private int _phase = 1;
     private int _checks;
     private readonly List<string> _failures = new();
@@ -261,6 +264,7 @@ public sealed class RandomStoreSimulationTests : IntegrationTestBase
         }
 
         _output.WriteLine($"\n✔ {_checks - _failures.Count}/{_checks} فحص صح · {_log.Count} عملية · SIM_SEED={_seed}");
+        _output.WriteLine($"إعادات استثمار: {_reinvestCount} · تراجعات: {_reversalCount}");
         Assert.True(_failures.Count == 0, Report($"{_failures.Count} من {_checks} فحص غلط:\n" + string.Join("\n", _failures.Take(40))));
     }
 
@@ -486,7 +490,8 @@ public sealed class RandomStoreSimulationTests : IntegrationTestBase
             (7, ReturnAsync), (4, WasteAsync), (3, ComplimentaryAsync), (5, ExpenseAsync), (2, SalaryAsync), (2, AdvanceAsync),
             (3, PriceChangeAsync), (3, AtCostAsync), (3, StocktakeAsync), (3, async () => { await CloseDrawerAsync(); return true; }),
             (_phase == 2 ? 4 : 0, async () => { await PartnerWithdrawalAsync(); return _partners.Count > 0; }),
-            (_phase == 2 ? 2 : 0, PartnerReinvestAsync)
+            (_phase == 2 ? 2 : 0, PartnerReinvestAsync),
+            (_phase == 2 ? 1 : 0, PartnerReverseReinvestAsync)
         };
 
         // عملية ما إلها ظروف (مثلًا ما في فاتورة ترجعها) بتنعاد بعملية تانية
@@ -1150,8 +1155,38 @@ public sealed class RandomStoreSimulationTests : IntegrationTestBase
             new { amount, password = DatabaseFixture.AdminPassword, notes = (string?)null, clientRequestId = Guid.NewGuid() }, "إعادة استثمار");
         partner.Reinvested += amount;
         partner.Capital += amount;
+        _openReinvestments.Add((partner, response.GetProperty("reinvestmentId").GetGuid(), amount));
+        _reinvestCount++;
         Check($"رصيد {partner.Name} بعد إعادة الاستثمار (من الرد)", balance - amount, D(response, "newBalance"));
         Log($"{partner.Name} أعاد استثمار {amount:0.000} من رصيده {balance:0.000} (رأس ماله صار {partner.Capital:0.000})");
+        return true;
+    }
+
+    /// <summary>
+    /// التراجع عن إعادة استثمار سابقة (16/10 → 20/10/2026): الرصيد بيرجع والرأس مال بينقص بنفس المبلغ، والتراجع التاني لنفس الإعادة 409.
+    /// الحَكَم بيعدّل نموذجه (مُعاد استثماره − المبلغ، رأس المال − المبلغ) والتحقق النهائي بيقارن الرصيد ورأس المال من الـAPI.
+    /// </summary>
+    private async Task<bool> PartnerReverseReinvestAsync()
+    {
+        var candidates = _openReinvestments.Where(r => r.Partner.Capital >= r.Amount).ToList();
+        if (candidates.Count == 0)
+        {
+            return false;
+        }
+
+        var (partner, id, amount) = Pick(candidates);
+        var response = await PostAsync(_admin, $"/api/v1/partners/reinvestments/{id}/reverse",
+            new { password = DatabaseFixture.AdminPassword, reason = "تراجع محاكاة", clientRequestId = Guid.NewGuid() }, "تراجع عن إعادة استثمار");
+        partner.Reinvested -= amount;
+        partner.Capital -= amount;
+        _openReinvestments.RemoveAll(r => r.Id == id);
+        _reversalCount++;
+        CheckTrue("رد التراجع بنفس المبلغ", D(response, "amount") == amount, $"{D(response, "amount")} ≠ {amount}");
+
+        var again = await _admin.PostAsJsonAsync($"/api/v1/partners/reinvestments/{id}/reverse",
+            new { password = DatabaseFixture.AdminPassword, reason = (string?)null, clientRequestId = Guid.NewGuid() });
+        CheckTrue("تراجع تاني لنفس الإعادة مرفوض (409)", again.StatusCode == HttpStatusCode.Conflict, ((int)again.StatusCode).ToString());
+        Log($"{partner.Name} تراجع عن إعادة استثمار {amount:0.000} (رأس ماله صار {partner.Capital:0.000})");
         return true;
     }
 

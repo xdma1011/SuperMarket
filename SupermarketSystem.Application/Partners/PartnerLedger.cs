@@ -13,7 +13,7 @@ namespace SupermarketSystem.Application.Partners;
 /// رصيد الشريك (ديناميكي، بلا Ledger مخزَّن - نفس فلسفة GetCustomerDebts):
 ///   مجموع أنصبته من كل الكشوف الشهرية
 ///   − سحوباته (صندوق أو جيب)
-///   − إعادة استثمار برأس المال (PartnerReinvestment)
+///   − إعادة استثمار برأس المال (PartnerReinvestment) + تراجعاتها (PartnerReinvestmentReversal)
 ///   − "اخصمها مني" (سحب بضاعة بسعر التكلفة، راجع SaleInvoice.IsDeductedFromShare): المتبقي على الفاتورة
 ///     (الإجمالي − المرتجع − المدفوع لاحقًا)، بس للفواتير اللي عملها حساب الشريك نفسه (Partner.UserId) بنفس الفرع.
 /// ممكن يكون سالب (سحب مسبق/سلفة) - بيترحّل ويتغطّى من أنصبة الشهور الجاية.
@@ -51,6 +51,13 @@ public static class PartnerLedger
             .Select(g => new { PartnerId = g.Key, Total = g.Sum(r => r.Amount) })
             .ToDictionaryAsync(x => x.PartnerId, x => x.Total, cancellationToken);
 
+        // الصافي بعد التراجعات: التراجع بيرجّع المبلغ لرصيد الشريك.
+        var reversed = await context.PartnerReinvestmentReversals.IgnoreQueryFilters().AsNoTracking()
+            .Where(r => ids.Contains(r.PartnerId))
+            .GroupBy(r => r.PartnerId)
+            .Select(g => new { PartnerId = g.Key, Total = g.Sum(r => r.Amount) })
+            .ToDictionaryAsync(x => x.PartnerId, x => x.Total, cancellationToken);
+
         var atCost = await LoadAtCostDeductionsAsync(context, partners, cancellationToken);
 
         return partners.ToDictionary(
@@ -60,7 +67,7 @@ public static class PartnerLedger
                 shares.GetValueOrDefault(p.Id),
                 withdrawals.GetValueOrDefault(p.Id),
                 atCost.Where(a => a.PartnerId == p.Id).Sum(a => a.Remaining),
-                reinvested.GetValueOrDefault(p.Id)));
+                reinvested.GetValueOrDefault(p.Id) - reversed.GetValueOrDefault(p.Id)));
     }
 
     public sealed record AtCostDeduction(Guid PartnerId, Guid SaleInvoiceId, string InvoiceNumber, DateTime CreatedAtUtc, decimal Remaining);

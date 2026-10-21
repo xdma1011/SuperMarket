@@ -78,6 +78,9 @@
                     @if (canReinvest(p)) {
                       <button type="button" class="btn-link" (click)="openReinvest(p)">إعادة استثمار</button>
                     }
+                    @if (p.typeCode === 1) {
+                      <button type="button" class="btn-link" (click)="openReinvestments(p)">إعادات الاستثمار</button>
+                    }
                     <button type="button" class="btn-link" (click)="openPartnerForm(p)">تعديل</button>
                     <button type="button" class="btn-link" (click)="toggleActive(p)">{{ p.isActive ? 'إيقاف' : 'تفعيل' }}</button>
                     <button type="button" class="btn-link" (click)="issueBarcode(p)">{{ p.hasCashierBarcode ? 'باركود جديد' : 'باركود شخصي' }}</button>
@@ -370,7 +373,7 @@
       <p class="hint">
         المبلغ بينتقل من رصيد الشريك (<strong>{{ target.currentBalance | number: '1.3-3' }} د.أ</strong>) لرأس ماله بدون أي حركة نقد، فنسبته من
         أرباح الشهور الجاية بتزيد. النسبة بتنحسب برأس المال <strong>آخر الشهر</strong>، يعني الإعادة بنص الشهر بتأثر على ربح هالشهر كله.
-        <strong>هاد الإجراء نهائي وما فيه زر تراجع</strong> (سحب رأس المال من المالية بينقص رأس ماله بس وما بيرجّع الرصيد).
+        <strong>هاد قرار نهائي.</strong> لو احتجت تتراجع (احتياطي): من «إعادات الاستثمار» للشريك، بيرجّع المبلغ كامل لرصيده بشرط رأس ماله لسا يغطيه. سحب رأس المال من المالية لحاله بينقص رأس ماله بس وما بيرجّع الرصيد.
       </p>
       <div class="form-grid">
         <label class="field">
@@ -418,6 +421,99 @@
       <div class="modal-actions">
         <button type="button" class="btn-link" (click)="closeReinvest()">إلغاء</button>
         <button type="button" class="btn-primary" [disabled]="!reinvestReady()" (click)="confirmReinvest()">تنفيذ إعادة الاستثمار</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (reinvestmentsPartner(); as rp) {
+  <div class="modal-backdrop" (click)="closeReinvestments()">
+    <div class="modal-card" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="reinvestments-title">
+      <h2 id="reinvestments-title">إعادات الاستثمار — {{ rp.fullName }}</h2>
+      <p class="hint">
+        رأس ماله <strong>{{ rp.capitalBalance | number: '1.3-3' }}</strong> د.أ، ورصيده <strong>{{ rp.currentBalance | number: '1.3-3' }}</strong> د.أ.
+        التراجع بيكون كامل لإعادة وحدة ومرة وحدة، بشرط رأس ماله الحالي يغطي مبلغها. الكشوف اللي نزلت قبل التراجع ما بتتغير.
+      </p>
+      @if (reinvestments().length === 0) {
+        <p class="empty">ما في إعادات استثمار لهالشريك.</p>
+      } @else {
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead><tr><th>التاريخ</th><th>المبلغ</th><th>بواسطة</th><th>ملاحظة</th><th>الحالة</th><th></th></tr></thead>
+            <tbody>
+              @for (r of reinvestments(); track r.id) {
+                <tr [class.inactive]="r.isReversed">
+                  <td class="mono">{{ r.occurredAtUtc | date: 'yyyy-MM-dd HH:mm' }}</td>
+                  <td class="money">{{ r.amount | number: '1.3-3' }}</td>
+                  <td>{{ r.recordedByName }}</td>
+                  <td>{{ r.notes }}</td>
+                  <td>
+                    @if (r.isReversed) {
+                      <span class="chip">منعكسة {{ r.reversedAtUtc | date: 'yyyy-MM-dd' }}</span>
+                      @if (r.reversalReason) { <small class="sub">{{ r.reversalReason }}</small> }
+                    } @else {
+                      فعّالة
+                    }
+                  </td>
+                  <td class="actions">
+                    @if (!r.isReversed) {
+                      <button type="button" class="btn-link" (click)="openReverse(r)">تراجع</button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+      <div class="modal-actions">
+        <button type="button" class="btn-link" (click)="closeReinvestments()">سكّر</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (reverseTarget(); as rt) {
+  <div class="modal-backdrop">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="reverse-title">
+      <h2 id="reverse-title">تراجع عن إعادة استثمار {{ rt.amount | number: '1.3-3' }} د.أ</h2>
+      @if (reversePreview(); as pv) {
+        @if (pv.canReverse) {
+          <p class="hint">المبلغ بيرجع من رأس مال الشريك لرصيده القابل للسحب. الكشوف اللي نزلت قبل ما بتتغير، والنسبة من الأرباح الجاية بترجع.</p>
+          <table class="data-table">
+            <thead><tr><th></th><th>قبل</th><th>بعد</th></tr></thead>
+            <tbody>
+              <tr><td>رصيد الشريك</td><td class="money">{{ pv.balanceBefore | number: '1.3-3' }}</td><td class="money-strong">{{ pv.balanceAfter | number: '1.3-3' }}</td></tr>
+              <tr><td>رأس ماله</td><td class="money">{{ pv.capitalBefore | number: '1.3-3' }}</td><td class="money-strong">{{ pv.capitalAfter | number: '1.3-3' }}</td></tr>
+              <tr><td>نسبته من الأرباح</td><td class="money">{{ pv.sharePercentBefore | number: '1.0-2' }}%</td><td class="money-strong">{{ pv.sharePercentAfter | number: '1.0-2' }}%</td></tr>
+            </tbody>
+          </table>
+          <div class="form-grid">
+            <label class="field wide">
+              <span>السبب (اختياري)</span>
+              <input type="text" maxlength="500" [(ngModel)]="reverseReason" />
+            </label>
+          </div>
+          <div class="reinvest-confirm">
+            <label class="field">
+              <span>للتأكيد اكتب اسم الشريك بالضبط: <strong>{{ pv.partnerName }}</strong></span>
+              <input type="text" autocomplete="off" [(ngModel)]="reverseConfirmName" />
+            </label>
+            <label class="field">
+              <span>كلمة سر حسابك أنت</span>
+              <input type="password" autocomplete="current-password" dir="ltr" [(ngModel)]="reversePassword" />
+            </label>
+          </div>
+        } @else {
+          <div class="alert-banner">{{ pv.blockedReason }}</div>
+        }
+      }
+      @if (reverseError()) {
+        <div class="alert-banner">{{ reverseError() }}</div>
+      }
+      <div class="modal-actions">
+        <button type="button" class="btn-link" (click)="closeReverse()">إلغاء</button>
+        <button type="button" class="btn-primary" [disabled]="!reverseReady()" (click)="confirmReverse()">تنفيذ التراجع</button>
       </div>
     </div>
   </div>

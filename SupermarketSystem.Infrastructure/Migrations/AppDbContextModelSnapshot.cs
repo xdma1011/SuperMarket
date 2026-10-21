@@ -3192,6 +3192,60 @@ namespace SupermarketSystem.Infrastructure.Migrations
                     b.ToTable("PartnerReinvestments", (string)null);
                 });
 
+            modelBuilder.Entity("SupermarketSystem.Domain.Partners.PartnerReinvestmentReversal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CapitalTransactionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ClientRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("PartnerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("RecordedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ReinvestmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("CapitalTransactionId")
+                        .IsUnique();
+
+                    b.HasIndex("ClientRequestId")
+                        .IsUnique();
+
+                    b.HasIndex("RecordedByUserId");
+
+                    b.HasIndex("ReinvestmentId")
+                        .IsUnique();
+
+                    b.HasIndex("PartnerId", "OccurredAtUtc");
+
+                    b.ToTable("PartnerReinvestmentReversals", (string)null);
+                });
+
             modelBuilder.Entity("SupermarketSystem.Domain.Partners.PartnerStatementLine", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5521,6 +5575,39 @@ namespace SupermarketSystem.Infrastructure.Migrations
                     b.HasOne("SupermarketSystem.Domain.Identity.User", null)
                         .WithMany()
                         .HasForeignKey("RecordedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SupermarketSystem.Domain.Partners.PartnerReinvestmentReversal", b =>
+                {
+                    b.HasOne("SupermarketSystem.Domain.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SupermarketSystem.Domain.Finance.CapitalTransaction", null)
+                        .WithMany()
+                        .HasForeignKey("CapitalTransactionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SupermarketSystem.Domain.Partners.Partner", null)
+                        .WithMany()
+                        .HasForeignKey("PartnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SupermarketSystem.Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("RecordedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SupermarketSystem.Domain.Partners.PartnerReinvestment", null)
+                        .WithMany()
+                        .HasForeignKey("ReinvestmentId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

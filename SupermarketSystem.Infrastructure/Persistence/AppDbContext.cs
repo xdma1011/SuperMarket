@@ -118,6 +118,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<Partner> Partners => Set<Partner>();
     public DbSet<PartnerWithdrawal> PartnerWithdrawals => Set<PartnerWithdrawal>();
     public DbSet<PartnerReinvestment> PartnerReinvestments => Set<PartnerReinvestment>();
+    public DbSet<PartnerReinvestmentReversal> PartnerReinvestmentReversals => Set<PartnerReinvestmentReversal>();
     public DbSet<PartnerOtpChallenge> PartnerOtpChallenges => Set<PartnerOtpChallenge>();
     public DbSet<PartnerMonthlyStatement> PartnerMonthlyStatements => Set<PartnerMonthlyStatement>();
     public DbSet<PartnerStatementLine> PartnerStatementLines => Set<PartnerStatementLine>();

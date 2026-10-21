@@ -54,6 +54,36 @@ export interface ReinvestPreviewDto {
   blockedReason: string | null;
 }
 
+/** إعادة استثمار سابقة وحالتها (منعكسة بتراجع أو فعّالة). */
+export interface PartnerReinvestmentDto {
+  id: string;
+  partnerId: string;
+  amount: number;
+  occurredAtUtc: string;
+  notes: string | null;
+  recordedByName: string;
+  isReversed: boolean;
+  reversedAtUtc: string | null;
+  reversalReason: string | null;
+  reversedByName: string | null;
+}
+
+/** معاينة التراجع (بلا كتابة): الرصيد ورأس المال والنسبة قبل/بعد. */
+export interface ReverseReinvestmentPreviewDto {
+  reinvestmentId: string;
+  partnerId: string;
+  partnerName: string;
+  amount: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  capitalBefore: number;
+  capitalAfter: number;
+  sharePercentBefore: number;
+  sharePercentAfter: number;
+  canReverse: boolean;
+  blockedReason: string | null;
+}
+
 /** كرت الباركود بعد الإصدار - الأرقام بتبين هون مرة وحدة بس (السيرفر بيحفظ hash). */
 export interface IssuedBarcodeCard {
   partnerName: string;
@@ -143,6 +173,8 @@ export class PartnersComponent implements OnInit {
   private readonly ledgerRequest = latestRequest();
   private readonly statementRequest = latestRequest();
   private readonly reinvestPreviewRequest = latestRequest();
+  private readonly reinvestmentsRequest = latestRequest();
+  private readonly reversePreviewRequest = latestRequest();
   private readonly apiClient = inject(ApiClient);
   private readonly auth = inject(AuthService);
   /** اختياري: "?tab=withdrawals" من كبسة تنبيه سحب شريك. */
@@ -181,6 +213,17 @@ export class PartnersComponent implements OnInit {
   reinvestConfirmName = '';
   reinvestPassword = '';
   private reinvestRequestId = '';
+
+  // سجل إعادات الاستثمار + التراجع الاحتياطي (20/10/2026): نفس حماية الإعادة (معاينة ← اسم الشريك + كلمة السر).
+  readonly reinvestmentsPartner = signal<PartnerDto | null>(null);
+  readonly reinvestments = signal<PartnerReinvestmentDto[]>([]);
+  readonly reverseTarget = signal<PartnerReinvestmentDto | null>(null);
+  readonly reversePreview = signal<ReverseReinvestmentPreviewDto | null>(null);
+  readonly reverseError = signal<string | null>(null);
+  reverseReason = '';
+  reverseConfirmName = '';
+  reversePassword = '';
+  private reverseRequestId = '';
 
   // الكشوف
   readonly statements = signal<PartnerStatementSummaryDto[]>([]);
@@ -358,6 +401,96 @@ export class PartnersComponent implements OnInit {
 
   closeLedger(): void {
     this.ledger.set(null);
+  }
+
+  // ===== سجل إعادات الاستثمار والتراجع =====
+
+  async openReinvestments(partner: PartnerDto): Promise<void> {
+    this.clearMessages();
+    this.reinvestmentsPartner.set(partner);
+    this.reinvestments.set([]);
+    await this.reloadReinvestments();
+  }
+
+  closeReinvestments(): void {
+    this.reinvestmentsPartner.set(null);
+    this.reinvestments.set([]);
+    this.reinvestmentsRequest.cancel();
+  }
+
+  private async reloadReinvestments(): Promise<void> {
+    const partner = this.reinvestmentsPartner();
+    if (!partner) return;
+    try {
+      this.reinvestments.set(await this.reinvestmentsRequest.run(
+        this.apiClient.get<PartnerReinvestmentDto[]>(ApiController.Partners, PartnersOperation.Reinvestments, { id: partner.id })
+      ));
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
+      this.errorMessage.set(this.errorDetail(err) ?? 'تعذّر جلب إعادات الاستثمار.');
+    }
+  }
+
+  async openReverse(item: PartnerReinvestmentDto): Promise<void> {
+    this.reverseTarget.set(item);
+    this.reversePreview.set(null);
+    this.reverseError.set(null);
+    this.reverseReason = '';
+    this.reverseConfirmName = '';
+    this.reversePassword = '';
+    this.reverseRequestId = crypto.randomUUID();
+    try {
+      this.reversePreview.set(await this.reversePreviewRequest.run(
+        this.apiClient.get<ReverseReinvestmentPreviewDto>(ApiController.Partners, PartnersOperation.ReverseReinvestmentPreview, { id: item.id })
+      ));
+    } catch (err) {
+      if (isRequestCancelled(err)) return;
+      this.reverseError.set(this.errorDetail(err) ?? 'تعذّرت المعاينة.');
+    }
+  }
+
+  closeReverse(): void {
+    this.reversePreviewRequest.cancel();
+    this.reverseTarget.set(null);
+    this.reversePreview.set(null);
+    this.reversePassword = '';
+    this.reverseConfirmName = '';
+  }
+
+  /** زر التراجع بيفتح بس لما المعاينة مسموحة + اسم الشريك بالضبط + كلمة سر. */
+  reverseReady(): boolean {
+    const partner = this.reinvestmentsPartner();
+    const preview = this.reversePreview();
+    if (!partner || !preview || !preview.canReverse || this.submitting()) return false;
+    return this.reverseConfirmName.trim() === partner.fullName.trim() && this.reversePassword.length > 0;
+  }
+
+  async confirmReverse(): Promise<void> {
+    const target = this.reverseTarget();
+    const partner = this.reinvestmentsPartner();
+    if (!target || !partner || !this.reverseReady()) return;
+
+    this.submitting.set(true);
+    this.reverseError.set(null);
+    try {
+      await firstValueFrom(this.apiClient.post(ApiController.Partners, PartnersOperation.ReverseReinvestment, {
+        password: this.reversePassword,
+        reason: this.reverseReason.trim() || null,
+        clientRequestId: this.reverseRequestId
+      }, { id: target.id }));
+      this.closeReverse();
+      this.successMessage.set(`انعمل تراجع عن إعادة استثمار ${target.amount.toFixed(3)} د.أ لـ${partner.fullName}.`);
+      await this.reloadAll();
+      const refreshed = this.partners().find(p => p.id === partner.id);
+      if (refreshed) this.reinvestmentsPartner.set(refreshed);
+      await this.reloadReinvestments();
+    } catch (err) {
+      // كلمة السر ما بتضل بالذاكرة؛ والمفتاح بيضل نفسه (لو الطلب نجح فعلًا وانقطع الرد، إعادة الإرسال ما بتكرر).
+      this.reversePassword = '';
+      this.reverseError.set(this.errorDetail(err) ?? 'تعذّر التراجع.');
+    } finally {
+      this.submitting.set(false);
+    }
   }
 
   // ===== إعادة استثمار الربح برأس المال =====

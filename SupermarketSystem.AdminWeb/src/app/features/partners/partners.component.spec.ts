@@ -243,4 +243,99 @@ describe('PartnersComponent', () => {
       expect((api.post.calls.mostRecent().args[2] as Record<string, unknown>)['clientRequestId']).toBe(firstId);
     });
   });
+
+  describe('سجل إعادات الاستثمار والتراجع', () => {
+    const ITEM = {
+      id: 'r1', partnerId: 'p1', amount: 0.5, occurredAtUtc: '2026-10-19T10:00:00Z', notes: null, recordedByName: 'المدير',
+      isReversed: false, reversedAtUtc: null, reversalReason: null, reversedByName: null
+    };
+    const REVERSE_PREVIEW = {
+      reinvestmentId: 'r1', partnerId: 'p1', partnerName: 'أحمد', amount: 0.5, balanceBefore: 0.1, balanceAfter: 0.6,
+      capitalBefore: 3000.5, capitalAfter: 3000, sharePercentBefore: 75.01, sharePercentAfter: 75, canReverse: true, blockedReason: null
+    };
+
+    function mockApi(preview: unknown = REVERSE_PREVIEW, items: unknown[] = [ITEM]): void {
+      api.get.and.callFake(((controller: string, operation: string) => {
+        if (operation === '{id}/reinvestments') return of(items);
+        if (operation === 'reinvestments/{id}/reverse-preview') return of(preview);
+        if (controller === 'partners' && operation === '') return of([AHMAD]);
+        return of([]);
+      }) as unknown as typeof api.get);
+    }
+
+    it('فتح السجل بيجيب إعادات الشريك', async () => {
+      mockApi();
+      await component.openReinvestments(AHMAD);
+      expect(component.reinvestmentsPartner()?.id).toBe('p1');
+      expect(component.reinvestments().length).toBe(1);
+      component.closeReinvestments();
+      expect(component.reinvestmentsPartner()).toBeNull();
+      expect(component.reinvestments()).toEqual([]);
+    });
+
+    it('التراجع مقفول لحد المعاينة + اسم الشريك بالضبط + كلمة السر', async () => {
+      mockApi();
+      await component.openReinvestments(AHMAD);
+      await component.openReverse(ITEM);
+      expect(component.reversePreview()?.canReverse).toBeTrue();
+      expect(component.reverseReady()).toBeFalse();
+      component.reverseConfirmName = 'أحمد';
+      expect(component.reverseReady()).toBeFalse();
+      component.reversePassword = 'x';
+      expect(component.reverseReady()).toBeTrue();
+      component.reverseConfirmName = 'احمد';
+      expect(component.reverseReady()).toBeFalse();
+    });
+
+    it('معاينة مرفوضة (رأس المال ما بيكفي) = التراجع مقفول', async () => {
+      mockApi({ ...REVERSE_PREVIEW, canReverse: false, blockedReason: 'رأس مال الشريك أقل من مبلغ الإعادة' });
+      await component.openReinvestments(AHMAD);
+      await component.openReverse(ITEM);
+      component.reverseConfirmName = 'أحمد';
+      component.reversePassword = 'x';
+      expect(component.reverseReady()).toBeFalse();
+    });
+
+    it('التنفيذ بيبعت كلمة السر والسبب ومفتاح عدم التكرار، وبيسكّر ويحدّث السجل', async () => {
+      mockApi();
+      api.post.and.returnValue(of({}));
+      await component.openReinvestments(AHMAD);
+      await component.openReverse(ITEM);
+      component.reverseReason = ' غيّرت رأيي ';
+      component.reverseConfirmName = 'أحمد';
+      component.reversePassword = 'secret';
+      await component.confirmReverse();
+
+      const [controller, operation, body, route] = api.post.calls.mostRecent().args as unknown as [string, string, Record<string, unknown>, Record<string, string>];
+      expect(controller).toBe('partners');
+      expect(operation).toBe('reinvestments/{id}/reverse');
+      expect(route).toEqual({ id: 'r1' });
+      expect(body['password']).toBe('secret');
+      expect(body['reason']).toBe('غيّرت رأيي');
+      expect(typeof body['clientRequestId']).toBe('string');
+      expect(component.reverseTarget()).toBeNull();
+      expect(component.reversePassword).toBe('');
+      expect(component.successMessage()).toContain('0.500');
+    });
+
+    it('كلمة سر غلط: رسالة السيرفر، كلمة السر بتنمسح، والمفتاح نفسه بالمحاولة الجاية', async () => {
+      mockApi();
+      api.post.and.returnValue(throwError(() => ({ error: { detail: 'كلمة السر غير صحيحة' } })));
+      await component.openReinvestments(AHMAD);
+      await component.openReverse(ITEM);
+      component.reverseConfirmName = 'أحمد';
+      component.reversePassword = 'غلط';
+      await component.confirmReverse();
+      const firstId = (api.post.calls.mostRecent().args[2] as Record<string, unknown>)['clientRequestId'];
+
+      expect(component.reverseError()).toBe('كلمة السر غير صحيحة');
+      expect(component.reversePassword).toBe('');
+      expect(component.reverseTarget()).not.toBeNull();
+      expect(component.reverseReady()).toBeFalse();
+
+      component.reversePassword = 'تاني';
+      await component.confirmReverse();
+      expect((api.post.calls.mostRecent().args[2] as Record<string, unknown>)['clientRequestId']).toBe(firstId);
+    });
+  });
 });

@@ -377,4 +377,228 @@ public sealed class PartnerReinvestmentHttpTests : IntegrationTestBase
         var violations = await Chaos.InvariantAuditor.AuditAsync(CreateDbContext(scope));
         Assert.True(violations.Count == 0, string.Join('\n', violations));
     }
+
+    // ===================================================================== التراجع عن إعادة الاستثمار
+
+    private static Task<HttpResponseMessage> ReverseAsync(HttpClient client, Guid reinvestmentId, string? password, Guid? requestId = null, string? reason = null) =>
+        client.PostAsJsonAsync($"/api/v1/partners/reinvestments/{reinvestmentId}/reverse", new { password, reason, clientRequestId = requestId ?? Guid.NewGuid() });
+
+    private async Task<Guid> ReinvestOkAsync(Setup s, decimal amount, string? notes = null)
+    {
+        var response = await ReadJsonAsync(await ReinvestAsync(s.Admin, s.Ahmad, amount, DatabaseFixture.AdminPassword, notes: notes), "إعادة استثمار");
+        return response.GetProperty("reinvestmentId").GetGuid();
+    }
+
+    private async Task<JsonElement> ReinvestmentsAsync(HttpClient admin, Guid partnerId) =>
+        await ReadJsonAsync(await admin.GetAsync($"/api/v1/partners/{partnerId}/reinvestments"), "قائمة إعادات الاستثمار");
+
+    [Fact]
+    public async Task تراجع_كامل_بيرجّع_المبلغ_للرصيد_وبينقصه_من_رأس_المال_والنسبة_بدون_ما_يلمس_الإعادة_الأصلية()
+    {
+        var s = await SetUpAsync();
+        var id = await ReinvestOkAsync(s, 2.000m);
+
+        var list = await ReinvestmentsAsync(s.Admin, s.Ahmad);
+        Assert.Single(list.EnumerateArray());
+        Assert.False(list[0].GetProperty("isReversed").GetBoolean());
+
+        // معاينة بلا كتابة: الرصيد 0.250 ← 2.250، رأس المال 12 ← 10، النسبة 54.55 ← 50.
+        var preview = await ReadJsonAsync(await s.Admin.GetAsync($"/api/v1/partners/reinvestments/{id}/reverse-preview"), "معاينة التراجع");
+        Assert.True(preview.GetProperty("canReverse").GetBoolean());
+        Assert.Equal(0.250m, preview.GetProperty("balanceBefore").GetDecimal());
+        Assert.Equal(2.250m, preview.GetProperty("balanceAfter").GetDecimal());
+        Assert.Equal(12m, preview.GetProperty("capitalBefore").GetDecimal());
+        Assert.Equal(10m, preview.GetProperty("capitalAfter").GetDecimal());
+        Assert.Equal(54.55m, preview.GetProperty("sharePercentBefore").GetDecimal());
+        Assert.Equal(50.00m, preview.GetProperty("sharePercentAfter").GetDecimal());
+        Assert.Equal(0.250m, (await PartnerAsync(s.Admin, s.Ahmad)).GetProperty("currentBalance").GetDecimal()); // المعاينة ما غيّرت شي
+
+        int drawerLogsBefore;
+        using (var scope = CreateScope())
+        {
+            drawerLogsBefore = await CreateDbContext(scope).CashDrawerLogs.IgnoreQueryFilters().CountAsync();
+        }
+
+        var response = await ReadJsonAsync(await ReverseAsync(s.Admin, id, DatabaseFixture.AdminPassword, reason: "قرار تغيّر"), "تراجع");
+        Assert.False(response.GetProperty("wasReplay").GetBoolean());
+        Assert.Equal(2.250m, response.GetProperty("newBalance").GetDecimal());
+        Assert.Equal(12m, response.GetProperty("capitalBefore").GetDecimal());
+        Assert.Equal(10m, response.GetProperty("capitalAfter").GetDecimal());
+
+        var partner = await PartnerAsync(s.Admin, s.Ahmad);
+        Assert.Equal(2.250m, partner.GetProperty("currentBalance").GetDecimal());
+        Assert.Equal(10m, partner.GetProperty("capitalBalance").GetDecimal());
+        Assert.Equal(0m, partner.GetProperty("reinvestedTotal").GetDecimal());
+
+        var after = await ReinvestmentsAsync(s.Admin, s.Ahmad);
+        Assert.True(after[0].GetProperty("isReversed").GetBoolean());
+        Assert.Equal("قرار تغيّر", after[0].GetProperty("reversalReason").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(after[0].GetProperty("reversedByName").GetString()));
+
+        var ledger = await ReadJsonAsync(await s.Admin.GetAsync($"/api/v1/partners/{s.Ahmad}/ledger"), "كشف حساب");
+        var kinds = ledger.GetProperty("entries").EnumerateArray().Select(e => e.GetProperty("kindCode").GetString()).ToList();
+        Assert.Contains("reinvest", kinds);
+        Assert.Contains("reinvest-reversal", kinds);
+        Assert.Equal(2.250m, ledger.GetProperty("currentBalance").GetDecimal());
+
+        using (var scope = CreateScope())
+        {
+            var db = CreateDbContext(scope);
+            Assert.Equal(drawerLogsBefore, await db.CashDrawerLogs.IgnoreQueryFilters().CountAsync()); // بلا حركة نقد
+            var reinvestment = await db.PartnerReinvestments.IgnoreQueryFilters().AsNoTracking().SingleAsync();
+            Assert.Equal(2.000m, reinvestment.Amount); // الأصل ما اتلمس
+            var reversal = await db.PartnerReinvestmentReversals.IgnoreQueryFilters().AsNoTracking().SingleAsync();
+            var withdrawal = await db.CapitalTransactions.IgnoreQueryFilters().AsNoTracking().SingleAsync(c => c.Id == reversal.CapitalTransactionId);
+            Assert.Equal(SupermarketSystem.Domain.Finance.CapitalTransactionType.Withdrawal, withdrawal.Type);
+            Assert.Equal((2.000m, s.Ahmad), (withdrawal.Amount, withdrawal.PartnerId));
+            var violations = await Chaos.InvariantAuditor.AuditAsync(db);
+            Assert.True(violations.Count == 0, string.Join('\n', violations));
+            var severities = await db.Notifications.IgnoreQueryFilters().AsNoTracking()
+                .Where(n => n.Title.Contains("تراجع عن إعادة استثمار")).Select(n => n.Severity).ToListAsync();
+            Assert.NotEmpty(severities);
+            Assert.All(severities, sev => Assert.Equal(NotificationSeverity.Warning, sev));
+        }
+    }
+
+    [Fact]
+    public async Task التراجع_مرة_وحدة_بس_والإعادة_بنفس_المفتاح_رد_أصلي_بلا_كلمة_سر_والتراجع_التاني_409()
+    {
+        var s = await SetUpAsync();
+        var id = await ReinvestOkAsync(s, 2.000m);
+        var requestId = Guid.NewGuid();
+
+        Assert.Equal(HttpStatusCode.Created, (await ReverseAsync(s.Admin, id, DatabaseFixture.AdminPassword, requestId)).StatusCode);
+        var replay = await ReverseAsync(s.Admin, id, "مش مهم", requestId);
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        Assert.True(JsonDocument.Parse(await replay.Content.ReadAsStringAsync()).RootElement.GetProperty("wasReplay").GetBoolean());
+
+        var again = await ReverseAsync(s.Admin, id, DatabaseFixture.AdminPassword); // مفتاح جديد = تراجع تاني
+        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
+        Assert.Contains("PartnerReinvest.AlreadyReversed", await again.Content.ReadAsStringAsync());
+
+        var partner = await PartnerAsync(s.Admin, s.Ahmad);
+        Assert.Equal(2.250m, partner.GetProperty("currentBalance").GetDecimal());
+        Assert.Equal(10m, partner.GetProperty("capitalBalance").GetDecimal());
+        using var scope = CreateScope();
+        Assert.Equal(1, await CreateDbContext(scope).PartnerReinvestmentReversals.IgnoreQueryFilters().CountAsync());
+    }
+
+    [Fact]
+    public async Task تراجع_بكلمة_سر_غلط_أو_فاضية_أو_حساب_تاني_مرفوض_وما_بينكتب_ولا_شي()
+    {
+        var s = await SetUpAsync();
+        var id = await ReinvestOkAsync(s, 2.000m);
+        foreach (var bad in new string?[] { "غلط", "", null, UsersTestDataHelper.DefaultPassword })
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, (await ReverseAsync(s.Admin, id, bad)).StatusCode);
+        }
+
+        var partner = await PartnerAsync(s.Admin, s.Ahmad);
+        Assert.Equal(0.250m, partner.GetProperty("currentBalance").GetDecimal());
+        Assert.Equal(12m, partner.GetProperty("capitalBalance").GetDecimal());
+        using var scope = CreateScope();
+        Assert.Equal(0, await CreateDbContext(scope).PartnerReinvestmentReversals.IgnoreQueryFilters().CountAsync());
+    }
+
+    [Fact]
+    public async Task التراجع_مرفوض_لو_رأس_المال_انسحب_بعد_الإعادة_وبيفتح_لما_يكفي_المبلغ()
+    {
+        var s = await SetUpAsync();
+        var id = await ReinvestOkAsync(s, 2.000m); // رأس المال 12
+
+        async Task WithdrawCapitalAsync(decimal amount) => await ReadJsonAsync(await s.Admin.PostAsJsonAsync("/api/v1/finance/capital-transactions", new
+        {
+            branchId = Fixture.TestBranchId, type = "Withdrawal", amount, occurredAtUtc = DateTime.UtcNow, notes = "سحب", partnerId = s.Ahmad
+        }, StringEnums), "سحب رأس مال");
+
+        await WithdrawCapitalAsync(11m); // رأس المال 1 < 2
+        var blocked = await ReverseAsync(s.Admin, id, DatabaseFixture.AdminPassword);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, blocked.StatusCode);
+        Assert.Contains("PartnerReinvest.CapitalInsufficient", await blocked.Content.ReadAsStringAsync());
+        var preview = await ReadJsonAsync(await s.Admin.GetAsync($"/api/v1/partners/reinvestments/{id}/reverse-preview"), "معاينة");
+        Assert.False(preview.GetProperty("canReverse").GetBoolean());
+        Assert.False(string.IsNullOrWhiteSpace(preview.GetProperty("blockedReason").GetString()));
+        Assert.Equal(0.250m, (await PartnerAsync(s.Admin, s.Ahmad)).GetProperty("currentBalance").GetDecimal());
+
+        await ReadJsonAsync(await s.Admin.PostAsJsonAsync("/api/v1/finance/capital-transactions", new
+        {
+            branchId = Fixture.TestBranchId, type = "Deposit", amount = 1m, occurredAtUtc = DateTime.UtcNow, notes = "إيداع", partnerId = s.Ahmad
+        }, StringEnums), "إيداع"); // رأس المال 2 = كافي بالضبط
+        Assert.Equal(HttpStatusCode.Created, (await ReverseAsync(s.Admin, id, DatabaseFixture.AdminPassword)).StatusCode);
+        var partner = await PartnerAsync(s.Admin, s.Ahmad);
+        Assert.Equal(2.250m, partner.GetProperty("currentBalance").GetDecimal());
+        Assert.Equal(0m, partner.GetProperty("capitalBalance").GetDecimal());
+    }
+
+    [Fact]
+    public async Task تراجع_عن_إعادة_وحدة_من_اثنتين_والدورة_إعادة_ثم_تراجع_ثم_إعادة_والشريك_الموقوف_بيتراجع_عنه()
+    {
+        var s = await SetUpAsync();
+        var first = await ReinvestOkAsync(s, 1.000m);
+        var second = await ReinvestOkAsync(s, 0.500m);
+        Assert.Equal(HttpStatusCode.Created, (await ReverseAsync(s.Admin, first, DatabaseFixture.AdminPassword)).StatusCode);
+
+        var partner = await PartnerAsync(s.Admin, s.Ahmad);
+        Assert.Equal(1.750m, partner.GetProperty("currentBalance").GetDecimal()); // 2.250 − 0.500
+        Assert.Equal(10.500m, partner.GetProperty("capitalBalance").GetDecimal());
+        Assert.Equal(0.500m, partner.GetProperty("reinvestedTotal").GetDecimal());
+        var list = (await ReinvestmentsAsync(s.Admin, s.Ahmad)).EnumerateArray().ToDictionary(e => e.GetProperty("id").GetGuid());
+        Assert.True(list[first].GetProperty("isReversed").GetBoolean());
+        Assert.False(list[second].GetProperty("isReversed").GetBoolean());
+
+        // بعد التراجع بيقدر يعيد استثمار نفس المبلغ من جديد.
+        await ReadJsonAsync(await ReinvestAsync(s.Admin, s.Ahmad, 1.750m, DatabaseFixture.AdminPassword), "إعادة جديدة");
+        Assert.Equal(0m, (await PartnerAsync(s.Admin, s.Ahmad)).GetProperty("currentBalance").GetDecimal());
+
+        // الشريك الموقوف: التراجع بيشتغل (بيرجّع رصيد/رأس مال بس).
+        await ReadJsonAsync(await s.Admin.PostAsJsonAsync($"/api/v1/partners/{s.Ahmad}/active", new { isActive = false }), "إيقاف");
+        Assert.Equal(HttpStatusCode.Created, (await ReverseAsync(s.Admin, second, DatabaseFixture.AdminPassword)).StatusCode);
+        Assert.Equal(0.500m, (await PartnerAsync(s.Admin, s.Ahmad)).GetProperty("currentBalance").GetDecimal());
+    }
+
+    [Fact]
+    public async Task التراجع_والقائمة_والمعاينة_ممنوعة_لمساعد_الأدمن_والكاشير_وغير_الموجود_404()
+    {
+        var s = await SetUpAsync();
+        var id = await ReinvestOkAsync(s, 1.000m);
+        foreach (var (roleId, app) in new[] { (UsersTestDataHelper.AssistantAdminRoleId, "Admin"), (UsersTestDataHelper.CashierRoleId, "Cashier") })
+        {
+            var (_, name) = await UsersTestDataHelper.CreateUserWithRoleReturningUsernameAsync(Fixture.Factory.Services, Fixture.TestBranchId, roleId, "reverse.denied");
+            var client = await LoginHelper.LoginAsAsync(Fixture, name, UsersTestDataHelper.DefaultPassword, app);
+            Assert.Equal(HttpStatusCode.Forbidden, (await ReverseAsync(client, id, UsersTestDataHelper.DefaultPassword)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/api/v1/partners/reinvestments/{id}/reverse-preview")).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/api/v1/partners/{s.Ahmad}/reinvestments")).StatusCode);
+        }
+
+        Assert.Equal(HttpStatusCode.NotFound, (await ReverseAsync(s.Admin, Guid.NewGuid(), DatabaseFixture.AdminPassword)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await s.Admin.GetAsync($"/api/v1/partners/reinvestments/{Guid.NewGuid()}/reverse-preview")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await s.Admin.GetAsync($"/api/v1/partners/{Guid.NewGuid()}/reinvestments")).StatusCode);
+    }
+
+    [Fact]
+    public async Task تراجعات_متزامنة_لنفس_الإعادة_بمفاتيح_مختلفة_بينجح_واحد_بس_والرصيد_ورأس_المال_ما_بيتضاعفوا()
+    {
+        var s = await SetUpAsync();
+        var id = await ReinvestOkAsync(s, 2.000m);
+        var gate = new TaskCompletionSource();
+        var tasks = Enumerable.Range(0, 6).Select(_ => Task.Run(async () =>
+        {
+            await gate.Task;
+            return await ReverseAsync(s.Admin, id, DatabaseFixture.AdminPassword);
+        })).ToArray();
+        await Task.Delay(100);
+        gate.SetResult();
+        var responses = await Task.WhenAll(tasks);
+
+        Assert.All(responses, r => Assert.True((int)r.StatusCode < 500, $"{(int)r.StatusCode}"));
+        Assert.Equal(1, responses.Count(r => r.StatusCode == HttpStatusCode.Created));
+        Assert.All(responses.Where(r => r.StatusCode != HttpStatusCode.Created), r => Assert.Equal(HttpStatusCode.Conflict, r.StatusCode));
+
+        var partner = await PartnerAsync(s.Admin, s.Ahmad);
+        Assert.Equal(2.250m, partner.GetProperty("currentBalance").GetDecimal());
+        Assert.Equal(10m, partner.GetProperty("capitalBalance").GetDecimal());
+        using var scope = CreateScope();
+        var violations = await Chaos.InvariantAuditor.AuditAsync(CreateDbContext(scope));
+        Assert.True(violations.Count == 0, string.Join('\n', violations));
+    }
 }

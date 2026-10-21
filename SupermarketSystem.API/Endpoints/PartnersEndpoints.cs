@@ -92,6 +92,36 @@ public static class PartnersEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
 
+        group.MapGet("/{partnerId:guid}/reinvestments", async (Guid partnerId, GetPartnerReinvestmentsHandler handler, CancellationToken cancellationToken) =>
+            {
+                var list = await handler.HandleAsync(partnerId, cancellationToken);
+                return list is null ? Results.NotFound() : Results.Ok(list);
+            })
+            .WithName("GetPartnerReinvestments")
+            .WithSummary("إعادات استثمار الشريك (الأحدث أول) وحالة كل وحدة: منعكسة أو لا.")
+            .Produces<IReadOnlyList<PartnerReinvestmentDto>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
+        group.MapGet("/reinvestments/{reinvestmentId:guid}/reverse-preview", async (Guid reinvestmentId, GetReverseReinvestmentPreviewHandler handler, CancellationToken cancellationToken) =>
+                (await handler.HandleAsync(reinvestmentId, cancellationToken)).ToHttpResult(r => Results.Ok(r)))
+            .WithName("GetReverseReinvestmentPreview")
+            .WithSummary("معاينة التراجع عن إعادة استثمار: الرصيد ورأس المال ونسبته قبل وبعد - بلا أي كتابة.")
+            .Produces<ReverseReinvestmentPreviewDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
+        group.MapPost("/reinvestments/{reinvestmentId:guid}/reverse", async (Guid reinvestmentId, ReverseReinvestmentRequest request, ReverseReinvestmentHandler handler, CancellationToken cancellationToken) =>
+            {
+                var result = await handler.HandleAsync(
+                    new ReverseReinvestmentCommand(reinvestmentId, request.Password, request.Reason, request.ClientRequestId), cancellationToken);
+                return result.ToHttpResult(r => r.WasReplay ? Results.Ok(r) : Results.Created($"/api/v1/partners/{r.PartnerId}/ledger", r));
+            })
+            .WithName("ReverseReinvestment")
+            .WithSummary("التراجع عن إعادة استثمار (كاملة فقط، مرة وحدة): بيرجّع المبلغ من رأس مال الشريك لرصيده - بتطلب كلمة سر المستخدم الحالي.")
+            .Produces<ReverseReinvestmentResponse>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+
         group.MapGet("/withdrawals", async (Guid? branchId, Guid? partnerId, GetPartnerWithdrawalsHandler handler, CancellationToken cancellationToken) =>
                 Results.Ok(await handler.HandleAsync(new GetPartnerWithdrawalsQuery(branchId, partnerId), cancellationToken)))
             .WithName("GetPartnerWithdrawals")
@@ -182,6 +212,8 @@ public static class PartnersEndpoints
     public sealed record UpdatePartnerRequest(string FullName, Guid? UserId, decimal? SpeculativeProfitPercent, string? Notes);
 
     public sealed record SetPartnerActiveRequest(bool IsActive);
+
+    public sealed record ReverseReinvestmentRequest(string? Password, string? Reason, Guid ClientRequestId);
 
     public sealed record ReinvestPartnerProfitRequest(decimal Amount, string? Password, string? Notes, Guid ClientRequestId);
 }

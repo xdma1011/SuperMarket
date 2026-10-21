@@ -94,6 +94,24 @@ internal static class InvariantAuditor
                 violations.Add($"إعادة استثمار {r.Id}: إيداع رأس المال المرتبط ناقص أو غير مطابق");
         }
 
+        // 6) تراجع إعادة الاستثمار: لكل تراجع إعادة أصلية بنفس المبلغ والشريك، وسحب رأس مال مطابق، وما بيزيد المنعكس عن المستثمر (رصيد إعادة الاستثمار ≥ 0).
+        var reversals = await db.PartnerReinvestmentReversals.IgnoreQueryFilters().AsNoTracking()
+            .Select(r => new { r.Id, r.ReinvestmentId, r.PartnerId, r.BranchId, r.Amount, r.CapitalTransactionId }).ToListAsync();
+        var originals = reinvestments.ToDictionary(r => r.Id);
+        var reversalCapitalIds = reversals.Select(r => r.CapitalTransactionId).ToList();
+        var reversalCapitals = (await db.CapitalTransactions.IgnoreQueryFilters().AsNoTracking().Where(c => reversalCapitalIds.Contains(c.Id))
+            .Select(c => new { c.Id, c.PartnerId, c.BranchId, c.Amount, c.Type }).ToListAsync()).ToDictionary(c => c.Id);
+        foreach (var r in reversals)
+        {
+            if (!originals.TryGetValue(r.ReinvestmentId, out var original) || original.Amount != r.Amount || original.PartnerId != r.PartnerId)
+                violations.Add($"تراجع {r.Id}: الإعادة الأصلية ناقصة أو غير مطابقة");
+            if (!reversalCapitals.TryGetValue(r.CapitalTransactionId, out var c)
+                || c.Type != SupermarketSystem.Domain.Finance.CapitalTransactionType.Withdrawal || c.Amount != r.Amount || c.PartnerId != r.PartnerId || c.BranchId != r.BranchId)
+                violations.Add($"تراجع {r.Id}: سحب رأس المال المرتبط ناقص أو غير مطابق");
+        }
+
+        if (reversals.GroupBy(r => r.ReinvestmentId).Any(g => g.Count() > 1)) violations.Add("إعادة استثمار انعكست أكتر من مرة");
+
         return violations;
     }
 }

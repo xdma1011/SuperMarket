@@ -490,6 +490,15 @@ public sealed class GetPartnerLedgerHandler
             "تحوّل من الرصيد لرأس مال الشريك" + (r.Notes is null ? "" : $" - {r.Notes}"),
             -r.Amount)));
 
+        var reversals = await _context.PartnerReinvestmentReversals.AsNoTracking()
+            .Where(r => r.PartnerId == partnerId)
+            .Select(r => new { r.OccurredAtUtc, r.Amount, r.Reason })
+            .ToListAsync(cancellationToken);
+        raw.AddRange(reversals.Select(r => (
+            r.OccurredAtUtc, "reinvest-reversal", "تراجع عن إعادة استثمار",
+            "رجع من رأس مال الشريك لرصيده" + (r.Reason is null ? "" : $" - {r.Reason}"),
+            r.Amount)));
+
         var atCost = await PartnerLedger.LoadAtCostDeductionsAsync(_context, new[] { (partner.Id, partner.BranchId, partner.UserId) }, cancellationToken);
         raw.AddRange(atCost.Select(a => (a.CreatedAtUtc, "at-cost", "بضاعة بسعر التكلفة", $"فاتورة {a.InvoiceNumber} (اخصمها مني)", -a.Remaining)));
 

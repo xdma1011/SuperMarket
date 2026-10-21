@@ -1,10 +1,8 @@
 using Microsoft.EntityFrameworkCore;
-using SupermarketSystem.Application.Authentication.Login;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Notifications;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Domain.Finance;
-using SupermarketSystem.Domain.Identity;
 using SupermarketSystem.Domain.Notifications;
 using SupermarketSystem.Domain.Partners;
 
@@ -48,23 +46,26 @@ internal static class PartnerReinvestmentMath
     public sealed record State(
         Partner Partner, decimal Balance, decimal CapitalBefore, decimal CapitalAfter, decimal PercentBefore, decimal PercentAfter);
 
-    public static async Task<State> LoadAsync(IApplicationDbContext context, Partner partner, decimal amount, CancellationToken cancellationToken)
+    /// <summary>
+    /// <paramref name="capitalDelta"/> موقّعة: موجبة لإعادة استثمار (رأس المال بيزيد)، سالبة لتراجع عنها (بينقص).
+    /// النسبة = رأس مال الشريك من رأس مال شركاء رأس المال الفعّالين بالفرع (نفس أساس الكشف الشهري)، وهو محسوب ضمن المجموع حتى لو موقوف.
+    /// </summary>
+    public static async Task<State> LoadAsync(IApplicationDbContext context, Partner partner, decimal capitalDelta, CancellationToken cancellationToken)
     {
         var balances = await PartnerLedger.LoadBalancesAsync(context, new[] { (partner.Id, partner.BranchId, partner.UserId) }, cancellationToken);
 
-        // نسبة الشريك من رأس مال شركاء رأس المال الفعّالين بنفس الفرع (نفس أساس الكشف الشهري).
         var peers = await context.Partners.IgnoreQueryFilters().AsNoTracking()
-            .Where(p => p.BranchId == partner.BranchId && p.IsActive && p.Type == PartnerType.Capital)
+            .Where(p => p.BranchId == partner.BranchId && p.IsActive && p.Type == PartnerType.Capital && p.Id != partner.Id)
             .Select(p => p.Id)
             .ToListAsync(cancellationToken);
-        var capitals = await PartnerLedger.LoadCapitalBalancesAsync(context, peers, null, cancellationToken);
-        var total = capitals.Where(c => peers.Contains(c.Key)).Sum(c => Math.Max(c.Value, 0m));
-        var own = capitals.GetValueOrDefault(partner.Id);
+        var capitals = await PartnerLedger.LoadCapitalBalancesAsync(context, peers.Append(partner.Id).ToList(), null, cancellationToken);
+        var othersTotal = peers.Sum(id => Math.Max(capitals.GetValueOrDefault(id), 0m));
 
-        var ownPositive = Math.Max(own, 0m);
-        var totalAfter = total - ownPositive + Math.Max(own + amount, 0m);
-        return new State(partner, balances[partner.Id].Current, own, own + amount,
-            Percent(ownPositive, total), Percent(Math.Max(own + amount, 0m), totalAfter));
+        var own = capitals.GetValueOrDefault(partner.Id);
+        var ownAfter = own + capitalDelta;
+        return new State(partner, balances[partner.Id].Current, own, ownAfter,
+            Percent(Math.Max(own, 0m), othersTotal + Math.Max(own, 0m)),
+            Percent(Math.Max(ownAfter, 0m), othersTotal + Math.Max(ownAfter, 0m)));
     }
 }
 
@@ -134,22 +135,20 @@ public sealed class ReinvestPartnerProfitHandler
 {
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserContext _currentUser;
-    private readonly IPasswordHasher _passwordHasher;
-    private readonly ISettingsProvider _settingsProvider;
+    private readonly PartnerActionPasswordVerifier _passwordVerifier;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly INotificationDispatcher _notificationDispatcher;
     private readonly ITransactionalExecutor _transactionalExecutor;
     private readonly IPartnerLock _partnerLock;
 
     public ReinvestPartnerProfitHandler(
-        IApplicationDbContext context, ICurrentUserContext currentUser, IPasswordHasher passwordHasher, ISettingsProvider settingsProvider,
+        IApplicationDbContext context, ICurrentUserContext currentUser, PartnerActionPasswordVerifier passwordVerifier,
         IDateTimeProvider dateTimeProvider, INotificationDispatcher notificationDispatcher, ITransactionalExecutor transactionalExecutor,
         IPartnerLock partnerLock)
     {
         _context = context;
         _currentUser = currentUser;
-        _passwordHasher = passwordHasher;
-        _settingsProvider = settingsProvider;
+        _passwordVerifier = passwordVerifier;
         _dateTimeProvider = dateTimeProvider;
         _notificationDispatcher = notificationDispatcher;
         _transactionalExecutor = transactionalExecutor;
@@ -193,7 +192,7 @@ public sealed class ReinvestPartnerProfitHandler
         var amount = Math.Round(command.Amount, 3, MidpointRounding.AwayFromZero);
 
         // كلمة السر قبل أي فحص رصيد: ما بنكشف أرقام لمين ما أثبت نفسه.
-        var passwordError = await VerifyPasswordAsync(actorId, partner.BranchId, command.Password, cancellationToken);
+        var passwordError = await _passwordVerifier.VerifyAsync(actorId, partner.BranchId, command.Password, InvalidPassword(), cancellationToken);
         if (passwordError is not null)
         {
             return Result.Failure<ReinvestPartnerProfitResponse>(passwordError);
@@ -241,57 +240,5 @@ public sealed class ReinvestPartnerProfitHandler
         }
 
         return result;
-    }
-
-    /// <summary>كلمة سر المستخدم الحالي نفسه (مش أي حساب) - الفشل بيتسجّل بنفس سجل الدخول فيتفعّل نفس القفل.</summary>
-    private async Task<Error?> VerifyPasswordAsync(Guid userId, Guid branchId, string? password, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrEmpty(password))
-        {
-            return InvalidPassword();
-        }
-
-        var user = await _context.Users.IgnoreQueryFilters().FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
-        if (user is null || string.IsNullOrWhiteSpace(user.PasswordHash) || !user.IsActive || user.IsDeleted)
-        {
-            return InvalidPassword();
-        }
-
-        var now = _dateTimeProvider.UtcNow;
-        if (await IsLockedOutAsync(user.Id, now, cancellationToken))
-        {
-            return Error.Forbidden("Auth.AccountLocked", "الحساب مقفل مؤقتًا بسبب محاولات كلمة سر فاشلة متكررة - جرّب بعدين.");
-        }
-
-        if (_passwordHasher.Verify(password, user.PasswordHash) == PasswordVerificationOutcome.Failed)
-        {
-            _context.UserLoginLogs.Add(new UserLoginLog(user.Id, branchId, now, false, _currentUser.IpAddress));
-            await _context.SaveChangesAsync(cancellationToken);
-            return InvalidPassword();
-        }
-
-        return null;
-    }
-
-    private async Task<bool> IsLockedOutAsync(Guid userId, DateTime utcNow, CancellationToken cancellationToken)
-    {
-        var maxAttempts = (int)await _settingsProvider.GetDecimalAsync(AuthSettingsKeys.MaxFailedLoginAttempts, 5m, cancellationToken);
-        if (maxAttempts <= 0)
-        {
-            return false;
-        }
-
-        // نفس قفل الدخول، بس العدّ ضمن نافذة القفل بس: كلمة سر غلط من أيام ما بتتراكم مع غلطة اليوم (تسجيل الدخول الناجح ما بيصير بين
-        // عمليات الشاشة عشان يصفّر العدّاد، فبدون النافذة كانت 5 غلطات متفرقة بتقفل صاحب المحل).
-        var lockoutMinutes = await _settingsProvider.GetDecimalAsync(AuthSettingsKeys.LockoutDurationMinutes, 15m, cancellationToken);
-        var windowStart = utcNow.AddMinutes(-(double)lockoutMinutes);
-        var recent = await _context.UserLoginLogs.AsNoTracking()
-            .Where(l => l.UserId == userId && l.AttemptedAtUtc > windowStart)
-            .OrderByDescending(l => l.AttemptedAtUtc)
-            .Take(maxAttempts)
-            .Select(l => new { l.Success, l.AttemptedAtUtc })
-            .ToListAsync(cancellationToken);
-
-        return recent.Count >= maxAttempts && !recent.Any(a => a.Success);
     }
 }

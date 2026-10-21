@@ -106,6 +106,7 @@ public interface IApplicationDbContext
     DbSet<Partner> Partners { get; }
     DbSet<PartnerWithdrawal> PartnerWithdrawals { get; }
     DbSet<PartnerReinvestment> PartnerReinvestments { get; }
+    DbSet<PartnerReinvestmentReversal> PartnerReinvestmentReversals { get; }
     DbSet<PartnerOtpChallenge> PartnerOtpChallenges { get; }
     DbSet<PartnerMonthlyStatement> PartnerMonthlyStatements { get; }
     DbSet<PartnerStatementLine> PartnerStatementLines { get; }

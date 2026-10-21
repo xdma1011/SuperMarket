@@ -99,6 +99,32 @@ public class PartnerReinvestmentConfiguration : IEntityTypeConfiguration<Partner
     }
 }
 
+public class PartnerReinvestmentReversalConfiguration : IEntityTypeConfiguration<PartnerReinvestmentReversal>
+{
+    public void Configure(EntityTypeBuilder<PartnerReinvestmentReversal> builder)
+    {
+        builder.ToTable("PartnerReinvestmentReversals");
+        builder.HasKey(r => r.Id);
+
+        builder.Property(r => r.Amount).HasColumnType("decimal(18,4)").IsRequired();
+        builder.Property(r => r.OccurredAtUtc).HasColumnType("datetime2").IsRequired();
+        builder.Property(r => r.Reason).HasMaxLength(PartnerReinvestmentReversal.MaxReasonLength);
+
+        // إعادة وحدة = تراجع وحيد: الفهرس الفريد هو الحارس الفعلي تحت التزامن (فوق قفل الشريك).
+        builder.HasIndex(r => r.ReinvestmentId).IsUnique();
+        builder.HasIndex(r => r.ClientRequestId).IsUnique();
+        builder.HasIndex(r => r.CapitalTransactionId).IsUnique();
+        builder.HasIndex(r => new { r.PartnerId, r.OccurredAtUtc });
+
+        builder.HasOne<Partner>().WithMany().HasForeignKey(r => r.PartnerId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Branch>().WithMany().HasForeignKey(r => r.BranchId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(r => r.RecordedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<PartnerReinvestment>().WithMany().HasForeignKey(r => r.ReinvestmentId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<SupermarketSystem.Domain.Finance.CapitalTransaction>().WithMany().HasForeignKey(r => r.CapitalTransactionId).OnDelete(DeleteBehavior.Restrict);
+        // سجل تاريخي بحت - ما في "تراجع عن التراجع"؛ إعادة استثمار جديدة بدالو.
+    }
+}
+
 public class PartnerMonthlyStatementConfiguration : IEntityTypeConfiguration<PartnerMonthlyStatement>
 {
     public void Configure(EntityTypeBuilder<PartnerMonthlyStatement> builder)

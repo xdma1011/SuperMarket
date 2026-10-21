@@ -285,6 +285,59 @@ public class PartnerReinvestment : Entity, IBranchOwned
 }
 
 /// <summary>
+/// تراجع عن إعادة استثمار (احتياطي، قرار نهائي بالأصل): بيرجّع المبلغ كامل لرصيد الشريك وبينقصه من رأس ماله (CapitalTransaction Withdrawal
+/// مربوطة هون). سجل مستقل - الإعادة الأصلية بتضل كما هي (سجل تاريخي بحت)، وكل إعادة بتنعكس مرة وحدة بس (ReinvestmentId فريد).
+/// الكشوف اللي نزلت قبل التراجع ما بتتغير (انحسبت على رأس المال وقتها).
+/// </summary>
+public class PartnerReinvestmentReversal : Entity, IBranchOwned
+{
+    public const int MaxReasonLength = 500;
+
+    public Guid BranchId { get; private set; }
+    public Guid PartnerId { get; private set; }
+
+    /// <summary>الإعادة اللي انعكست (واحد لواحد).</summary>
+    public Guid ReinvestmentId { get; private set; }
+
+    public decimal Amount { get; private set; }
+    public DateTime OccurredAtUtc { get; private set; }
+    public string? Reason { get; private set; }
+    public Guid RecordedByUserId { get; private set; }
+
+    /// <summary>حركة رأس المال (Withdrawal) اللي انولدت مع التراجع - نفس المبلغ ونفس الشريك.</summary>
+    public Guid CapitalTransactionId { get; private set; }
+
+    public Guid ClientRequestId { get; private set; }
+
+    private PartnerReinvestmentReversal() { } // EF Core
+
+    public PartnerReinvestmentReversal(
+        Guid branchId, Guid partnerId, Guid reinvestmentId, decimal amount, DateTime occurredAtUtc, string? reason,
+        Guid recordedByUserId, Guid capitalTransactionId, Guid clientRequestId)
+    {
+        if (amount <= 0)
+        {
+            throw new DomainException("Reversal amount must be positive.");
+        }
+
+        if (clientRequestId == Guid.Empty)
+        {
+            throw new DomainException("A client request id is required.");
+        }
+
+        BranchId = branchId;
+        PartnerId = partnerId;
+        ReinvestmentId = reinvestmentId;
+        Amount = amount;
+        OccurredAtUtc = occurredAtUtc;
+        Reason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        RecordedByUserId = recordedByUserId;
+        CapitalTransactionId = capitalTransactionId;
+        ClientRequestId = clientRequestId;
+    }
+}
+
+/// <summary>
 /// الكشف الشهري لفرع: ربح الشهر (Snapshot مجمَّد) موزَّع على الشركاء. واحد بس لكل (فرع، سنة، شهر) - بينزل
 /// تلقائيًا ببداية الشهر، والإدارة بتقدر تعيد إصداره (فاتورة شراء متأخرة غيّرت الربح مثلًا).
 /// </summary>
