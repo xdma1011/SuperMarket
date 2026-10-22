@@ -77,6 +77,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             await db.Database.MigrateAsync();
+            await EnsureSimpleRecoveryAsync(db);
             await ArchivePreviousRunAsync(db);
             await SeedFixedDataAsync(scope.ServiceProvider);
         }
@@ -99,6 +100,31 @@ public sealed class DatabaseFixture : IAsyncLifetime
                 "Users", "UserRoles", "UserBranches", "Branches"
             ]
         });
+    }
+
+    /// <summary>
+    /// قاعدة الاختبار بوضع استرجاع SIMPLE (22/10/2026): بوضع FULL الافتراضي وبلا نسخ سجل، ملف سجل المعاملات بيكبر بلا حد مع كل تشغيلة
+    /// (وصل 13 GB وملّا القرص واخد التشغيل الطويل بـ"transaction log is full"). النسخ الاحتياطي الكامل (COPY_ONLY) اللي بنأخذه قبل التصفير
+    /// ما بيتأثر. بس لقواعد اسمها فيها "test" (الـfixture بيرفض غيرها أصلًا)؛ فشله ما بيوقف الاختبارات.
+    /// </summary>
+    private static async Task EnsureSimpleRecoveryAsync(AppDbContext db)
+    {
+        try
+        {
+            var database = db.Database.GetDbConnection().Database;
+            if (!database.Contains("test", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+#pragma warning disable EF1002 // اسم القاعدة من الـconnection string نفسه (متحقق إنه فيه "test").
+            await db.Database.ExecuteSqlRawAsync($"ALTER DATABASE [{database.Replace("]", "]]")}] SET RECOVERY SIMPLE");
+#pragma warning restore EF1002
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[اختبارات] تعذّر ضبط وضع الاسترجاع SIMPLE (ما بيوقف الاختبارات): {ex.Message}");
+        }
     }
 
     /// <summary>
