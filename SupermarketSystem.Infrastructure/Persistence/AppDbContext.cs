@@ -41,6 +41,11 @@ public class AppDbContext : DbContext, IApplicationDbContext
     private readonly Guid? _currentBranchId;
     private readonly bool _isCrossBranchAccessAllowed;
 
+    /// <summary>نفس قيمتي فلتر الفرع المجمّدتين وقت إنشاء الـcontext - للـSQL الخام اللي ما بيمر على الـquery filter (راجع StockOperations).</summary>
+    public bool IsCrossBranchAccessAllowed => _isCrossBranchAccessAllowed;
+
+    public Guid? CurrentBranchId => _currentBranchId;
+
     public AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUserContext currentUserContext)
         : base(options)
     {

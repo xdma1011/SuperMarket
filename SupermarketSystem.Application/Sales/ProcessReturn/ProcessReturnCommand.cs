@@ -126,6 +126,7 @@ public sealed class ProcessReturnHandler
     private readonly IDocumentNumberGenerator _documentNumberGenerator;
     private readonly ISaleInvoiceOperations _saleInvoiceOperations;
     private readonly ITransactionalExecutor _transactionalExecutor;
+    private readonly IStockOperations _stockOperations;
     private readonly IPosPolicyService _posPolicyService;
     private readonly INotificationDispatcher _notificationDispatcher;
     private readonly ICurrentUserContext _currentUser;
@@ -136,6 +137,7 @@ public sealed class ProcessReturnHandler
         IDocumentNumberGenerator documentNumberGenerator,
         ISaleInvoiceOperations saleInvoiceOperations,
         ITransactionalExecutor transactionalExecutor,
+        IStockOperations stockOperations,
         IPosPolicyService posPolicyService,
         INotificationDispatcher notificationDispatcher,
         ICurrentUserContext currentUser,
@@ -145,6 +147,7 @@ public sealed class ProcessReturnHandler
         _documentNumberGenerator = documentNumberGenerator;
         _saleInvoiceOperations = saleInvoiceOperations;
         _transactionalExecutor = transactionalExecutor;
+        _stockOperations = stockOperations;
         _posPolicyService = posPolicyService;
         _notificationDispatcher = notificationDispatcher;
         _currentUser = currentUser;
@@ -379,8 +382,7 @@ public sealed class ProcessReturnHandler
                 var quantityBase = requested.Quantity * unitFactors[saleItem.ProductUnitId];
                 var batchId = batchBySaleItem.GetValueOrDefault(saleItem.Id);
 
-                var stock = await GetOrCreateTrackedStockAsync(saleItem.ProductId, originalInvoice.BranchId, batchId, ct);
-                stock.Increase(quantityBase);
+                await _stockOperations.IncreaseAsync(saleItem.ProductId, originalInvoice.BranchId, batchId, quantityBase, ct);
 
                 movements.Add(new StockMovement(
                     saleItem.ProductId, originalInvoice.BranchId, saleItem.ProductUnitId, batchId,
@@ -462,22 +464,5 @@ public sealed class ProcessReturnHandler
         }
 
         return result;
-    }
-
-    private async Task<Stock> GetOrCreateTrackedStockAsync(
-        Guid productId, Guid branchId, Guid? productBatchId, CancellationToken cancellationToken)
-    {
-        var existing = await _context.Stocks.FirstOrDefaultAsync(
-            s => s.ProductId == productId && s.BranchId == branchId && s.ProductBatchId == productBatchId,
-            cancellationToken);
-
-        if (existing is not null)
-        {
-            return existing;
-        }
-
-        var created = new Stock(productId, branchId, productBatchId);
-        _context.Stocks.Add(created);
-        return created;
     }
 }

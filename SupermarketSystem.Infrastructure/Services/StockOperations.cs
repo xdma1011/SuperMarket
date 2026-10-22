@@ -1,3 +1,4 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using SupermarketSystem.Application.Common.Interfaces;
@@ -70,14 +71,7 @@ public sealed class StockOperations : IStockOperations
         // شرط "الرصيد كافٍ" (QuantityOnHand >= quantityBase) داخل جملة الـ
         // WHERE نفسها، يعني الفحص والكتابة بيصيروا سوا بنفس القفل. هذا
         // المسار اللي بيغطي أغلبية البيعات (رصيد كافٍ، ما في داعي للسالب).
-        var rowsAffected = await _context.Stocks
-            .Where(s => s.ProductId == productId
-                        && s.BranchId == branchId
-                        && s.ProductBatchId == productBatchId
-                        && s.QuantityOnHand >= quantityBase)
-            .ExecuteUpdateAsync(
-                setters => setters.SetProperty(s => s.QuantityOnHand, s => s.QuantityOnHand - quantityBase),
-                cancellationToken);
+        var rowsAffected = await DecrementAsync(productId, branchId, productBatchId, quantityBase, requireSufficientBalance: true, cancellationToken);
 
         if (rowsAffected == 1)
         {
@@ -94,11 +88,7 @@ public sealed class StockOperations : IStockOperations
         // === الإعداد مفعّل: نعيد المحاولة بلا شرط "الرصيد كافٍ" ===
         // نفس آلية الذرية (UPDATE واحدة)، بس بلا الحد الأدنى — الرصيد ممكن
         // يصير سالب، وهذا مقبول ومقصود.
-        var forcedRows = await _context.Stocks
-            .Where(s => s.ProductId == productId && s.BranchId == branchId && s.ProductBatchId == productBatchId)
-            .ExecuteUpdateAsync(
-                setters => setters.SetProperty(s => s.QuantityOnHand, s => s.QuantityOnHand - quantityBase),
-                cancellationToken);
+        var forcedRows = await DecrementAsync(productId, branchId, productBatchId, quantityBase, requireSufficientBalance: false, cancellationToken);
 
         if (forcedRows == 1)
         {
@@ -114,6 +104,108 @@ public sealed class StockOperations : IStockOperations
         return inserted ? StockDecrementOutcome.SucceededWentNegative : StockDecrementOutcome.Failed;
     }
 
+
+    // أربع صيغ literal (بلا نص ديناميكي): بلا دفعة / بدفعة × مع شرط الرصيد / بلا شرط. كل وحدة بـindex hint على الفهرس الفريد المناسب.
+    private const string NoBatchSufficient = @"
+        UPDATE s SET s.QuantityOnHand = s.QuantityOnHand - @q
+        FROM [Stocks] AS s WITH (INDEX(IX_Stocks_ProductId_BranchId_NoBatch), ROWLOCK)
+        WHERE s.ProductId = @productId AND s.BranchId = @branchId AND s.ProductBatchId IS NULL
+          AND (@cross = 1 OR s.BranchId = @currentBranch) AND s.QuantityOnHand >= @q";
+
+    private const string NoBatchForced = @"
+        UPDATE s SET s.QuantityOnHand = s.QuantityOnHand - @q
+        FROM [Stocks] AS s WITH (INDEX(IX_Stocks_ProductId_BranchId_NoBatch), ROWLOCK)
+        WHERE s.ProductId = @productId AND s.BranchId = @branchId AND s.ProductBatchId IS NULL
+          AND (@cross = 1 OR s.BranchId = @currentBranch)";
+
+    private const string BatchSufficient = @"
+        UPDATE s SET s.QuantityOnHand = s.QuantityOnHand - @q
+        FROM [Stocks] AS s WITH (INDEX(IX_Stocks_ProductId_BranchId_ProductBatchId), ROWLOCK)
+        WHERE s.ProductId = @productId AND s.BranchId = @branchId AND s.ProductBatchId IS NOT NULL AND s.ProductBatchId = @batchId
+          AND (@cross = 1 OR s.BranchId = @currentBranch) AND s.QuantityOnHand >= @q";
+
+    private const string BatchForced = @"
+        UPDATE s SET s.QuantityOnHand = s.QuantityOnHand - @q
+        FROM [Stocks] AS s WITH (INDEX(IX_Stocks_ProductId_BranchId_ProductBatchId), ROWLOCK)
+        WHERE s.ProductId = @productId AND s.BranchId = @branchId AND s.ProductBatchId IS NOT NULL AND s.ProductBatchId = @batchId
+          AND (@cross = 1 OR s.BranchId = @currentBranch)";
+
+    /// <summary>
+    /// الخصم الذري بجملة SQL خام (§3.3) مع index hint على الفهرس الفريد (صنف، فرع[، دفعة]) = seek مضمون لصف واحد بغض النظر عن حجم الجدول.
+    /// ليش مش ExecuteUpdate: شرط الدفعة المولَّد (<c>ProductBatchId = @p OR (IS NULL AND @p IS NULL)</c>) ما بيطابق الفهارس الفريدة المفلترة،
+    /// فالمحسّن بيمسح (scan) ويحط U lock على صفوف الأصناف التانية بالترتيب - بيعتين متزامنتين لصنفين مختلفين بيتقفلوا ببعض (deadlock) حتى مع
+    /// ترتيب قفل ثابت. انمسك بعاصفة 8 كاشيرات (22/10/2026) وأكّدت الخطة: Clustered Index Scan. فلتر الفرع (الـquery filter) محفوظ يدويًا بالشرط.
+    /// </summary>
+    private Task<int> DecrementAsync(
+        Guid productId, Guid branchId, Guid? productBatchId, decimal quantityBase, bool requireSufficientBalance, CancellationToken cancellationToken)
+    {
+        var sql = (productBatchId is null, requireSufficientBalance) switch
+        {
+            (true, true) => NoBatchSufficient,
+            (true, false) => NoBatchForced,
+            (false, true) => BatchSufficient,
+            (false, false) => BatchForced
+        };
+
+        return ExecuteStockSqlAsync(sql, productId, branchId, productBatchId, quantityBase, cancellationToken);
+    }
+
+    private Task<int> ExecuteStockSqlAsync(
+        string sql, Guid productId, Guid branchId, Guid? productBatchId, decimal quantityBase, CancellationToken cancellationToken)
+    {
+        var parameters = new List<SqlParameter>
+        {
+            new("@q", System.Data.SqlDbType.Decimal) { Precision = 18, Scale = 4, Value = quantityBase },
+            new("@productId", productId),
+            new("@branchId", branchId),
+            new("@cross", _context.IsCrossBranchAccessAllowed),
+            new("@currentBranch", System.Data.SqlDbType.UniqueIdentifier) { Value = (object?)_context.CurrentBranchId ?? DBNull.Value }
+        };
+        if (productBatchId is { } batchId)
+        {
+            parameters.Add(new SqlParameter("@batchId", batchId));
+        }
+
+        return _context.Database.ExecuteSqlRawAsync(sql, parameters, cancellationToken);
+    }
+
+    private const string NoBatchIncrease = @"
+        UPDATE s SET s.QuantityOnHand = s.QuantityOnHand + @q
+        FROM [Stocks] AS s WITH (INDEX(IX_Stocks_ProductId_BranchId_NoBatch), ROWLOCK)
+        WHERE s.ProductId = @productId AND s.BranchId = @branchId AND s.ProductBatchId IS NULL
+          AND (@cross = 1 OR s.BranchId = @currentBranch)";
+
+    private const string BatchIncrease = @"
+        UPDATE s SET s.QuantityOnHand = s.QuantityOnHand + @q
+        FROM [Stocks] AS s WITH (INDEX(IX_Stocks_ProductId_BranchId_ProductBatchId), ROWLOCK)
+        WHERE s.ProductId = @productId AND s.BranchId = @branchId AND s.ProductBatchId IS NOT NULL AND s.ProductBatchId = @batchId
+          AND (@cross = 1 OR s.BranchId = @currentBranch)";
+
+    public async Task IncreaseAsync(
+        Guid productId, Guid branchId, Guid? productBatchId, decimal quantityBase, CancellationToken cancellationToken)
+    {
+        if (quantityBase <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(quantityBase), "كمية الزيادة لازم تكون موجبة.");
+        }
+
+        // الصف موجود بالغالب = UPDATE وحدة. غير هيك: INSERT ذري، ولو سبقنا طلب تاني بإنشائه نعيد الـUPDATE مرة (الصف صار موجود أكيد).
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            if (await ExecuteStockSqlAsync(productBatchId is null ? NoBatchIncrease : BatchIncrease, productId, branchId, productBatchId, quantityBase, cancellationToken) == 1)
+            {
+                return;
+            }
+
+            if (await InsertStockRowIfMissingAsync(productId, branchId, productBatchId, quantityBase, cancellationToken))
+            {
+                return;
+            }
+        }
+
+        throw new InvalidOperationException($"تعذّرت زيادة المخزون للصنف {productId} بالفرع {branchId} (الصف مش موجود ولا قابل للإنشاء).");
+    }
+
     /// <summary>
     /// ينشئ صف Stock جديد برصيد سالب، بس لو ما في صف موجود أصلًا لنفس
     /// المفتاح (ProductId + BranchId + ProductBatchId). جملة
@@ -126,28 +218,41 @@ public sealed class StockOperations : IStockOperations
     /// طبقتين"، مش اعتماد كامل على جملة النفي هون لحالها.
     /// </summary>
     private async Task<bool> InsertNegativeStockRowIfMissingAsync(
-        Guid productId,
-        Guid branchId,
-        Guid? productBatchId,
-        decimal quantityBase,
-        CancellationToken cancellationToken)
+        Guid productId, Guid branchId, Guid? productBatchId, decimal quantityBase, CancellationToken cancellationToken) =>
+        await InsertStockRowIfMissingAsync(productId, branchId, productBatchId, -quantityBase, cancellationToken);
+
+    private const string InsertNoBatchIfMissing = @"
+        INSERT INTO [Stocks] ([Id], [ProductId], [BranchId], [ProductBatchId], [QuantityOnHand])
+        SELECT @id, @productId, @branchId, NULL, @q
+        WHERE NOT EXISTS (
+            SELECT 1 FROM [Stocks] WITH (INDEX(IX_Stocks_ProductId_BranchId_NoBatch))
+            WHERE [ProductId] = @productId AND [BranchId] = @branchId AND [ProductBatchId] IS NULL)";
+
+    private const string InsertBatchIfMissing = @"
+        INSERT INTO [Stocks] ([Id], [ProductId], [BranchId], [ProductBatchId], [QuantityOnHand])
+        SELECT @id, @productId, @branchId, @batchId, @q
+        WHERE NOT EXISTS (
+            SELECT 1 FROM [Stocks] WITH (INDEX(IX_Stocks_ProductId_BranchId_ProductBatchId))
+            WHERE [ProductId] = @productId AND [BranchId] = @branchId AND [ProductBatchId] IS NOT NULL AND [ProductBatchId] = @batchId)";
+
+    /// <summary>INSERT ذري لصف مخزون بكمية ابتدائية (موجبة لزيادة، سالبة لبيع بلا صف)، بس لو ما في صف بنفس المفتاح - seek على الفهرس الفريد بدل مسح.</summary>
+    private async Task<bool> InsertStockRowIfMissingAsync(
+        Guid productId, Guid branchId, Guid? productBatchId, decimal initialQuantity, CancellationToken cancellationToken)
     {
-        var newId = Guid.NewGuid();
-        var negativeQuantity = -quantityBase;
+        var parameters = new List<SqlParameter>
+        {
+            new("@id", Guid.NewGuid()),
+            new("@q", System.Data.SqlDbType.Decimal) { Precision = 18, Scale = 4, Value = initialQuantity },
+            new("@productId", productId),
+            new("@branchId", branchId)
+        };
+        if (productBatchId is { } batchId)
+        {
+            parameters.Add(new SqlParameter("@batchId", batchId));
+        }
 
-        var rowsInserted = await _context.Database.ExecuteSqlInterpolatedAsync($@"
-            INSERT INTO [Stocks] ([Id], [ProductId], [BranchId], [ProductBatchId], [QuantityOnHand])
-            SELECT {newId}, {productId}, {branchId}, {productBatchId}, {negativeQuantity}
-            WHERE NOT EXISTS (
-                SELECT 1 FROM [Stocks]
-                WHERE [ProductId] = {productId} AND [BranchId] = {branchId}
-                  AND (
-                        ([ProductBatchId] IS NULL AND {productBatchId} IS NULL)
-                        OR [ProductBatchId] = {productBatchId}
-                      )
-            )", cancellationToken);
-
-        return rowsInserted == 1;
+        var rows = await _context.Database.ExecuteSqlRawAsync(productBatchId is null ? InsertNoBatchIfMissing : InsertBatchIfMissing, parameters, cancellationToken);
+        return rows == 1;
     }
 }
 

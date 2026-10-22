@@ -67,6 +67,18 @@ public interface IStockOperations
         decimal quantityBase,
         bool allowNegative,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// زيادة ذرية لرصيد (صنف، فرع[، دفعة]) بجملة SQL واحدة - مرجع إلغاء/إرجاع (بيرجّع بضاعة للرف). بلا قراءة-ثم-كتابة ولا RowVersion، فما في
+    /// 409 "عدّله حدا" بين كاشيرين على نفس الصنف. لو الصف مش موجود (بيعة سابقة بسالب بلا صف) بينشئه بالكمية بجملة INSERT ذرية.
+    /// لازم تنادى جوّا معاملة مع ترتيب قفل ثابت (صنف ← دفعة) مثل TryDecreaseAsync.
+    /// </summary>
+    Task IncreaseAsync(
+        Guid productId,
+        Guid branchId,
+        Guid? productBatchId,
+        decimal quantityBase,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>

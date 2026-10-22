@@ -50,6 +50,7 @@ public sealed class VoidSaleHandler
 {
     private readonly IApplicationDbContext _context;
     private readonly ITransactionalExecutor _transactionalExecutor;
+    private readonly IStockOperations _stockOperations;
     private readonly IPosPolicyService _posPolicyService;
     private readonly INotificationDispatcher _notificationDispatcher;
     private readonly ICurrentUserContext _currentUser;
@@ -58,6 +59,7 @@ public sealed class VoidSaleHandler
     public VoidSaleHandler(
         IApplicationDbContext context,
         ITransactionalExecutor transactionalExecutor,
+        IStockOperations stockOperations,
         IPosPolicyService posPolicyService,
         INotificationDispatcher notificationDispatcher,
         ICurrentUserContext currentUser,
@@ -65,6 +67,7 @@ public sealed class VoidSaleHandler
     {
         _context = context;
         _transactionalExecutor = transactionalExecutor;
+        _stockOperations = stockOperations;
         _posPolicyService = posPolicyService;
         _notificationDispatcher = notificationDispatcher;
         _currentUser = currentUser;
@@ -137,10 +140,7 @@ public sealed class VoidSaleHandler
             // نفس ترتيب القفل الثابت بالبيع (صنف ← دفعة) - راجع CompleteSaleCommand.
             foreach (var original in originalMovements.OrderBy(m => m.ProductId).ThenBy(m => m.ProductBatchId))
             {
-                var stock = await GetOrCreateTrackedStockAsync(
-                    original.ProductId, original.BranchId, original.ProductBatchId, ct);
-
-                stock.Increase(original.QuantityBase);
+                await _stockOperations.IncreaseAsync(original.ProductId, original.BranchId, original.ProductBatchId, original.QuantityBase, ct);
 
                 // VoidReversal لا ReturnIn — الاثنين بيرجّعوا بضاعة للرف، بس
                 // التمييز بينهم مقصود (§13.4): "الزبون رجّع بضاعة" شي،
@@ -223,25 +223,5 @@ public sealed class VoidSaleHandler
         }
 
         return result;
-    }
-
-    private async Task<Stock> GetOrCreateTrackedStockAsync(
-        Guid productId, Guid branchId, Guid? productBatchId, CancellationToken cancellationToken)
-    {
-        var existing = await _context.Stocks.FirstOrDefaultAsync(
-            s => s.ProductId == productId && s.BranchId == branchId && s.ProductBatchId == productBatchId,
-            cancellationToken);
-
-        if (existing is not null)
-        {
-            return existing;
-        }
-
-        // ممكن الصف يكون انحذف/ما وُجد أصلًا (حالة نادرة، مثلًا بيعة صارت
-        // برصيد سالب لمنتج ما إله صف Stock). ننشئه بصفر ثم نزيد — البضاعة
-        // رجعت فعليًا للرف، لازم تنعكس بالمخزون بغض النظر.
-        var created = new Stock(productId, branchId, productBatchId);
-        _context.Stocks.Add(created);
-        return created;
     }
 }
