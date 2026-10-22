@@ -345,8 +345,8 @@ public sealed class ProcessReturnHandler
         // === 7. الجزء الذري ===
         var result = await _transactionalExecutor.ExecuteAsync<ProcessReturnResponse>(async ct =>
         {
-            // الحارس الذري أولًا — أكثر خطوة احتمالًا للفشل.
-            foreach (var requested in command.Items)
+            // الحارس الذري أولًا — أكثر خطوة احتمالًا للفشل. بترتيب ثابت (سطر البيع) عشان إرجاعين متزامنين لنفس الفاتورة ما يتقفلوا ببعض.
+            foreach (var requested in command.Items.OrderBy(i => i.SaleInvoiceItemId))
             {
                 var recorded = await _saleInvoiceOperations.TryRecordReturnedQuantityAsync(
                     requested.SaleInvoiceItemId, requested.Quantity, ct);
@@ -365,7 +365,10 @@ public sealed class ProcessReturnHandler
 
             var movements = new List<StockMovement>();
 
-            foreach (var requested in command.Items)
+            // ترتيب قفل مخزون ثابت (صنف ← دفعة) - راجع CompleteSaleCommand؛ بدونه إرجاع وبيع بنفس الصنفين بترتيب معاكس ممكن يتقفلوا.
+            foreach (var requested in command.Items
+                         .OrderBy(i => saleItemsById[i.SaleInvoiceItemId].ProductId)
+                         .ThenBy(i => batchBySaleItem.GetValueOrDefault(i.SaleInvoiceItemId)))
             {
                 var saleItem = saleItemsById[requested.SaleInvoiceItemId];
 

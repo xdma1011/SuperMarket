@@ -366,4 +366,44 @@ public sealed class ConcurrencyRaceTests : IntegrationTestBase
         Assert.Equal(ok, await cdb.PurchaseInvoices.IgnoreQueryFilters().CountAsync(p => p.SupplierId == supplierId));
         await AssertInvariantsAsync(productId, 0m);
     }
+
+    /// <summary>
+    /// deadlock حقيقي انمسك بعاصفة 8 كاشيرات (22/10/2026): بيعة (س ثم ص) وبيعة (ص ثم س) بنفس اللحظة كانتا تقفلان صفّي المخزون بترتيب معاكس
+    /// فيتقفلوا ببعض، والضحية بتنهار بـ500 بعد 6 إعادات أوتوماتيكية. الإصلاح: ترتيب قفل ثابت (صنف ← دفعة) بالبيع والإلغاء والإرجاع.
+    /// </summary>
+    [Fact]
+    public async Task بيوع_متزامنة_بسلات_أصنافها_بترتيب_معاكس_ما_بتتقفل_ببعض_deadlock()
+    {
+        const int n = 40;
+        var (cashier, p1, u1, _) = await SetUpAsync(stock: 500m);
+        Guid p2, u2;
+        using (var scope = CreateScope())
+        {
+            var db = CreateDbContext(scope);
+            var (product, unit) = await TestDataBuilder.CreateActiveProductAsync(db, "صنف السباق الثاني");
+            await TestDataBuilder.CreateProductBranchAsync(db, product.Id, Fixture.TestBranchId, sellingPrice: Price);
+            await TestDataBuilder.SetStockAsync(db, product.Id, Fixture.TestBranchId, 500m);
+            (p2, u2) = (product.Id, unit.Id);
+        }
+
+        object Basket(bool reversed) => new
+        {
+            branchId = Fixture.TestBranchId, clientRequestId = Guid.NewGuid(), customerId = (Guid?)null, allowCreditSale = false, invoiceLevelDiscountAmount = 0m,
+            items = (reversed ? new[] { (p2, u2), (p1, u1) } : new[] { (p1, u1), (p2, u2) })
+                .Select(x => new { productId = x.Item1, productUnitId = x.Item2, quantity = 1m, manualDiscountAmount = 0m, productBatchId = (Guid?)null, catalogVersion = (long?)null, promotionId = (Guid?)null }).ToArray(),
+            payments = new[] { new { paymentMethodId = TestDataBuilder.CashPaymentMethodId, amount = Price * 2, externalReference = (string?)null, clientRequestId = Guid.NewGuid() } },
+            preparedOrderId = (Guid?)null, customerPhone = (string?)null
+        };
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var responses = await RaceAsync(n, i => cashier.PostAsJsonAsync("/api/v1/sales", Basket(i % 2 == 1)));
+        watch.Stop();
+        _output.WriteLine($"زمن {n} بيعة متزامنة بترتيب معاكس: {watch.Elapsed.TotalSeconds:0.0}s");
+        // بلا ترتيب القفل كان بياخد 31-34 ثانية (deadlock + إعادات أوتوماتيكية بتغطي الفشل)؛ معه 3-4 ثواني. الحد بيحرس الإصلاح حتى لو نجحت الإعادات.
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(20), $"البيوع المتزامنة بطيئة ({watch.Elapsed.TotalSeconds:0.0}s) - deadlock على المخزون؟");
+        AssertNo5xx(responses, "بيوع بترتيب أصناف معاكس");
+        Assert.All(responses, r => Assert.True(r.IsSuccessStatusCode, $"{(int)r.StatusCode}"));
+        Assert.Equal(500m - n, await StockAsync(p1));
+        Assert.Equal(500m - n, await StockAsync(p2));
+    }
 }

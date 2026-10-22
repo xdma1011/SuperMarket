@@ -134,7 +134,8 @@ public sealed class VoidSaleHandler
             var reversalMovements = new List<StockMovement>();
 
             // === 1. عكس المخزون ===
-            foreach (var original in originalMovements)
+            // نفس ترتيب القفل الثابت بالبيع (صنف ← دفعة) - راجع CompleteSaleCommand.
+            foreach (var original in originalMovements.OrderBy(m => m.ProductId).ThenBy(m => m.ProductBatchId))
             {
                 var stock = await GetOrCreateTrackedStockAsync(
                     original.ProductId, original.BranchId, original.ProductBatchId, ct);

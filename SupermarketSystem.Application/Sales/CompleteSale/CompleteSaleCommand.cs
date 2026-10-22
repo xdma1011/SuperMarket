@@ -772,7 +772,9 @@ public sealed class CompleteSaleHandler
         {
             // نخصم المخزون أول شي — هو العملية الأكثر احتمالًا للفشل، وفشلها
             // قبل أي إضافات بيخلي التراجع (rollback) رخيص وسريع.
-            foreach (var line in resolvedLines)
+            // ترتيب قفل ثابت (صنف ← دفعة): بيعتين متزامنتين بنفس الصنفين بترتيب مختلف بالسلة (A: س،ص — B: ص،س) كانتا تتقفلان
+            // ببعض (deadlock) فتنهار الضحية بـ500 بعد 6 إعادات أوتوماتيكية - انمسكت بعاصفة 8 كاشيرات (22/10/2026).
+            foreach (var line in resolvedLines.OrderBy(l => l.ProductId).ThenBy(l => l.ProductBatchId))
             {
                 var outcome = await _stockOperations.TryDecreaseAsync(
                     line.ProductId, command.BranchId, line.ProductBatchId, line.QuantityBase,
