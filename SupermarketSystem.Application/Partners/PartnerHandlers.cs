@@ -272,7 +272,8 @@ internal static class PartnerRules
 // ===== الكشوف الشهرية =====
 
 public sealed record PartnerStatementLineDto(
-    Guid PartnerId, string PartnerName, int TypeCode, string TypeTitle, decimal? CapitalBalance, decimal SharePercent, decimal ShareAmount);
+    Guid PartnerId, string PartnerName, int TypeCode, string TypeTitle, decimal? CapitalBalance, decimal SharePercent, decimal ShareAmount,
+    decimal LossCarriedIn = 0m, decimal LossCarriedOut = 0m);
 
 public sealed record PartnerStatementDto(
     Guid Id, Guid BranchId, string BranchName, int Year, int Month, decimal NetProfit, decimal UnallocatedAmount,
@@ -399,7 +400,7 @@ public sealed class GetPartnerStatementByIdHandler
                 .OrderBy(l => l.PartnerType).ThenByDescending(l => l.ShareAmount)
                 .Select(l => new PartnerStatementLineDto(
                     l.PartnerId, names.GetValueOrDefault(l.PartnerId, "(شريك محذوف)"), (int)l.PartnerType, PartnerTitles.Type(l.PartnerType),
-                    l.CapitalBalance, l.SharePercent, l.ShareAmount))
+                    l.CapitalBalance, l.SharePercent, l.ShareAmount, l.LossCarriedIn, l.LossCarriedOut))
                 .ToList(),
             statement.UncostedItemsCount,
             statement.StaleSinceUtc,

@@ -118,6 +118,10 @@ export interface PartnerStatementDto extends PartnerStatementSummaryDto {
     capitalBalance: number | null;
     sharePercent: number;
     shareAmount: number;
+    /** للمضارب: خسارة الشهور السابقة اللي دخلت هالشهر ولسا ما اتغطت (ترحيل الخسارة). */
+    lossCarriedIn?: number;
+    /** للمضارب: اللي بضل بعد هالشهر وبيدخل الشهر الجاي. */
+    lossCarriedOut?: number;
   }[];
 }
 

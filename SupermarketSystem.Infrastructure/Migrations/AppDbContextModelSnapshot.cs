@@ -3255,6 +3255,16 @@ namespace SupermarketSystem.Infrastructure.Migrations
                     b.Property<decimal?>("CapitalBalance")
                         .HasColumnType("decimal(18,4)");
 
+                    b.Property<decimal>("LossCarriedIn")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18,4)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<decimal>("LossCarriedOut")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18,4)")
+                        .HasDefaultValue(0m);
+
                     b.Property<Guid>("PartnerId")
                         .HasColumnType("uniqueidentifier");
 

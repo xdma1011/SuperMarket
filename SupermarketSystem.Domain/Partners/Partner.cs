@@ -403,7 +403,7 @@ public class PartnerMonthlyStatement : AuditableEntity, IBranchOwned
 
     /// <summary>بيستبدل محتوى الكشف كامل (أول إصدار أو إعادة إصدار).</summary>
     public void SetContent(decimal netProfit, decimal unallocatedAmount, DateTime generatedAtUtc, bool isAutomatic,
-        IEnumerable<(Guid PartnerId, PartnerType Type, decimal? CapitalBalance, decimal SharePercent, decimal ShareAmount)> lines,
+        IEnumerable<StatementLineInput> lines,
         int uncostedItemsCount = 0)
     {
         UncostedItemsCount = uncostedItemsCount;
@@ -417,10 +417,17 @@ public class PartnerMonthlyStatement : AuditableEntity, IBranchOwned
         _lines.Clear();
         foreach (var line in lines)
         {
-            _lines.Add(new PartnerStatementLine(Id, line.PartnerId, line.Type, line.CapitalBalance, line.SharePercent, line.ShareAmount));
+            _lines.Add(new PartnerStatementLine(Id, line.PartnerId, line.Type, line.CapitalBalance, line.SharePercent, line.ShareAmount, line.LossCarriedIn, line.LossCarriedOut));
         }
     }
 }
+
+/// <summary>
+/// مدخل سطر كشف عند إصداره. LossCarriedIn/Out للمضارب بس (ترحيل الخسارة): الخسارة اللي دخلت الشهر وهاي اللي بتطلع منه.
+/// </summary>
+public sealed record StatementLineInput(
+    Guid PartnerId, PartnerType Type, decimal? CapitalBalance, decimal SharePercent, decimal ShareAmount,
+    decimal LossCarriedIn = 0m, decimal LossCarriedOut = 0m);
 
 public class PartnerStatementLine : Entity
 {
@@ -437,10 +444,23 @@ public class PartnerStatementLine : Entity
     /// <summary>نصيبه بالدينار (سالب بشهر خسارة لشريك رأس المال).</summary>
     public decimal ShareAmount { get; private set; }
 
+    /// <summary>
+    /// للمضارب (20/10 → 27/10/2026): خسارة الشهور السابقة اللي لسه ما اتغطت لما دخل هالشهر. نسبته بتنحسب من ربح الشهر بعد ما
+    /// تنخصم منها (ما بيربح المضارب إلا بعد ما تتغطى الخسارة). 0 لشريك رأس المال ولكشوف قبل هالميزة.
+    /// </summary>
+    public decimal LossCarriedIn { get; private set; }
+
+    /// <summary>الخسارة اللي لسه ما اتغطت بعد هالشهر - بتدخل الشهر اللي بعده (LossCarriedIn لكشفه). سجل مجمَّد مع الكشف.</summary>
+    public decimal LossCarriedOut { get; private set; }
+
     private PartnerStatementLine() { } // EF Core
 
-    internal PartnerStatementLine(Guid statementId, Guid partnerId, PartnerType partnerType, decimal? capitalBalance, decimal sharePercent, decimal shareAmount)
+    internal PartnerStatementLine(
+        Guid statementId, Guid partnerId, PartnerType partnerType, decimal? capitalBalance, decimal sharePercent, decimal shareAmount,
+        decimal lossCarriedIn = 0m, decimal lossCarriedOut = 0m)
     {
+        LossCarriedIn = lossCarriedIn;
+        LossCarriedOut = lossCarriedOut;
         StatementId = statementId;
         PartnerId = partnerId;
         PartnerType = partnerType;

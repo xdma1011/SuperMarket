@@ -162,6 +162,8 @@ public class PartnerStatementLineConfiguration : IEntityTypeConfiguration<Partne
         builder.Property(l => l.CapitalBalance).HasColumnType("decimal(18,4)");
         builder.Property(l => l.SharePercent).HasColumnType("decimal(9,4)").IsRequired();
         builder.Property(l => l.ShareAmount).HasColumnType("decimal(18,4)").IsRequired();
+        builder.Property(l => l.LossCarriedIn).HasColumnType("decimal(18,4)").HasDefaultValue(0m).IsRequired();
+        builder.Property(l => l.LossCarriedOut).HasColumnType("decimal(18,4)").HasDefaultValue(0m).IsRequired();
 
         builder.HasIndex(l => l.PartnerId);
         builder.HasOne<Partner>().WithMany().HasForeignKey(l => l.PartnerId).OnDelete(DeleteBehavior.Restrict);

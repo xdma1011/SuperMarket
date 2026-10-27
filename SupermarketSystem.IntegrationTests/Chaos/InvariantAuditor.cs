@@ -112,6 +112,22 @@ internal static class InvariantAuditor
 
         if (reversals.GroupBy(r => r.ReinvestmentId).Any(g => g.Count() > 1)) violations.Add("إعادة استثمار انعكست أكتر من مرة");
 
+        // 7) ترحيل خسارة المضارب: لكل سطر مضارب المرحَّل الخارج = max(0, الداخل − صافي الكشف)، ما بينزل تحت الصفر، ونصيبه ≥ 0 وبلا نصيب ببداية خسارة.
+        var speculativeLines = await (
+                from l in db.PartnerStatementLines.AsNoTracking()
+                join s in db.PartnerMonthlyStatements.IgnoreQueryFilters().AsNoTracking() on l.StatementId equals s.Id
+                where l.PartnerType == SupermarketSystem.Domain.Partners.PartnerType.Speculative
+                select new { l.PartnerId, s.Year, s.Month, s.NetProfit, l.LossCarriedIn, l.LossCarriedOut, l.ShareAmount })
+            .ToListAsync();
+        foreach (var l in speculativeLines)
+        {
+            if (l.LossCarriedIn < 0 || l.LossCarriedOut < 0) violations.Add($"مضارب {l.PartnerId} {l.Month}/{l.Year}: خسارة مرحّلة سالبة");
+            if (l.LossCarriedOut != Math.Max(0m, l.LossCarriedIn - l.NetProfit))
+                violations.Add($"مضارب {l.PartnerId} {l.Month}/{l.Year}: مرحَّل خارج {l.LossCarriedOut} ≠ max(0, {l.LossCarriedIn} − {l.NetProfit})");
+            if (l.ShareAmount < 0 || (l.NetProfit <= l.LossCarriedIn && l.ShareAmount != 0m))
+                violations.Add($"مضارب {l.PartnerId} {l.Month}/{l.Year}: نصيب {l.ShareAmount} رغم إنّ الربح {l.NetProfit} ما غطّى المرحَّل {l.LossCarriedIn}");
+        }
+
         return violations;
     }
 }

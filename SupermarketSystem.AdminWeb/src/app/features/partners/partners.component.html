@@ -194,7 +194,15 @@
             <tbody>
               @for (line of st.lines; track line.partnerId) {
                 <tr>
-                  <td>{{ line.partnerName }}</td>
+                  <td>
+                    {{ line.partnerName }}
+                    @if (line.typeCode === 2 && ((line.lossCarriedIn ?? 0) > 0 || (line.lossCarriedOut ?? 0) > 0)) {
+                      <small class="sub">
+                        خسارة مرحّلة: دخلت {{ line.lossCarriedIn ?? 0 | number: '1.3-3' }} ← بقي {{ line.lossCarriedOut ?? 0 | number: '1.3-3' }}
+                        (نسبته من الربح بعد تغطيتها)
+                      </small>
+                    }
+                  </td>
                   <td>{{ line.typeTitle }}</td>
                   <td class="money">{{ line.capitalBalance === null ? '—' : (line.capitalBalance | number: '1.3-3') }}</td>
                   <td class="money">{{ line.sharePercent | number: '1.0-2' }}%</td>
@@ -204,7 +212,7 @@
             </tbody>
           </table>
         </div>
-        <p class="hint">المضارب بياخد نسبته بشهر الربح بس. الباقي (ربح أو خسارة) بين شركاء رأس المال بنسبة رأس مال كل واحد آخر الشهر.</p>
+        <p class="hint">المضارب بياخد نسبته بشهر الربح بس، <strong>وبعد ما تتغطى خسارة الشهور اللي قبل</strong> (بتترحّل لحد ما تنتهي). الباقي (ربح أو خسارة) بين شركاء رأس المال بنسبة رأس مال كل واحد آخر الشهر.</p>
       </div>
     }
   }

@@ -153,6 +153,57 @@ public sealed class PartnerStatementGenerator
         _dateTimeProvider = dateTimeProvider;
     }
 
+    /// <summary>
+    /// الخسارة المرحّلة الداخلة لكل مضارب = LossCarriedOut من آخر كشف مخزَّن إله قبل هالشهر (سجل مجمَّد، مش إعادة حساب). أول كشف يشارك فيه = 0.
+    /// السلسلة لازم تكون متصلة: أي شهر ناقص بين آخر كشف إله وهالشهر = رفض برسالة، عشان خسارة ما تضيع بصمت (أموال ناس).
+    /// </summary>
+    private async Task<Result<Dictionary<Guid, decimal>>> LoadMudaribCarryInAsync(
+        Guid branchId, int year, int month, IReadOnlyCollection<Guid> mudaribIds, CancellationToken cancellationToken)
+    {
+        var carry = new Dictionary<Guid, decimal>();
+        if (mudaribIds.Count == 0)
+        {
+            return Result.Success(carry);
+        }
+
+        var target = year * 12 + month - 1;
+        var statementMonths = (await _context.PartnerMonthlyStatements.IgnoreQueryFilters().AsNoTracking()
+            .Where(s => s.BranchId == branchId && s.Year * 12 + s.Month - 1 < target)
+            .Select(s => s.Year * 12 + s.Month - 1)
+            .ToListAsync(cancellationToken)).ToHashSet();
+
+        var previousLines = await (
+                from l in _context.PartnerStatementLines.AsNoTracking()
+                join s in _context.PartnerMonthlyStatements.IgnoreQueryFilters().AsNoTracking() on l.StatementId equals s.Id
+                where s.BranchId == branchId && mudaribIds.Contains(l.PartnerId) && s.Year * 12 + s.Month - 1 < target
+                select new { l.PartnerId, MonthIndex = s.Year * 12 + s.Month - 1, l.LossCarriedOut })
+            .ToListAsync(cancellationToken);
+
+        foreach (var id in mudaribIds)
+        {
+            var last = previousLines.Where(x => x.PartnerId == id).OrderByDescending(x => x.MonthIndex).FirstOrDefault();
+            if (last is null)
+            {
+                carry[id] = 0m; // أول كشف يشارك فيه المضارب: الترحيل بيبدأ من هون.
+                continue;
+            }
+
+            for (var index = last.MonthIndex + 1; index < target; index++)
+            {
+                if (!statementMonths.Contains(index))
+                {
+                    return Result.Failure<Dictionary<Guid, decimal>>(Error.BusinessRule(
+                        "PartnerStatement.PreviousMonthMissing",
+                        $"كشف شهر {index % 12 + 1}/{index / 12} مش موجود - أصدره أول (بالترتيب) عشان الخسارة المرحّلة للمضارب تنحسب صح."));
+                }
+            }
+
+            carry[id] = last.LossCarriedOut;
+        }
+
+        return Result.Success(carry);
+    }
+
     public async Task<Result<Guid>> GenerateAsync(Guid branchId, int year, int month, bool isAutomatic, CancellationToken cancellationToken)
     {
         if (month is < 1 or > 12 || year is < 2000 or > 2200)
@@ -195,16 +246,24 @@ public sealed class PartnerStatementGenerator
             + profit.StocktakeMovementsExcludedNoCostHistory
             + profit.WasteMovementsExcludedNoCostHistory
             + profit.ComplimentaryMovementsExcludedNoCostHistory;
-        var lines = new List<(Guid PartnerId, PartnerType Type, decimal? CapitalBalance, decimal SharePercent, decimal ShareAmount)>();
+        var lines = new List<StatementLineInput>();
 
-        // (2) المضاربين.
+        // (2) المضاربين - مع ترحيل الخسارة: ما بيربح المضارب إلا بعد ما تتغطى خسارة الشهور اللي قبل (راجع MudaribLossCarryForward).
+        var speculativePartners = partners.Where(p => p.Type == PartnerType.Speculative).ToList();
+        var carryInResult = await LoadMudaribCarryInAsync(branchId, year, month, speculativePartners.Select(p => p.Id).ToList(), cancellationToken);
+        if (carryInResult.IsFailure)
+        {
+            return Result.Failure<Guid>(carryInResult.Error!);
+        }
+
         var speculativeTotal = 0m;
-        foreach (var partner in partners.Where(p => p.Type == PartnerType.Speculative))
+        foreach (var partner in speculativePartners)
         {
             var percent = partner.SpeculativeProfitPercent ?? 0m;
-            var share = netProfit > 0 ? Math.Round(netProfit * percent / 100m, 3, MidpointRounding.AwayFromZero) : 0m;
-            speculativeTotal += share;
-            lines.Add((partner.Id, PartnerType.Speculative, null, netProfit > 0 ? percent : 0m, share));
+            var calc = MudaribLossCarryForward.Calculate(netProfit, carryInResult.Value.GetValueOrDefault(partner.Id), percent);
+            speculativeTotal += calc.Share;
+            lines.Add(new StatementLineInput(
+                partner.Id, PartnerType.Speculative, null, netProfit > 0 ? percent : 0m, calc.Share, calc.CarriedIn, calc.CarriedOut));
         }
 
         // (3) شركاء رأس المال.
@@ -242,13 +301,17 @@ public sealed class PartnerStatementGenerator
                 var balance = capital.GetValueOrDefault(id);
                 var share = shares.GetValueOrDefault(id);
                 var percent = netProfit != 0 ? Math.Round(share / netProfit * 100m, 4) : (balance > 0 ? Math.Round(balance / totalCapital * 100m, 4) : 0m);
-                lines.Add((id, PartnerType.Capital, balance, percent, share));
+                lines.Add(new StatementLineInput(id, PartnerType.Capital, balance, percent, share));
             }
         }
 
         var statement = await _context.PartnerMonthlyStatements.IgnoreQueryFilters()
             .Include(s => s.Lines)
             .FirstOrDefaultAsync(s => s.BranchId == branchId && s.Year == year && s.Month == month, cancellationToken);
+
+        var previousOut = statement is null
+            ? new Dictionary<Guid, decimal>()
+            : statement.Lines.Where(l => l.PartnerType == PartnerType.Speculative).ToDictionary(l => l.PartnerId, l => l.LossCarriedOut);
 
         if (statement is null)
         {
@@ -265,6 +328,24 @@ public sealed class PartnerStatementGenerator
             _context.PartnerStatementLines.RemoveRange(statement.Lines.ToList());
         }
 
+        // الخسارة المرحّلة اللي طلعت من هالكشف قبل وبعد: لو تغيّرت (إعادة إصدار، أو كشف أقدم انضاف) الكشوف اللي بعده انحسبت على
+        // رقم قديم - بنعلّمها "قديمة" بنفس الحفظ (مش منع - §1.6 - بس الأرقام ما بتتشوه بصمت). ناقص = 0.
+        var newOut = lines.Where(l => l.Type == PartnerType.Speculative).ToDictionary(l => l.PartnerId, l => l.LossCarriedOut);
+        var carryChanged = newOut.Keys.Union(previousOut.Keys)
+            .Any(id => newOut.GetValueOrDefault(id) != previousOut.GetValueOrDefault(id));
+        if (carryChanged)
+        {
+            var target = year * 12 + month - 1;
+            var later = await _context.PartnerMonthlyStatements.IgnoreQueryFilters()
+                .Where(s => s.BranchId == branchId && s.Year * 12 + s.Month - 1 > target)
+                .ToListAsync(cancellationToken);
+            foreach (var l in later)
+            {
+                l.MarkStale(_dateTimeProvider.UtcNow,
+                    $"تغيّرت الخسارة المرحّلة للمضارب بعد إصدار كشف {month}/{year} - أعد إصداره (بالترتيب من الأقدم للأحدث).");
+            }
+        }
+
         statement.SetContent(netProfit, unallocated, _dateTimeProvider.UtcNow, isAutomatic, lines, uncostedItems);
 
         // الأسطر معرّفها بينولد بالكود (Entity)، فـEF بيفكّر السطر الجديد جوّا كشف موجود "صف موجود" وبيعمل
@@ -276,5 +357,30 @@ public sealed class PartnerStatementGenerator
 
         await _context.SaveChangesAsync(cancellationToken);
         return Result.Success(statement.Id);
+    }
+}
+
+/// <summary>
+/// ترحيل خسارة المضارب (قرار صاحب المشروع 27/10/2026: "بتترحّل طبعًا - المضارب ما يربح لحاله وأنا أتحمّل الخسارة"): نسبة المضارب بتنحسب
+/// من الربح <b>بعد</b> تغطية خسارة الشهور اللي قبل. شهر خسارة: نصيبه صفر (ما بيتحمّل كخسارة سالبة) والخسارة بتنضاف للمرحَّل.
+/// شهر ربح: الخسارة المرحّلة بتنخصم من الربح أول، والباقي بس بتنحسب منه نسبته. دالة نقية (بلا قاعدة بيانات) عشان تنختبر لحالها.
+/// كل المبالغ بـ3 خانات، والتقريب AwayFromZero زي باقي التوزيع.
+/// </summary>
+public static class MudaribLossCarryForward
+{
+    public readonly record struct CarryResult(decimal CarriedIn, decimal ProfitAfterCarry, decimal Share, decimal CarriedOut);
+
+    public static CarryResult Calculate(decimal netProfit, decimal carriedIn, decimal percent)
+    {
+        carriedIn = Math.Max(carriedIn, 0m);
+        if (netProfit <= 0)
+        {
+            return new CarryResult(carriedIn, 0m, 0m, carriedIn - netProfit);
+        }
+
+        var offset = Math.Min(carriedIn, netProfit);
+        var profitAfterCarry = netProfit - offset;
+        var share = Math.Round(profitAfterCarry * percent / 100m, 3, MidpointRounding.AwayFromZero);
+        return new CarryResult(carriedIn, profitAfterCarry, share, carriedIn - offset);
     }
 }

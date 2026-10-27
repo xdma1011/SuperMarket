@@ -128,6 +128,24 @@ describe('PartnersComponent', () => {
     expect(component.errorMessage()).toContain('2.000');
   });
 
+  it('كشف فيه مضارب بخسارة مرحّلة: بيبين الملاحظة، وشريك رأس المال بلا ملاحظة', () => {
+    const base = { id: 's1', year: 2026, month: 9, netProfit: 45, unallocatedAmount: 0, generatedAtUtc: '2026-10-01T00:00:00Z', isAutomatic: true, partnerCount: 2 };
+    component.selectedStatement.set({
+      ...base,
+      branchName: 'الرئيسي',
+      lines: [
+        { partnerId: 'm1', partnerName: 'خالد المضارب', typeCode: 2, typeTitle: 'شريك مضارب', capitalBalance: null, sharePercent: 20, shareAmount: 7, lossCarriedIn: 10, lossCarriedOut: 0 },
+        { partnerId: 'p1', partnerName: 'أحمد', typeCode: 1, typeTitle: 'شريك رأس مال', capitalBalance: 3000, sharePercent: 75, shareAmount: 38, lossCarriedIn: 0, lossCarriedOut: 0 }
+      ]
+    });
+    component.setTab('statements');
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('خسارة مرحّلة');
+    expect(text).toContain('10.000');
+    expect((text.match(/خسارة مرحّلة/g) ?? []).length).toBe(1); // سطر المضارب بس
+  });
+
   describe('إعادة استثمار الربح برأس المال', () => {
     const PREVIEW = {
       partnerId: 'p1', partnerName: 'أحمد', amount: 0.5, balanceBefore: 0.6, balanceAfter: 0.1, capitalBefore: 3000, capitalAfter: 3000.5,
