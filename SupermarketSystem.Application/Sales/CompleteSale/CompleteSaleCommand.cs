@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SupermarketSystem.Application.Common.Costing;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Policies;
 using SupermarketSystem.Application.Common.Promotions;
@@ -411,6 +412,8 @@ public sealed class CompleteSaleHandler
             command.Items.Select(i => (i.ProductId, i.ProductBatchId)).ToList(),
             nowUtc,
             cancellationToken);
+        // هامش التكلفة التقديرية للصنف بلا تكلفة معروفة (0 = معطّل) - يتجمّد بسطر البيع مع علامة IsCostEstimated.
+        var estimatedMarginPercent = await EstimatedCost.LoadMarginPercentAsync(_settingsProvider, cancellationToken);
 
         var activePromotionsByProduct = await _context.Promotions.AsNoTracking()
             .Where(p => productIds.Contains(p.ProductId) && p.StartAtUtc <= nowUtc && p.EndAtUtc >= nowUtc)
@@ -527,6 +530,15 @@ public sealed class CompleteSaleHandler
                 ? (batchUnitCosts.TryGetValue(batchId, out var batchCost) ? batchCost : null)
                 : (weightedAverageCosts.TryGetValue(item.ProductId, out var avgCost) ? avgCost : null);
 
+            // صنف بلا تكلفة معروفة: تكلفة تقديرية من سعر البيع بدل الاستبعاد (قرار صاحب المشروع 27/10/2026)، ومعلَّمة. السحب بسعر
+            // التكلفة (atCost) ما بياخد تقدير أبدًا - بيضل مرفوض تحت.
+            var isCostEstimated = false;
+            if (unitCostSnapshotBaseUnit is null && atCost is null)
+            {
+                unitCostSnapshotBaseUnit = EstimatedCost.FromSellingPrice(baseSellingPrice, estimatedMarginPercent);
+                isCostEstimated = unitCostSnapshotBaseUnit is not null;
+            }
+
             decimal? unitCostSnapshot = unitCostSnapshotBaseUnit is { } costBaseUnit
                 ? costBaseUnit * unit.ConversionFactorToBase
                 : null;
@@ -636,7 +648,8 @@ public sealed class CompleteSaleHandler
                 promotionAmount,
                 promotionId,
                 promotionTitleSnapshot,
-                unitCostSnapshot));
+                unitCostSnapshot,
+                isCostEstimated));
         }
 
         // --- 4. Totals, then the payment-completeness rule ---
@@ -830,7 +843,7 @@ public sealed class CompleteSaleHandler
                     line.ProductId, line.ProductUnitId, line.Quantity,
                     line.UnitPrice, line.ManualDiscountAmount, discountId: null,
                     line.PromotionAmount, line.PromotionId, line.PromotionTitleSnapshot,
-                    line.UnitCostSnapshot);
+                    line.UnitCostSnapshot, line.IsCostEstimated);
 
                 movements.Add(new StockMovement(
                     line.ProductId,
@@ -957,7 +970,8 @@ public sealed class CompleteSaleHandler
         decimal PromotionAmount,
         Guid? PromotionId,
         string? PromotionTitleSnapshot,
-        decimal? UnitCostSnapshot)
+        decimal? UnitCostSnapshot,
+        bool IsCostEstimated = false)
     {
         public decimal LineTotal => (UnitPrice * Quantity) - ManualDiscountAmount - PromotionAmount;
     }

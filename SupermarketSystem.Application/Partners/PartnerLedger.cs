@@ -245,7 +245,8 @@ public sealed class PartnerStatementGenerator
         var uncostedItems = profit.ItemsExcludedNoCostHistory
             + profit.StocktakeMovementsExcludedNoCostHistory
             + profit.WasteMovementsExcludedNoCostHistory
-            + profit.ComplimentaryMovementsExcludedNoCostHistory;
+            + profit.ComplimentaryMovementsExcludedNoCostHistory
+            + profit.EstimatedCostItemsCount;
         var lines = new List<StatementLineInput>();
 
         // (2) المضاربين - مع ترحيل الخسارة: ما بيربح المضارب إلا بعد ما تتغطى خسارة الشهور اللي قبل (راجع MudaribLossCarryForward).

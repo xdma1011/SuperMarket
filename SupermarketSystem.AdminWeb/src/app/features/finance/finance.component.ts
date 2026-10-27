@@ -104,6 +104,8 @@ interface GetMonthlyProfitStatementResponse {
   /** تكلفة الضيافة بالشهر (29/9/2026) - بتنطرح من صافي الربح. */
   complimentaryCostValue?: number;
   complimentaryMovementsExcludedNoCostHistory?: number;
+  /** بنود (بيع/جرد/تلف/ضيافة) انحسبت بتكلفة تقديرية من سعر البيع (27/10/2026) - داخلة بالأرقام فوق بس تقدير. */
+  estimatedCostItemsCount?: number;
 }
 
 const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategoryName, string> = {

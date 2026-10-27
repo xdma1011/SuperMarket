@@ -155,7 +155,7 @@
                       <span class="chip" [title]="s.staleReason || ''">⚠ قديم - أعد الإصدار</span>
                     }
                     @if ((s.uncostedItemsCount ?? 0) > 0) {
-                      <span class="chip" title="فيه بنود بلا تكلفة معروفة - الربح مبالغ فيه على الأغلب">⚠ بنود بلا تكلفة</span>
+                      <span class="chip" title="فيه بنود بلا تكلفة فعلية (مستبعدة أو بتكلفة تقديرية) - الربح تقدير">⚠ بنود بلا تكلفة فعلية</span>
                     }
                   </td>
                   <td>{{ s.generatedAtUtc | date: 'yyyy-MM-dd HH:mm' }} <span class="chip">{{ s.isAutomatic ? 'تلقائي' : 'يدوي' }}</span></td>
@@ -181,8 +181,9 @@
         }
         @if ((st.uncostedItemsCount ?? 0) > 0) {
           <div class="alert-banner warn">
-            ⚠ في {{ st.uncostedItemsCount }} بند بلا تكلفة معروفة (بيع/جرد/تلف/ضيافة) انحسبت بلا تكلفة، فصافي الربح على الأغلب
-            <strong>مبالغ فيه</strong>. سجّل بضاعة الافتتاح كـ«رصيد افتتاحي» من صفحة المشتريات، ثم أعد إصدار الكشف قبل ما حدا يسحب.
+            ⚠ في {{ st.uncostedItemsCount }} بند بلا تكلفة فعلية (بيع/جرد/تلف/ضيافة): إما مستبعدة من الربح أو محسوبة بتكلفة
+            <strong>تقديرية</strong> من سعر البيع، فصافي الربح <strong>تقدير مش حقيقة</strong>. سجّل بضاعة الافتتاح كـ«رصيد افتتاحي» من صفحة المشتريات،
+            ثم أعد إصدار الكشف قبل ما حدا يسحب.
           </div>
         }
         @if (st.unallocatedAmount !== 0) {

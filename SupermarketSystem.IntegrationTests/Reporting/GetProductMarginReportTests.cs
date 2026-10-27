@@ -1,3 +1,4 @@
+using SupermarketSystem.Application.Common.Costing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SupermarketSystem.Application.Common.Pagination;
@@ -138,6 +139,8 @@ public sealed class GetProductMarginReportTests : IntegrationTestBase
     {
         using var scope = CreateScope();
         await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+        // هالاختبار بيتحقق من حالة التقدير المعطّل (هامش 0): الصنف بلا تكلفة يُستبعد. الافتراضي (15%) مغطّى باختبارات التكلفة التقديرية.
+        await TestDataBuilder.SetSettingAsync(scope, CostingSettingsKeys.EstimatedMarginPercent, 0m);
         var db = CreateDbContext(scope);
 
         var (product, unit) = await TestDataBuilder.CreateActiveProductAsync(db, "منتج هامش بلا تاريخ شراء");

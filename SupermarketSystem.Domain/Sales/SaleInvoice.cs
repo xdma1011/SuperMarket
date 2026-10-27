@@ -157,11 +157,12 @@ public class SaleInvoice : AuditableEntity, IBranchOwned, IHasRowVersion
 
     public SaleInvoiceItem AddItem(
         Guid productId, Guid productUnitId, decimal quantity, decimal unitPriceSnapshot, decimal discountSnapshot, Guid? discountId,
-        decimal promotionAmount = 0m, Guid? promotionId = null, string? promotionTitleSnapshot = null, decimal? unitCostSnapshot = null)
+        decimal promotionAmount = 0m, Guid? promotionId = null, string? promotionTitleSnapshot = null, decimal? unitCostSnapshot = null,
+        bool isCostEstimated = false)
     {
         var item = new SaleInvoiceItem(
             Id, productId, productUnitId, quantity, unitPriceSnapshot, discountSnapshot, discountId,
-            promotionAmount, promotionId, promotionTitleSnapshot, unitCostSnapshot);
+            promotionAmount, promotionId, promotionTitleSnapshot, unitCostSnapshot, isCostEstimated);
         _items.Add(item);
         TotalAmount += item.LineTotal;
         return item;
@@ -317,6 +318,12 @@ public class SaleInvoiceItem : Entity
     /// </summary>
     public decimal? UnitCostSnapshot { get; private set; }
 
+    /// <summary>
+    /// true = UnitCostSnapshot تقدير (سعر البيع × (1 − هامش الإعدادات)) مش تكلفة شراء فعلية - الصنف ما كان إله تاريخ شراء وقت البيع
+    /// (27/10/2026). مجمَّد مع التكلفة: تغيير الهامش لاحقًا ما بيغيّر بيعات قديمة. كشف الربح بيعدّها ويحذّر منها.
+    /// </summary>
+    public bool IsCostEstimated { get; private set; }
+
     public decimal LineTotal { get; private set; }
     public Guid? DiscountId { get; private set; }
     public decimal QuantityReturned { get; private set; }
@@ -325,7 +332,8 @@ public class SaleInvoiceItem : Entity
 
     internal SaleInvoiceItem(
         Guid saleInvoiceId, Guid productId, Guid productUnitId, decimal quantity, decimal unitPriceSnapshot, decimal discountSnapshot, Guid? discountId,
-        decimal promotionAmount = 0m, Guid? promotionId = null, string? promotionTitleSnapshot = null, decimal? unitCostSnapshot = null)
+        decimal promotionAmount = 0m, Guid? promotionId = null, string? promotionTitleSnapshot = null, decimal? unitCostSnapshot = null,
+        bool isCostEstimated = false)
     {
         if (quantity <= 0)
         {
@@ -353,6 +361,7 @@ public class SaleInvoiceItem : Entity
         PromotionId = promotionId;
         PromotionTitleSnapshot = promotionTitleSnapshot;
         UnitCostSnapshot = unitCostSnapshot;
+        IsCostEstimated = isCostEstimated && unitCostSnapshot is not null;
         LineTotal = (quantity * unitPriceSnapshot) - discountSnapshot - promotionAmount;
         QuantityReturned = 0;
     }

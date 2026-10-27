@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SupermarketSystem.Application.Common.Costing;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Policies;
 using SupermarketSystem.Application.Inventory.RecordComplimentaryIssue;
@@ -38,6 +39,7 @@ public sealed class GetAdminSettingsHandler
         (PosPolicyKeys.MaxManualDiscountPercentage, "أقصى نسبة خصم يدوي مسموحة (%) - 0 يعطّل الخصم اليدوي كليًا", AdminSettingDataType.Decimal),
         (PosPolicyKeys.AllowPaymentReversal, "السماح بعكس دفعة مكتملة", AdminSettingDataType.Boolean),
         (PosPolicyKeys.HighValueReturnThreshold, "حد قيمة الإرجاع المرتفعة - يُعلَّم للمراجعة فوقه (0 = تعطيل)", AdminSettingDataType.Decimal),
+        (CostingSettingsKeys.EstimatedMarginPercent, "هامش الربح التقديري (%) للصنف اللي ما إله تكلفة شراء معروفة: التكلفة = سعر البيع × (1 − الهامش). الافتراضي 15 (من 0 إلى 90) - 0 = تعطيل (الصنف بيتستبعد من الربح). بيتجمّد بالبيعة وقت البيع", AdminSettingDataType.Decimal),
         (InventorySettingsKeys.AllowNegativeStock, "السماح بالبيع رغم نقص المخزون بالنظام", AdminSettingDataType.Boolean),
         (ComplimentarySettingsKeys.DailyReviewThresholdQuantity, "الحد اليومي لكمية الضيافة قبل التعليم للمراجعة", AdminSettingDataType.Decimal),
         // معرَّف بـInfrastructure.Services.PendingReviewSettingsKeys - Application
@@ -63,6 +65,12 @@ public sealed class GetAdminSettingsHandler
         (ClientVersionSettingsKeys.CashierMinimumVersion, "أقل نسخة مقبولة من تطبيق الكاشير (مثلًا 1.2.0) - نسخة أقدم بتشوف رسالة \"حدّث البرنامج\" بدل ما بيعاتها تعلق. فاضي = بلا فحص", AdminSettingDataType.String)
     };
 
+    // إعدادات إلها قيمة افتراضية بالكود (مفيش صف بالجدول لحد ما ينحفظ) - الصفحة لازم تعرض القيمة الفعّالة مش خانة فاضية.
+    private static readonly Dictionary<string, string> DefaultValues = new()
+    {
+        [CostingSettingsKeys.EstimatedMarginPercent] = CostingSettingsKeys.DefaultEstimatedMarginPercent.ToString(global::System.Globalization.CultureInfo.InvariantCulture)
+    };
+
     private readonly IApplicationDbContext _context;
 
     public GetAdminSettingsHandler(IApplicationDbContext context)
@@ -80,7 +88,7 @@ public sealed class GetAdminSettingsHandler
             .ToDictionaryAsync(s => s.Key, s => s.Value, cancellationToken);
 
         var settings = ManagedSettings
-            .Select(m => new AdminSettingDto(m.Key, m.Label, values.GetValueOrDefault(m.Key, string.Empty), m.DataType))
+            .Select(m => new AdminSettingDto(m.Key, m.Label, values.GetValueOrDefault(m.Key, DefaultValues.GetValueOrDefault(m.Key, string.Empty)), m.DataType))
             .ToList();
 
         return new GetAdminSettingsResponse(settings);

@@ -428,10 +428,10 @@ public static class PartnerStatementAlerts
 
         var branchName = await AlertText.BranchNameAsync(context, statement.BranchId, cancellationToken);
         await dispatcher.NotifyAsync(
-            $"كشف الشركاء {statement.Month}/{statement.Year} فيه بنود بلا تكلفة — راجعه قبل السحب",
+            $"كشف الشركاء {statement.Month}/{statement.Year} فيه بنود بلا تكلفة فعلية — راجعه قبل السحب",
             $"الفرع: {branchName}\n"
-            + $"عدد البنود بلا تكلفة معروفة: {statement.UncostedItemsCount} (بيع/جرد/تلف/ضيافة)\n"
-            + $"صافي الربح بالكشف: {statement.NetProfit:0.000} د.أ — على الأغلب مبالغ فيه لأنها بتتحسب بلا تكلفة.\n"
+            + $"عدد البنود بلا تكلفة فعلية: {statement.UncostedItemsCount} (بيع/جرد/تلف/ضيافة) - إما مستبعدة من الربح أو محسوبة بتكلفة تقديرية من سعر البيع\n"
+            + $"صافي الربح بالكشف: {statement.NetProfit:0.000} د.أ — تقدير مش حقيقة لحد ما تنسجّل تكلفة هالأصناف.\n"
             + "الحل: سجّل بضاعة الافتتاح كرصيد افتتاحي (صفحة المشتريات) ثم أعد إصدار الكشف.",
             cancellationToken,
             NotificationSeverity.Critical,

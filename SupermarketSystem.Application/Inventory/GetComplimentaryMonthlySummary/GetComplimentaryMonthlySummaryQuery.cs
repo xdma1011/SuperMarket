@@ -51,8 +51,10 @@ public sealed class GetComplimentaryMonthlySummaryHandler
         var businessTime = await BusinessTime.LoadAsync(_context, cancellationToken);
         var (startUtc, endUtc) = businessTime.MonthRangeUtc(query.Year, query.Month);
         var movements = await LoadMovementsAsync(query.BranchId, startUtc, endUtc, cancellationToken);
+        var estimatedMarginPercent = await EstimatedCost.LoadMarginPercentAsync(_context, cancellationToken);
         var unitCostOf = await MovementUnitCosts.LoadAsync(
-            _context, movements.Select(m => (m.ProductId, m.ProductBatchId)).ToList(), endUtc, cancellationToken);
+            _context, movements.Select(m => (m.ProductId, m.ProductBatchId)).ToList(), endUtc, cancellationToken,
+            query.BranchId, estimatedMarginPercent);
 
         // آخر 12 شهر لحد الشهر المختار (كل شهر بتقييمه لحد نهايته - نفس كشف ربح ذاك الشهر).
         var last12Months = new List<ComplimentaryMonthTotalDto>();
@@ -63,7 +65,7 @@ public sealed class GetComplimentaryMonthlySummaryHandler
             last12Months.Add(back == 0
                 ? new ComplimentaryMonthTotalDto(y, mo, movements.Count,
                     movements.Sum(m => m.QuantityBase * (unitCostOf(m.ProductId, m.ProductBatchId) ?? 0m)))
-                : await MonthTotalAsync(query.BranchId, businessTime, y, mo, cancellationToken));
+                : await MonthTotalAsync(query.BranchId, businessTime, y, mo, estimatedMarginPercent, cancellationToken));
         }
 
         var previousCost = last12Months[^2].CostValue;
@@ -114,7 +116,7 @@ public sealed class GetComplimentaryMonthlySummaryHandler
     }
 
     private async Task<ComplimentaryMonthTotalDto> MonthTotalAsync(
-        Guid branchId, BusinessTime businessTime, int year, int month, CancellationToken cancellationToken)
+        Guid branchId, BusinessTime businessTime, int year, int month, decimal estimatedMarginPercent, CancellationToken cancellationToken)
     {
         var (startUtc, endUtc) = businessTime.MonthRangeUtc(year, month);
         var rows = await LoadMovementsAsync(branchId, startUtc, endUtc, cancellationToken);
@@ -124,7 +126,8 @@ public sealed class GetComplimentaryMonthlySummaryHandler
         }
 
         var unitCostOf = await MovementUnitCosts.LoadAsync(
-            _context, rows.Select(m => (m.ProductId, m.ProductBatchId)).ToList(), endUtc, cancellationToken);
+            _context, rows.Select(m => (m.ProductId, m.ProductBatchId)).ToList(), endUtc, cancellationToken,
+            branchId, estimatedMarginPercent);
         return new ComplimentaryMonthTotalDto(year, month, rows.Count,
             rows.Sum(m => m.QuantityBase * (unitCostOf(m.ProductId, m.ProductBatchId) ?? 0m)));
     }

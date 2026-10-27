@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using SupermarketSystem.Application.Common.Costing;
+using System.Net;
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -209,6 +210,8 @@ public sealed class FinanceTests : IntegrationTestBase
     {
         using var scope = CreateScope();
         await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+        // هالاختبار بيتحقق من حالة التقدير المعطّل (هامش 0): الصنف بلا تكلفة يُستبعد. الافتراضي (15%) مغطّى باختبارات التكلفة التقديرية.
+        await TestDataBuilder.SetSettingAsync(scope, CostingSettingsKeys.EstimatedMarginPercent, 0m);
         var db = CreateDbContext(scope);
         var (product, unit) = await TestDataBuilder.CreateActiveProductAsync(db, "منتج بلا تاريخ شراء");
         await TestDataBuilder.CreateProductBranchAsync(db, product.Id, Fixture.TestBranchId, sellingPrice: 5m);
@@ -276,6 +279,8 @@ public sealed class FinanceTests : IntegrationTestBase
     {
         using var scope = CreateScope();
         await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+        // هالاختبار بيتحقق من حالة التقدير المعطّل (هامش 0): الصنف بلا تكلفة يُستبعد. الافتراضي (15%) مغطّى باختبارات التكلفة التقديرية.
+        await TestDataBuilder.SetSettingAsync(scope, CostingSettingsKeys.EstimatedMarginPercent, 0m);
         var db = CreateDbContext(scope);
         var (product, unit) = await TestDataBuilder.CreateActiveProductAsync(db, "منتج بلا تاريخ شراء لكشف الربح");
         await TestDataBuilder.CreateProductBranchAsync(db, product.Id, Fixture.TestBranchId, sellingPrice: 5m);
@@ -410,6 +415,8 @@ public sealed class FinanceTests : IntegrationTestBase
     {
         using var scope = CreateScope();
         await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+        // تقدير التكلفة معطّل هون (هامش 0): الصنف بلا تاريخ شراء يُستبعد. الافتراضي مغطّى بـEstimatedCostTests.
+        await TestDataBuilder.SetSettingAsync(scope, CostingSettingsKeys.EstimatedMarginPercent, 0m);
         var db = CreateDbContext(scope);
 
         var (product, unit) = await TestDataBuilder.CreateActiveProductAsync(db, "منتج تلف بكشف الربح");
@@ -468,6 +475,8 @@ public sealed class FinanceTests : IntegrationTestBase
     {
         using var scope = CreateScope();
         await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+        // هالاختبار بيتحقق من حالة التقدير المعطّل (هامش 0): الصنف بلا تكلفة يُستبعد. الافتراضي (15%) مغطّى باختبارات التكلفة التقديرية.
+        await TestDataBuilder.SetSettingAsync(scope, CostingSettingsKeys.EstimatedMarginPercent, 0m);
         var db = CreateDbContext(scope);
 
         var (product, _) = await TestDataBuilder.CreateActiveProductAsync(db, "منتج جرد بلا تاريخ شراء");

@@ -4275,6 +4275,11 @@ namespace SupermarketSystem.Infrastructure.Migrations
                     b.Property<decimal>("DiscountSnapshot")
                         .HasColumnType("decimal(18,4)");
 
+                    b.Property<bool>("IsCostEstimated")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<decimal>("LineTotal")
                         .HasColumnType("decimal(18,4)");
 

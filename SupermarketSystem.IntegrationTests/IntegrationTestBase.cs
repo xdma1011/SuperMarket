@@ -1,4 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
+using SupermarketSystem.Application.Common.Costing;
+using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Infrastructure.Persistence;
 
 namespace SupermarketSystem.IntegrationTests;
@@ -24,6 +26,11 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     public virtual async Task InitializeAsync()
     {
         await Fixture.ResetDatabaseAsync();
+
+        // Respawn بيمسح صف الإعداد بس كاش الإعدادات بيحتفظ بقيمة اختبار سابق غيّرها (هامش التكلفة التقديرية) - بنفضّيه عشان كل
+        // اختبار يبلش بالافتراضي (15%).
+        using var scope = CreateScope();
+        scope.ServiceProvider.GetRequiredService<ISettingsProvider>().Invalidate(CostingSettingsKeys.EstimatedMarginPercent);
     }
 
     public virtual Task DisposeAsync() => Task.CompletedTask;

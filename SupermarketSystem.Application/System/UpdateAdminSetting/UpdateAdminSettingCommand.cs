@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using SupermarketSystem.Application.Common.Costing;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Application.System.GetAdminSettings;
@@ -45,6 +46,14 @@ public sealed class UpdateAdminSettingHandler
         {
             return Result.Failure<UpdateAdminSettingResponse>(
                 Error.Validation("AdminSettings.InvalidValue", $"القيمة المدخلة لإعداد '{managedSetting.Label}' غير صحيحة."));
+        }
+
+        if (command.Key == CostingSettingsKeys.EstimatedMarginPercent
+            && (!decimal.TryParse(normalizedValue, NumberStyles.Number, CultureInfo.InvariantCulture, out var margin)
+                || margin < 0 || margin > CostingSettingsKeys.MaxEstimatedMarginPercent))
+        {
+            return Result.Failure<UpdateAdminSettingResponse>(
+                Error.Validation("AdminSettings.InvalidValue", $"هامش التكلفة التقديرية لازم يكون بين 0 و{CostingSettingsKeys.MaxEstimatedMarginPercent:0}."));
         }
 
         var setting = await _context.SystemSettings

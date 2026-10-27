@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using SupermarketSystem.Application.Common.Costing;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Policies;
 using SupermarketSystem.Application.Common.Promotions;
@@ -365,6 +366,8 @@ public sealed class RandomStoreSimulationTests : IntegrationTestBase
             // الإعدادات مش بتتصفّر بين الاختبارات (وكاشها عايش) - بنثبّت اللي المحاكاة بتعتمد عليه.
             await TestDataBuilder.SetSettingAsync(scope, PosPolicyKeys.AllowVoidSale, true);
             await TestDataBuilder.SetSettingAsync(scope, PosPolicyKeys.AllowReturn, true);
+            // الحَكَم بيحسب الصنف بلا تكلفة كـ"غير معروفة" (null) - فبنعطّل التكلفة التقديرية (هامش 0). مسار التقدير نفسه مغطّى بـEstimatedCostTests.
+            await TestDataBuilder.SetSettingAsync(scope, CostingSettingsKeys.EstimatedMarginPercent, 0m);
         }
 
         _admin = await CreateAuthenticatedClientAsync();

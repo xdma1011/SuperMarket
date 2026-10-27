@@ -123,6 +123,8 @@ public sealed class MonthlyProfitReflectionScenarioTests : IntegrationTestBase
         using (var scope = CreateScope())
         {
             await TestDataBuilder.EnsureDocumentSequencesProvisionedAsync(CreateDbContext(scope), branchId);
+            // السيناريو بيتحقق من استبعاد الشيبس (بلا تكلفة) من الربح - فبنعطّل التكلفة التقديرية (هامش 0). التقدير مغطّى بـEstimatedCostTests.
+            await TestDataBuilder.SetSettingAsync(scope, SupermarketSystem.Application.Common.Costing.CostingSettingsKeys.EstimatedMarginPercent, 0m);
         }
 
         var admin = await CreateAuthenticatedClientAsync();

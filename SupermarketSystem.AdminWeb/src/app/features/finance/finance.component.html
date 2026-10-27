@@ -41,6 +41,13 @@
     }
 
     @if (statement(); as s) {
+      @if ((s.estimatedCostItemsCount ?? 0) > 0) {
+        <div class="alert-banner warn">
+          تنبيه: {{ s.estimatedCostItemsCount }} بند (بيع/جرد/تلف/ضيافة) بهالشهر انحسبت بتكلفة <strong>تقديرية</strong> من سعر البيع لأنها بلا تكلفة شراء معروفة -
+          الربح المعروض هون تقدير مش حقيقة. سجّل بضاعة الافتتاح أو فواتير الشراء لتصير التكلفة فعلية، والهامش التقديري بتغيّره من صفحة الإعدادات.
+        </div>
+      }
+
       @if (s.itemsExcludedNoCostHistory > 0) {
         <div class="alert-banner warn">
           تنبيه: {{ s.itemsExcludedNoCostHistory }} سطر بيع بهالشهر بلا تكلفة معروفة (منتج بيع قبل أي فاتورة شراء مسجَّلة له) -

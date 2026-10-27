@@ -37,6 +37,8 @@ public sealed record ExpenseByTypeDto(Guid? ExpenseTypeId, string TypeName, deci
 ///   CostOfGoodsSold، لا مُحتسبة بتكلفة صفر (كان رح يضخّم GrossProfit
 ///   بشكل مضلِّل). أي رقم بهالحقل غير صفر = الربح المعروض هون أعلى من
 ///   الحقيقي فعليًا، ويحتاج مراجعة يدوية لتلك الأسطر تحديدًا.
+///   (27/10/2026) صنف بلا تاريخ شراء بيتسعّر بتكلفة تقديرية = سعر البيع × (1 − `Costing.EstimatedMarginPercent`، افتراضي 15%) بدل
+///   الاستبعاد، ومعلَّمة (`IsCostEstimated`/`EstimatedCostItemsCount`). هامش 0 = التعطيل والاستبعاد القديم.
 /// - GrossProfit = NetRevenue - CostOfGoodsSold.
 /// - TotalExpenses: مصاريف Expense بنفس (BranchId، PeriodYear، PeriodMonth)
 ///   المطلوبة - لا PaymentDateUtc (راجع تعليق Expense.cs بالـDomain).
@@ -121,6 +123,7 @@ public sealed class GetMonthlyProfitStatementHandler
 
         var costOfGoodsSold = costAggregate?.CostOfGoodsSold ?? 0m;
         var itemsExcludedNoCostHistory = await items.CountAsync(i => i.UnitCostSnapshot == null, cancellationToken);
+        var estimatedSaleItems = await items.CountAsync(i => i.IsCostEstimated, cancellationToken);
 
         var grossProfit = netRevenue - costOfGoodsSold;
 
@@ -152,7 +155,8 @@ public sealed class GetMonthlyProfitStatementHandler
             .Select(x => x.Dto)
             .ToList();
 
-        var inventory = await GetInventoryVarianceAndWasteAsync(query.BranchId, periodStartUtc, periodEndUtc, cancellationToken);
+        var estimatedMarginPercent = await EstimatedCost.LoadMarginPercentAsync(_context, cancellationToken);
+        var inventory = await GetInventoryVarianceAndWasteAsync(query.BranchId, periodStartUtc, periodEndUtc, estimatedMarginPercent, cancellationToken);
 
         var netProfit = grossProfit - totalExpenses
             + inventory.StocktakeSurplusValue - inventory.StocktakeShortageValue - inventory.WasteLossValue
@@ -168,17 +172,18 @@ public sealed class GetMonthlyProfitStatementHandler
             netProfit, expensesByType)
         {
             ComplimentaryCostValue = inventory.ComplimentaryCostValue,
-            ComplimentaryMovementsExcludedNoCostHistory = inventory.ComplimentaryExcludedNoCostHistory
+            ComplimentaryMovementsExcludedNoCostHistory = inventory.ComplimentaryExcludedNoCostHistory,
+            EstimatedCostItemsCount = estimatedSaleItems + inventory.EstimatedMovementsCount
         });
     }
 
     private sealed record InventoryValuation(
         decimal StocktakeSurplusValue, decimal StocktakeShortageValue, int StocktakeExcludedNoCostHistory,
         decimal WasteLossValue, int WasteExcludedNoCostHistory,
-        decimal ComplimentaryCostValue, int ComplimentaryExcludedNoCostHistory);
+        decimal ComplimentaryCostValue, int ComplimentaryExcludedNoCostHistory, int EstimatedMovementsCount = 0);
 
     private async Task<InventoryValuation> GetInventoryVarianceAndWasteAsync(
-        Guid branchId, DateTime periodStartUtc, DateTime periodEndUtc, CancellationToken cancellationToken)
+        Guid branchId, DateTime periodStartUtc, DateTime periodEndUtc, decimal estimatedMarginPercent, CancellationToken cancellationToken)
     {
         var movements = await _context.StockMovements.AsNoTracking()
             .Where(m => m.BranchId == branchId
@@ -196,8 +201,11 @@ public sealed class GetMonthlyProfitStatementHandler
         }
 
         // تكلفة الحبة (دفعة أو متوسط مرجّح لحد نهاية الشهر) - نفس مصدر ملخّص الضيافة الشهري.
-        var unitCostOf = await MovementUnitCosts.LoadAsync(
-            _context, movements.Select(m => (m.ProductId, m.ProductBatchId)).ToList(), periodEndUtc, cancellationToken);
+        var costs = await MovementUnitCosts.LoadWithEstimatesAsync(
+            _context, movements.Select(m => (m.ProductId, m.ProductBatchId)).ToList(), periodEndUtc, cancellationToken,
+            branchId, estimatedMarginPercent);
+        var unitCostOf = costs.UnitCostOf;
+        var estimatedMovements = 0;
 
         var surplusValue = 0m;
         var shortageValue = 0m;
@@ -231,6 +239,11 @@ public sealed class GetMonthlyProfitStatementHandler
                 continue;
             }
 
+            if (costs.IsEstimated(movement.ProductId, movement.ProductBatchId))
+            {
+                estimatedMovements++;
+            }
+
             var value = movement.QuantityBase * unitCost.Value;
             if (isWaste)
             {
@@ -251,7 +264,7 @@ public sealed class GetMonthlyProfitStatementHandler
         }
 
         return new InventoryValuation(surplusValue, shortageValue, stocktakeExcludedCount, wasteLossValue, wasteExcludedCount,
-            complimentaryValue, complimentaryExcludedCount);
+            complimentaryValue, complimentaryExcludedCount, estimatedMovements);
     }
 }
 
@@ -278,4 +291,10 @@ public sealed record GetMonthlyProfitStatementResponse(
     /// <summary>تكلفة الضيافة/الاستهلاك الداخلي بالشهر (29/9/2026) - بتنطرح من صافي الربح.</summary>
     public decimal ComplimentaryCostValue { get; init; }
     public int ComplimentaryMovementsExcludedNoCostHistory { get; init; }
+
+    /// <summary>
+    /// أسطر بيع + حركات (جرد/تلف/ضيافة) انحسبت بتكلفة تقديرية من سعر البيع (27/10/2026) لأن الصنف بلا تاريخ شراء. داخلة بالأرقام فوق
+    /// (بعكس "المستبعدة") بس الربح تقدير مش حقيقة - بتنعدّ بتحذير الكشف مع المستبعدة.
+    /// </summary>
+    public int EstimatedCostItemsCount { get; init; }
 }
