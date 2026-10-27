@@ -4,6 +4,7 @@ using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Policies;
 using SupermarketSystem.Application.Common.Promotions;
 using SupermarketSystem.Application.Common.Results;
+using SupermarketSystem.Application.Partners;
 using SupermarketSystem.Application.Sales.Common;
 using SupermarketSystem.Domain.CashManagement;
 using SupermarketSystem.Domain.Common;
@@ -932,6 +933,17 @@ public sealed class CompleteSaleHandler
                 $"- {flagsText}",
                 cancellationToken,
                 link: $"/sales?search={Uri.EscapeDataString(result.Value.InvoiceNumber)}");
+        }
+
+        // بيعة أوفلاين وصلت متأخرة ووقتها الفعلي بشهر نزل كشفه = الكشف ما شملها، فبينعلّم قديم (ثغرة #6). مش لبيع بوقت الوصول
+        // (ما بينزل كشف لشهر لسا ما خلص)، ولا لإعادة إرسال نفس البيعة.
+        // (فرق دقيقتين تحت = بيع أونلاين عادي، ما بنكلّف كل بيعة استعلام كشوف).
+        if (result.IsSuccess && !result.Value.WasReplay && command.OccurredAtUtc is not null
+            && saleTime.SaleTimeUtc < _dateTimeProvider.UtcNow.AddMinutes(-2))
+        {
+            await PartnerStatementStaleness.MarkLateSaleAsync(
+                _context, _notificationDispatcher, _dateTimeProvider.UtcNow, command.BranchId, saleTime.SaleTimeUtc,
+                result.Value.InvoiceNumber, result.Value.TotalAmount, cancellationToken);
         }
 
         return result;

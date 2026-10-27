@@ -128,6 +128,44 @@ public static class PartnerLedger
 
         return rows.ToDictionary(r => r.PartnerId, r => r.Total);
     }
+
+    /// <summary>
+    /// متوسط رأس مال كل شريك **مرجَّح بالزمن** خلال الفترة [periodStartUtc, periodEndUtc) (27/10/2026، ثغرة #1 "تلميع رأس المال"): رصيد افتتاح
+    /// الفترة ثم كل حركة بوقتها، والرصيد بيتحسب بمدة بقائه (بالتِكّات). قبل هيك كانت النسبة برأس المال آخر لحظة بالشهر، فشريك بيودع مبلغ ضخم
+    /// آخر يوم وبيسحبه أول يوم الجاي كان ياخد حصة الباقين (حصة شريك نزلت من 11.25 إلى 1.324 باختبار هجومي). الرصيد السالب بيحتسب صفر
+    /// بمدته (ما بيخصم من غيره). رأس مال ثابت طول الشهر = نفس الرقم القديم بالضبط.
+    /// </summary>
+    public static async Task<Dictionary<Guid, decimal>> LoadTimeWeightedCapitalAsync(
+        IApplicationDbContext context, IReadOnlyCollection<Guid> partnerIds, DateTime periodStartUtc, DateTime periodEndUtc,
+        CancellationToken cancellationToken)
+    {
+        var ids = partnerIds.ToList();
+        var transactions = await context.CapitalTransactions.IgnoreQueryFilters().AsNoTracking()
+            .Where(c => c.PartnerId != null && ids.Contains(c.PartnerId.Value) && c.OccurredAtUtc < periodEndUtc)
+            .Select(c => new { PartnerId = c.PartnerId!.Value, c.OccurredAtUtc, Signed = c.Type == CapitalTransactionType.Deposit ? c.Amount : -c.Amount })
+            .ToListAsync(cancellationToken);
+
+        var totalTicks = (decimal)(periodEndUtc - periodStartUtc).Ticks;
+        var result = new Dictionary<Guid, decimal>();
+        foreach (var id in ids)
+        {
+            var own = transactions.Where(t => t.PartnerId == id).OrderBy(t => t.OccurredAtUtc).ToList();
+            var balance = own.Where(t => t.OccurredAtUtc < periodStartUtc).Sum(t => t.Signed);
+            var cursor = periodStartUtc;
+            var weighted = 0m;
+            foreach (var t in own.Where(t => t.OccurredAtUtc >= periodStartUtc))
+            {
+                weighted += Math.Max(balance, 0m) * (t.OccurredAtUtc - cursor).Ticks;
+                balance += t.Signed;
+                cursor = t.OccurredAtUtc;
+            }
+
+            weighted += Math.Max(balance, 0m) * (periodEndUtc - cursor).Ticks;
+            result[id] = totalTicks > 0 ? Math.Round(weighted / totalTicks, 4, MidpointRounding.AwayFromZero) : Math.Max(balance, 0m);
+        }
+
+        return result;
+    }
 }
 
 /// <summary>
@@ -211,7 +249,7 @@ public sealed class PartnerStatementGenerator
             return Result.Failure<Guid>(Error.Validation("PartnerStatement.InvalidPeriod", "الشهر مش صحيح."));
         }
 
-        var (_, periodEndUtc) = (await BusinessTime.LoadAsync(_context, cancellationToken)).MonthRangeUtc(year, month);
+        var (periodStartUtc, periodEndUtc) = (await BusinessTime.LoadAsync(_context, cancellationToken)).MonthRangeUtc(year, month);
         if (periodEndUtc > _dateTimeProvider.UtcNow)
         {
             return Result.Failure<Guid>(Error.BusinessRule("PartnerStatement.MonthNotEnded", "الشهر لسه ما خلص - الكشف بينزل بعد نهايته."));
@@ -278,7 +316,8 @@ public sealed class PartnerStatementGenerator
         }
         else
         {
-            var capital = await PartnerLedger.LoadCapitalBalancesAsync(_context, capitalPartners, periodEndUtc, cancellationToken);
+            // متوسط رأس المال خلال الشهر مرجَّحًا بالزمن (مش لقطة آخر لحظة) - راجع LoadTimeWeightedCapitalAsync.
+            var capital = await PartnerLedger.LoadTimeWeightedCapitalAsync(_context, capitalPartners, periodStartUtc, periodEndUtc, cancellationToken);
             var positive = capitalPartners.Where(id => capital.GetValueOrDefault(id) > 0).ToList();
             var totalCapital = positive.Sum(id => capital[id]);
 
@@ -286,7 +325,7 @@ public sealed class PartnerStatementGenerator
             {
                 return Result.Failure<Guid>(Error.BusinessRule(
                     "PartnerStatement.NoCapital",
-                    "ما في رأس مال مسجَّل لشركاء رأس المال بهالفرع لحد آخر الشهر - سجّله من صفحة المالية (حركة رأس مال مع اختيار الشريك)."));
+                    "ما في رأس مال مسجَّل لشركاء رأس المال بهالفرع خلال هالشهر - سجّله من صفحة المالية (حركة رأس مال مع اختيار الشريك)."));
             }
 
             var shares = positive.ToDictionary(id => id, id => Math.Round(remaining * capital[id] / totalCapital, 3, MidpointRounding.AwayFromZero));

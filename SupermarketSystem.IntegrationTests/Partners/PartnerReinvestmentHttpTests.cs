@@ -99,7 +99,7 @@ public sealed class PartnerReinvestmentHttpTests : IntegrationTestBase
         {
             await ReadJsonAsync(await admin.PostAsJsonAsync("/api/v1/finance/capital-transactions", new
             {
-                branchId, type = "Deposit", amount = 10m, occurredAtUtc = previous.AddDays(-5), notes = "رأس مال", partnerId = p
+                branchId, type = "Deposit", amount = 10m, occurredAtUtc = previous.AddMonths(-1), notes = "رأس مال", partnerId = p
             }, StringEnums), "رأس مال");
         }
 
@@ -180,12 +180,13 @@ public sealed class PartnerReinvestmentHttpTests : IntegrationTestBase
         var s = await SetUpAsync();
         await ReadJsonAsync(await ReinvestAsync(s.Admin, s.Ahmad, 2.000m, DatabaseFixture.AdminPassword), "إعادة استثمار");
 
-        // نرجّع تاريخ الإيداع الناتج لقبل نهاية الشهر الماضي ونعيد إصدار كشفه: رأس المال 12 مقابل 10 = 54.55%/45.45%.
+        // نرجّع تاريخ الإيداع الناتج لقبل بداية الشهر الماضي (رأس المال بالكشف متوسط مرجَّح بالزمن - 27/10/2026 - فلازم يكون موجود طول
+        // الشهر عشان يظهر كامل) ونعيد إصدار كشفه: رأس المال 12 مقابل 10 = 54.55%/45.45%.
         using (var scope = CreateScope())
         {
             await CreateDbContext(scope).CapitalTransactions.IgnoreQueryFilters()
                 .Where(c => c.PartnerId == s.Ahmad && c.Amount == 2.000m)
-                .ExecuteUpdateAsync(x => x.SetProperty(c => c.OccurredAtUtc, s.Previous.AddDays(-2)));
+                .ExecuteUpdateAsync(x => x.SetProperty(c => c.OccurredAtUtc, s.Previous.AddMonths(-1).AddDays(3)));
         }
 
         var statement = await ReadJsonAsync(await s.Admin.PostAsJsonAsync("/api/v1/partners/statements",

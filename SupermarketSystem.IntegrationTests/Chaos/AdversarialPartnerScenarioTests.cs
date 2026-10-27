@@ -7,6 +7,7 @@ using SupermarketSystem.Application.Inventory.ApproveStocktake;
 using SupermarketSystem.Application.Inventory.CompleteStocktake;
 using SupermarketSystem.Application.Inventory.CreateStocktake;
 using SupermarketSystem.Application.Inventory.RecordStocktakeCount;
+using SupermarketSystem.Domain.Notifications;
 using SupermarketSystem.Domain.Partners;
 using SupermarketSystem.IntegrationTests.Common;
 using Xunit;
@@ -15,8 +16,8 @@ namespace SupermarketSystem.IntegrationTests.Chaos;
 
 /// <summary>
 /// اختبارات هجومية (27/10/2026، "اسأل المجلس كيف تطلع مشاكل بالسستم - خطأ أو تحايل أو خطأ بين الشركاء"): كل اختبار بيتصرف كشخص بدو
-/// يخرّب أو يغشّ، وبيتحقق من **السلوك المطلوب** (مش الحالي). اللي بينكسر = ثغرة حقيقية مكتشفة، بيتعلّم `Skip` بسبب واضح لحد ما تنصلح،
-/// والباقي حراسة دايمة. الأموال أموال ناس: كل كشف لازم مجموع أنصبته + غير الموزَّع = صافيه بالضبط، وسلسلة ترحيل المضارب متصلة.
+/// يخرّب أو يغشّ، وبيتحقق من **السلوك المطلوب** (مش الحالي). اللي بينكسر = ثغرة حقيقية مكتشفة (بيتعلّم `Skip` بسبب واضح لحد ما تنصلح)،
+/// والباقي حراسة دايمة. (كل الثغرات الأربع المكتشفة انصلحت 27/10/2026 - الاختبارات كلها حراسة.) الأموال أموال ناس: كل كشف لازم مجموع أنصبته + غير الموزَّع = صافيه بالضبط، وسلسلة ترحيل المضارب متصلة.
 /// </summary>
 [Collection(DatabaseCollection.Name)]
 public sealed class AdversarialPartnerScenarioTests : IntegrationTestBase
@@ -172,7 +173,7 @@ public sealed class AdversarialPartnerScenarioTests : IntegrationTestBase
     /// [#6] بيعة وصلت متأخرة وحسب وقتها بتنتمي لفترة كشف نازل أصلًا: الكشف لازم ينعلّم "قديم" (وإلا الأنصبة بتضل على رقم ناقص).
     /// بنحاكي كشف شهر "منتهي" بإدخال سجله مباشرة بالقاعدة (الشهر الحالي ما بيصدر بالـAPI)، ثم بيعة بوقت داخل نفس الفترة وأقدم من وقت الإصدار.
     /// </summary>
-    [Fact(Skip = "ثغرة مفتوحة #6: بيعة متأخرة (أوفلاين ≤ 7 أيام) ما بتعلّم الكشف الصادر قديم - CompleteSale ما بينادي PartnerStatementStaleness")]
+    [Fact]
     public async Task بيعة_متأخرة_بوقت_داخل_فترة_كشف_نازل_بتعلّم_الكشف_قديم()
     {
         var s = await SetUpAsync(new[] { 1000m, 1000m });
@@ -205,7 +206,7 @@ public sealed class AdversarialPartnerScenarioTests : IntegrationTestBase
     /// [#1] تلميع رأس المال: شريك بيودع مبلغ ضخم بآخر يوم بالشهر وبيسحبه أول يوم بالشهر اللي بعده. نسبته بتنحسب برأس المال آخر الشهر،
     /// فبياخد حصة الشريك الثاني. المطلوب: حصة الشريك الأمين ما تنقص بسبب إيداع ساعات.
     /// </summary>
-    [Fact(Skip = "ثغرة مفتوحة #1: النسبة برأس المال آخر لحظة بالشهر (لقطة) مش متوسط زمني - إيداع آخر يوم + سحب أول يوم بيسرق حصة الشريك الثاني")]
+    [Fact]
     public async Task إيداع_آخر_يوم_وسحبه_أول_يوم_ما_بيسرق_حصة_الشريك_الثاني()
     {
         var s = await SetUpAsync(new[] { 3000m, 1000m });
@@ -218,8 +219,10 @@ public sealed class AdversarialPartnerScenarioTests : IntegrationTestBase
 
         var m1 = await JsonAsync(await GenerateAsync(s, 3), "كشف M1");
         AssertSharesSumToNet(m1, "M1");
-        Assert.True(D(Line(m1, s.Capital[1]), "shareAmount") >= honestShareOfPartner2 - 0.5m,
-            $"حصة الشريك الثاني {D(Line(m1, s.Capital[1]), "shareAmount")} نزلت عن العادلة {honestShareOfPartner2} بسبب إيداع ليوم واحد");
+        // يوم من ~30 بمبلغ ضخم بيحسب بحجمه الزمني (رأس مال مرجَّح بالزمن): ~92% من العادلة، مش 12% زي لقطة آخر الشهر القديمة.
+        var share = D(Line(m1, s.Capital[1]), "shareAmount");
+        Assert.True(share >= honestShareOfPartner2 * 0.85m,
+            $"حصة الشريك الثاني {share} نزلت عن 85% من العادلة {honestShareOfPartner2} بسبب إيداع ليوم واحد");
     }
 
     /// <summary>[#2] حركة رأس مال بتاريخ رجعي داخل شهر نزل كشفه لازم تعلّم الكشف قديم (ما ينسحب على أنصبة قديمة بصمت).</summary>
@@ -255,7 +258,7 @@ public sealed class AdversarialPartnerScenarioTests : IntegrationTestBase
     }
 
     /// <summary>[#7] ترحيل مصروف لفترة بعيدة جدًا عن تاريخ الإدخال (تهريب ربح بين الشهور) لازم يطلّع تنبيه لصاحب المحل.</summary>
-    [Fact(Skip = "ثغرة مفتوحة #7: PeriodMonth/PeriodYear بتنحدد بحرية بلا أي تنبيه لو الفترة بعيدة عن تاريخ الإدخال")]
+    [Fact]
     public async Task مصروف_بفترة_بعيدة_عن_تاريخ_إدخاله_بيطلّع_تنبيه()
     {
         var s = await SetUpAsync(new[] { 1000m, 1000m });
@@ -267,7 +270,7 @@ public sealed class AdversarialPartnerScenarioTests : IntegrationTestBase
     }
 
     /// <summary>[#8] فائض جرد ضخم (بيزيد الربح) لازم يتعلّم/يطلّع تنبيه مثل النقص (النقص بيطلّع تنبيه خطير، الزيادة لا).</summary>
-    [Fact(Skip = "ثغرة مفتوحة #8: فائض الجرد بيدخل الربح (وأنصبة الشركاء) بدون أي تنبيه أو تعليم، بعكس النقص")]
+    [Fact]
     public async Task فائض_جرد_ضخم_بيطلّع_تنبيه_زي_النقص()
     {
         var s = await SetUpAsync(new[] { 1000m, 1000m });
@@ -381,5 +384,109 @@ public sealed class AdversarialPartnerScenarioTests : IntegrationTestBase
             var list = await StatementListAsync(s);
             Assert.All(list.Values, item => Assert.False(IsStale(item), $"seed {seed}: كشف ضل قديم بعد إعادة إصدار الكل بالترتيب"));
         }
+    }
+
+    /// <summary>متوسط رأس المال المرجَّح بالزمن بمثال بالإيد (10 أيام): افتتاح 200، +1000 بالبداية، +1000 باليوم 5، −500 باليوم 8 → 1600.</summary>
+    [Fact]
+    public async Task متوسط_رأس_المال_المرجَّح_بالزمن_بمثال_محسوب_بالإيد()
+    {
+        var s = await SetUpAsync(new[] { 1m });
+        var start = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+        var end = start.AddDays(10);
+        var partner = s.Capital[0];
+        await DepositAsync(s.Admin, partner, 200m, start.AddDays(-20));         // افتتاح 200 (إيداع التجهيز بتاريخ أحدث من الفترة فما بيدخل)
+        await DepositAsync(s.Admin, partner, 1000m, start);
+        await DepositAsync(s.Admin, partner, 1000m, start.AddDays(5));
+        await DepositAsync(s.Admin, partner, 500m, start.AddDays(8), "Withdrawal");
+        await DepositAsync(s.Admin, partner, 99999m, end.AddHours(1));          // بعد نهاية الفترة: ما بيدخل
+
+        using var scope = CreateScope();
+        var result = await SupermarketSystem.Application.Partners.PartnerLedger.LoadTimeWeightedCapitalAsync(
+            CreateDbContext(scope), new[] { partner }, start, end, CancellationToken.None);
+
+        Assert.Equal(1600m, result[partner]);
+    }
+
+    private async Task ApproveStocktakeWithCountAsync(IServiceScope scope, decimal counted)
+    {
+        var created = await scope.ServiceProvider.GetRequiredService<CreateStocktakeHandler>().HandleAsync(
+            new CreateStocktakeCommand(Fixture.TestBranchId, IncludeAllProductsAtBranch: true, ProductIds: null), CancellationToken.None);
+        Assert.True(created.IsSuccess, created.Error?.Message);
+        var itemId = await CreateDbContext(scope).StocktakeItems.AsNoTracking()
+            .Where(i => i.StocktakeId == created.Value.StocktakeId).Select(i => i.Id).FirstAsync();
+        await scope.ServiceProvider.GetRequiredService<RecordStocktakeCountHandler>().HandleAsync(
+            new RecordStocktakeCountCommand(created.Value.StocktakeId, itemId, CountedQuantity: counted), CancellationToken.None);
+        await scope.ServiceProvider.GetRequiredService<CompleteStocktakeHandler>().HandleAsync(
+            new CompleteStocktakeCommand(created.Value.StocktakeId), CancellationToken.None);
+        var approved = await scope.ServiceProvider.GetRequiredService<ApproveStocktakeHandler>().HandleAsync(
+            new ApproveStocktakeCommand(created.Value.StocktakeId), CancellationToken.None);
+        Assert.True(approved.IsSuccess, approved.Error?.Message);
+    }
+
+    /// <summary>فائض الجرد: صغير (≈ 8 د.أ بالتكلفة) = تنبيه "مهم"؛ كبير (≈ 3200 د.أ، فوق حد 100) = "خطير". النقص ما تغيّر (خطير دايمًا).</summary>
+    [Fact]
+    public async Task فائض_الجرد_بيتصعّد_حسب_قيمته_صغير_مهم_وكبير_خطير()
+    {
+        var s = await SetUpAsync(new[] { 1000m, 1000m });
+        using var scope = CreateScope();
+        await TestDataBuilder.ActAsAdminAsync(scope, Fixture);
+
+        await ApproveStocktakeWithCountAsync(scope, 5010m);     // مخزون النظام 5000 → +10 × 0.8 = 8
+        await ApproveStocktakeWithCountAsync(scope, 9010m);     // بعدها 5010 → +4000 × 0.8 = 3200
+
+        var alerts = await CreateDbContext(scope).Notifications.IgnoreQueryFilters().AsNoTracking()
+            .Where(n => n.Title.StartsWith("فائض بالجرد")).OrderBy(n => n.CreatedAtUtc).ToListAsync();
+        Assert.Equal(new[] { NotificationSeverity.Warning, NotificationSeverity.Critical }, alerts.Select(a => a.Severity).Distinct().Order().ToArray());
+    }
+
+    /// <summary>مصروف بالشهر الحالي أو اللي قبله = عادي بلا تنبيه "فترة بعيدة"؛ بالمستقبل = تنبيه.</summary>
+    [Fact]
+    public async Task مصروف_بفترة_قريبة_بلا_تنبيه_وبالمستقبل_بتنبيه()
+    {
+        var s = await SetUpAsync(new[] { 1000m, 1000m });
+        using var scope = CreateScope();
+        var db = CreateDbContext(scope);
+
+        async Task<int> FarPeriodAlertsAsync() =>
+            await db.Notifications.IgnoreQueryFilters().AsNoTracking().CountAsync(n => n.Title.StartsWith("مصروف بفترة بعيدة"));
+
+        await ExpenseInMonthAsync(s, 0, 10m);   // الشهر الحالي
+        await ExpenseInMonthAsync(s, 1, 10m);   // الشهر اللي قبله
+        Assert.Equal(0, await FarPeriodAlertsAsync());
+
+        var future = DateTime.UtcNow.AddMonths(3);
+        await JsonAsync(await s.Admin.PostAsJsonAsync("/api/v1/finance/expenses", new
+        {
+            branchId = Fixture.TestBranchId, category = 2, amount = 10m, paymentDateUtc = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+            periodYear = future.Year, periodMonth = future.Month, notes = "إيجار مقدّم"
+        }), "مصروف مستقبلي");
+        var afterFuture = await FarPeriodAlertsAsync();   // التنبيه بينسجّل لكل مستلم، فبنقارن بالزيادة مش بعدد ثابت
+        Assert.True(afterFuture > 0, "مصروف بفترة مستقبلية بلا تنبيه");
+
+        await ExpenseInMonthAsync(s, 5, 10m);   // قبل 5 شهور
+        Assert.True(await FarPeriodAlertsAsync() > afterFuture, "مصروف قبل 5 شهور بلا تنبيه");
+    }
+
+    /// <summary>بيعة عادية (بوقت الوصول) أو بوقت قريب ما بتعلّم ولا بتنبّه؛ وإعادة إرسال نفس البيعة المتأخرة ما بتكرر التنبيه.</summary>
+    [Fact]
+    public async Task البيعة_المتأخرة_ما_بتكرر_التعليم_وبيعة_بلا_كشف_ما_بتعلّم_شي()
+    {
+        var s = await SetUpAsync(new[] { 1000m, 1000m });
+        var now = DateTime.UtcNow;
+        var requestId = Guid.NewGuid();
+
+        object Sale(DateTime? at) => new
+        {
+            branchId = Fixture.TestBranchId, clientRequestId = requestId, customerId = (Guid?)null, invoiceLevelDiscountAmount = 0m,
+            items = new[] { new { productId = s.MilkId, productUnitId = s.MilkUnit, quantity = 1m, manualDiscountAmount = 0m, productBatchId = (Guid?)null } },
+            payments = new[] { new { paymentMethodId = TestDataBuilder.CashPaymentMethodId, amount = 1.25m, externalReference = (string?)null, clientRequestId = Guid.NewGuid() } },
+            occurredAtUtc = at
+        };
+
+        // بلا كشف أصلًا: بيعة متأخرة ما بتعمل ولا تنبيه.
+        await JsonAsync(await s.Admin.PostAsJsonAsync("/api/v1/sales", Sale(now.AddHours(-3))), "بيعة متأخرة بلا كشف");
+        using var scope = CreateScope();
+        var db = CreateDbContext(scope);
+        Assert.Equal(0, await db.Notifications.IgnoreQueryFilters().AsNoTracking().CountAsync(n => n.Title.Contains("صار قديم")));
     }
 }

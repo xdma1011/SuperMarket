@@ -22,4 +22,12 @@ public static class InventorySettingsKeys
 
     /// <summary>عدد الأيام قبل انتهاء الصلاحية اللي تبدأ فيها دفعة تظهر بتقرير "قرب انتهاء الصلاحية" (GetExpiringBatchesQuery). افتراضي 14 يوم.</summary>
     public const string ExpiryAlertThresholdDays = "Inventory.ExpiryAlertThresholdDays";
+
+    /// <summary>
+    /// قيمة فائض الجرد (بالتكلفة، دينار) اللي فوقها تنبيه الفائض بيصير "خطير" بدل "مهم" (27/10/2026). الفائض بيزيد الربح وأنصبة الشركاء،
+    /// فمساعد أدمن ممكن يعدّ بزيادة ويعتمد - مهما كان صغير بنبّه، وفوق هالحد بنصعّد. 0 = ما بنصعّد أبدًا. الافتراضي 100.
+    /// </summary>
+    public const string StocktakeSurplusCriticalValue = "Stocktake.SurplusCriticalValue";
+
+    public const decimal DefaultStocktakeSurplusCriticalValue = 100m;
 }

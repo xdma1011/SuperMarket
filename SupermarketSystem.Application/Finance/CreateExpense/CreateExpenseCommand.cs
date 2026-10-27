@@ -3,9 +3,11 @@ using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Notifications;
 using SupermarketSystem.Application.Partners;
 using SupermarketSystem.Application.Common.Results;
+using SupermarketSystem.Application.Common.Time;
 using SupermarketSystem.Domain.CashManagement;
 using SupermarketSystem.Domain.Finance;
 using SupermarketSystem.Domain.Identity;
+using SupermarketSystem.Domain.Notifications;
 
 namespace SupermarketSystem.Application.Finance.CreateExpense;
 
@@ -152,6 +154,32 @@ public sealed class CreateExpenseHandler
             new[] { (command.PeriodYear, command.PeriodMonth) },
             $"انضاف مصروف ({expense.Amount:0.000} د.أ) بفترة {command.PeriodMonth}/{command.PeriodYear} بعد نزول الكشف.", cancellationToken);
 
+        await NotifyIfPeriodFarFromEntryAsync(expense, command, cancellationToken);
+
         return Result.Success(new CreateExpenseResponse(expense.Id));
+    }
+
+    /// <summary>
+    /// تنبيه "مهم" لو فترة المصروف (الشهر اللي بينحسب عليه) مش الشهر الحالي ولا اللي قبله، أو بالمستقبل (27/10/2026، ثغرة #7).
+    /// الفترة حرّة عمدًا (إيجار سنوي، فاتورة متأخرة) فما بنمنع - بس نقل مصروف لشهر بعيد = طريقة لتهريب الربح بين الشهور وأنصبة الشركاء.
+    /// </summary>
+    private async Task NotifyIfPeriodFarFromEntryAsync(Expense expense, CreateExpenseCommand command, CancellationToken cancellationToken)
+    {
+        var (currentYear, currentMonth) = (await BusinessTime.LoadAsync(_context, cancellationToken)).LocalMonth(_dateTimeProvider.UtcNow);
+        var monthsBack = (currentYear * 12 + currentMonth) - (command.PeriodYear * 12 + command.PeriodMonth);
+        if (monthsBack is >= 0 and <= 1)
+        {
+            return;
+        }
+
+        var branchName = await AlertText.BranchNameAsync(_context, command.BranchId, cancellationToken);
+        await _notificationDispatcher.NotifyAsync(
+            $"مصروف بفترة بعيدة عن تاريخ تسجيله — {expense.Amount:0.000} د.أ",
+            $"الفرع: {branchName}\nانسجّل بشهر {currentMonth}/{currentYear} على فترة {command.PeriodMonth}/{command.PeriodYear} " +
+            (monthsBack < 0 ? "(بالمستقبل)." : $"(قبل {monthsBack} شهر).") +
+            "\nنقل مصروف لشهر ثاني بيغيّر ربح الشهرين وأنصبة الشركاء — راجعه لو مش مقصود.",
+            cancellationToken,
+            NotificationSeverity.Warning,
+            link: "/finance");
     }
 }

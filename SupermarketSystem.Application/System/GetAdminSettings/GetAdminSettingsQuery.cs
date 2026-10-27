@@ -40,6 +40,7 @@ public sealed class GetAdminSettingsHandler
         (PosPolicyKeys.AllowPaymentReversal, "السماح بعكس دفعة مكتملة", AdminSettingDataType.Boolean),
         (PosPolicyKeys.HighValueReturnThreshold, "حد قيمة الإرجاع المرتفعة - يُعلَّم للمراجعة فوقه (0 = تعطيل)", AdminSettingDataType.Decimal),
         (CostingSettingsKeys.EstimatedMarginPercent, "هامش الربح التقديري (%) للصنف اللي ما إله تكلفة شراء معروفة: التكلفة = سعر البيع × (1 − الهامش). الافتراضي 15 (من 0 إلى 90) - 0 = تعطيل (الصنف بيتستبعد من الربح). بيتجمّد بالبيعة وقت البيع", AdminSettingDataType.Decimal),
+        (InventorySettingsKeys.StocktakeSurplusCriticalValue, "قيمة فائض الجرد (دينار، بالتكلفة) اللي فوقها التنبيه بيصير \"خطير\" - أي فائض أقل بينبّه كـ\"مهم\" (0 = ما بيصعّد أبدًا). الافتراضي 100", AdminSettingDataType.Decimal),
         (InventorySettingsKeys.AllowNegativeStock, "السماح بالبيع رغم نقص المخزون بالنظام", AdminSettingDataType.Boolean),
         (ComplimentarySettingsKeys.DailyReviewThresholdQuantity, "الحد اليومي لكمية الضيافة قبل التعليم للمراجعة", AdminSettingDataType.Decimal),
         // معرَّف بـInfrastructure.Services.PendingReviewSettingsKeys - Application
@@ -68,6 +69,7 @@ public sealed class GetAdminSettingsHandler
     // إعدادات إلها قيمة افتراضية بالكود (مفيش صف بالجدول لحد ما ينحفظ) - الصفحة لازم تعرض القيمة الفعّالة مش خانة فاضية.
     private static readonly Dictionary<string, string> DefaultValues = new()
     {
+        [InventorySettingsKeys.StocktakeSurplusCriticalValue] = InventorySettingsKeys.DefaultStocktakeSurplusCriticalValue.ToString(global::System.Globalization.CultureInfo.InvariantCulture),
         [CostingSettingsKeys.EstimatedMarginPercent] = CostingSettingsKeys.DefaultEstimatedMarginPercent.ToString(global::System.Globalization.CultureInfo.InvariantCulture)
     };
 

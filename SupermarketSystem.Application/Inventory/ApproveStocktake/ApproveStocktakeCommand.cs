@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Domain.Notifications;
+using SupermarketSystem.Application.Common.Costing;
 using SupermarketSystem.Application.Common.Notifications;
 using SupermarketSystem.Application.Common.Interfaces;
 using SupermarketSystem.Application.Common.Results;
@@ -186,12 +187,52 @@ public sealed class ApproveStocktakeHandler
                 link: $"/stocktakes/{stocktake.Id}");
         }
 
+        // فائض بالجرد = بيزيد الربح وأنصبة الشركاء بكشف الشهر (القيمة بتنحسب ربح). مهما كان صغير بنبّه (§1.6: سماح مع تعليم)،
+        // وفوق حد من الإعدادات بنصعّد لخطير - مساعد الأدمن عنده صلاحية الاعتماد، فعدّ بزيادة ما بيمرّ بصمت (27/10/2026، ثغرة #8).
+        var surpluses = result.IsSuccess
+            ? result.Value.AppliedCorrections.Where(c => c.Variance > 0).ToList()
+            : new List<ApproveStocktakeAppliedCorrectionDto>();
+        if (surpluses.Count > 0)
+        {
+            await NotifySurplusAsync(stocktake.Id, stocktake.StocktakeNumber, stocktake.BranchId, surpluses, cancellationToken);
+        }
+
         if (result.IsSuccess && result.Value.AppliedCorrections.Count > 0)
         {
             await NotifyVarianceOnRecentlyReturnedAsync(stocktake, result.Value.AppliedCorrections, cancellationToken);
         }
 
         return result;
+    }
+
+    private async Task NotifySurplusAsync(
+        Guid stocktakeId, string stocktakeNumber, Guid branchId, IReadOnlyList<ApproveStocktakeAppliedCorrectionDto> surpluses,
+        CancellationToken cancellationToken)
+    {
+        var margin = await EstimatedCost.LoadMarginPercentAsync(_settingsProvider, cancellationToken);
+        var costs = await MovementUnitCosts.LoadWithEstimatesAsync(
+            _context, surpluses.Select(s => (s.ProductId, (Guid?)null)).ToList(), _dateTimeProvider.UtcNow, cancellationToken, branchId, margin);
+
+        var total = 0m;
+        var lines = new List<string>();
+        foreach (var surplus in surpluses)
+        {
+            var productName = await AlertText.ProductNameAsync(_context, surplus.ProductId, cancellationToken);
+            var unitCost = costs.UnitCostOf(surplus.ProductId, null);
+            var value = unitCost is { } cost ? surplus.Variance * cost : (decimal?)null;
+            total += value ?? 0m;
+            lines.Add($"- {productName}: زايد {surplus.Variance:0.###}" + (value is { } v ? $" (≈ {v:0.000} د.أ)" : " (تكلفة غير معروفة)"));
+        }
+
+        var criticalValue = await _settingsProvider.GetDecimalAsync(
+            InventorySettingsKeys.StocktakeSurplusCriticalValue, InventorySettingsKeys.DefaultStocktakeSurplusCriticalValue, cancellationToken);
+        var branchName = await AlertText.BranchNameAsync(_context, branchId, cancellationToken);
+        await _notificationDispatcher.NotifyAsync(
+            $"فائض بالجرد — {stocktakeNumber}",
+            $"الفرع: {branchName}\n{string.Join("\n", lines)}\nالفائض بينحسب ربح بكشف الشهر (وبيزيد أنصبة الشركاء) — تأكد من صحة العدّ.",
+            cancellationToken,
+            criticalValue > 0 && total >= criticalValue ? NotificationSeverity.Critical : NotificationSeverity.Warning,
+            link: $"/stocktakes/{stocktakeId}");
     }
 
     /// <summary>

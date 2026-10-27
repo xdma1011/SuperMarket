@@ -40,6 +40,27 @@ public static class PartnerStatementStaleness
         IApplicationDbContext context, DateTime utc, CancellationToken cancellationToken) =>
         (await BusinessTime.LoadAsync(context, cancellationToken)).LocalMonth(utc);
 
+    /// <summary>
+    /// بيعة وصلت متأخرة (أوفلاين) ووقتها الفعلي بشهر نزل كشفه: الكشف أصلًا انحسب قبل ما تنسجّل، فأنصبته ناقصة ربحها (27/10/2026، ثغرة #6).
+    /// أي كشف موجود لشهر وقت البيعة = ما شملها (البيعة بتلتزم هلق، والكشف نزل قبل)، فبنعلّمه قديم. بنادى بعد الالتزام، وفشله ما بيأثر عالبيعة.
+    /// </summary>
+    public static async Task MarkLateSaleAsync(
+        IApplicationDbContext context, INotificationDispatcher dispatcher, DateTime utcNow, Guid branchId,
+        DateTime saleTimeUtc, string invoiceNumber, decimal totalAmount, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var month = await LocalMonthAsync(context, saleTimeUtc, cancellationToken);
+            await MarkAndNotifyAsync(
+                context, dispatcher, utcNow, branchId, new[] { month },
+                $"وصلت بيعة متأخرة ({invoiceNumber}، {totalAmount:0.000} د.أ) بوقت {month.Month}/{month.Year} بعد نزول الكشف.", cancellationToken);
+        }
+        catch (Exception)
+        {
+            // أفضل جهد (زي MarkAndNotifyAsync): البيعة التزمت أصلًا.
+        }
+    }
+
     public static async Task MarkAndNotifyAsync(
         IApplicationDbContext context, INotificationDispatcher dispatcher, DateTime utcNow, Guid branchId,
         IEnumerable<(int Year, int Month)> months, string reason, CancellationToken cancellationToken)

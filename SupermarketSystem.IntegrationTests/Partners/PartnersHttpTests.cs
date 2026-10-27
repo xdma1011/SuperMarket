@@ -195,8 +195,9 @@ public sealed class PartnersHttpTests : IntegrationTestBase
         }, StringEnums);
         Assert.Equal(HttpStatusCode.BadRequest, capitalForMudarib.StatusCode);
 
-        await DepositCapitalAsync(admin, ahmad, 3000m, previous.AddDays(-5));
-        await DepositCapitalAsync(admin, sami, 1000m, previous.AddDays(-5));
+        // قبل بداية الشهر: رأس المال بالكشف متوسط مرجَّح بالزمن (27/10/2026)، فلازم يكون موجود طول الشهر عشان يظهر 3000 كامل.
+        await DepositCapitalAsync(admin, ahmad, 3000m, previous.AddMonths(-1));
+        await DepositCapitalAsync(admin, sami, 1000m, previous.AddMonths(-1));
         // رأس مال انضاف بعد نهاية الشهر ما بيدخل بنسبة هالشهر.
         await DepositCapitalAsync(admin, sami, 5000m, DateTime.UtcNow);
 
