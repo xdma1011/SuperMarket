@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SupermarketSystem.Application.Common.Interfaces;
+using SupermarketSystem.Application.Common.Time;
 using SupermarketSystem.Application.Common.Notifications;
 using SupermarketSystem.Application.Common.Results;
 using SupermarketSystem.Domain.Common;
@@ -322,6 +323,7 @@ public sealed class GeneratePartnerStatementHandler
         }
 
         await PartnerStatementAlerts.NotifyIfUncostedAsync(_context, _notificationDispatcher, generated.Value, cancellationToken);
+        await PartnerStatementNewcomerAlerts.NotifyIfNewcomersAsync(_context, _notificationDispatcher, generated.Value, cancellationToken);
 
         var dto = await GetPartnerStatementByIdHandler.LoadAsync(_context, generated.Value, cancellationToken);
         return dto is null
@@ -435,6 +437,48 @@ public static class PartnerStatementAlerts
             + "الحل: سجّل بضاعة الافتتاح كرصيد افتتاحي (صفحة المشتريات) ثم أعد إصدار الكشف.",
             cancellationToken,
             NotificationSeverity.Critical,
+            link: "/partners?tab=statements");
+    }
+}
+
+/// <summary>
+/// شريك انضاف (انعرّف بالنظام) **بعد نهاية شهر الكشف** وأخد نصيب فيه (28/10/2026، ثغرة #5): إعادة إصدار شهر قديم بعد ما ينضاف مضارب، أو
+/// إيداع رأس مال رجعي لشريك جديد، بيدخّله بأرباح شهر ما كان شريك فيه. ما بنمنع (ممكن إعداد أولي للشركاء متأخر، أو شريك قديم انسجّل
+/// متأخر) - بس تنبيه "مهم" بالأسماء والأنصبة (§1.6).
+/// </summary>
+public static class PartnerStatementNewcomerAlerts
+{
+    public static async Task NotifyIfNewcomersAsync(
+        IApplicationDbContext context, INotificationDispatcher dispatcher, Guid statementId, CancellationToken cancellationToken)
+    {
+        var statement = await context.PartnerMonthlyStatements.IgnoreQueryFilters().AsNoTracking()
+            .Where(s => s.Id == statementId)
+            .Select(s => new { s.BranchId, s.Year, s.Month })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (statement is null)
+        {
+            return;
+        }
+
+        var (_, periodEndUtc) = (await BusinessTime.LoadAsync(context, cancellationToken)).MonthRangeUtc(statement.Year, statement.Month);
+        var newcomers = await (from line in context.PartnerStatementLines.IgnoreQueryFilters().AsNoTracking()
+                               join partner in context.Partners.IgnoreQueryFilters().AsNoTracking() on line.PartnerId equals partner.Id
+                               where line.StatementId == statementId && partner.CreatedAtUtc >= periodEndUtc && line.ShareAmount != 0
+                               select new { partner.FullName, line.ShareAmount, partner.CreatedAtUtc })
+            .ToListAsync(cancellationToken);
+        if (newcomers.Count == 0)
+        {
+            return;
+        }
+
+        var branchName = await AlertText.BranchNameAsync(context, statement.BranchId, cancellationToken);
+        var lines = newcomers.Select(n => $"- {n.FullName}: نصيبه {n.ShareAmount:0.000} د.أ (انضاف {n.CreatedAtUtc:yyyy-MM-dd})");
+        await dispatcher.NotifyAsync(
+            $"كشف الشركاء {statement.Month}/{statement.Year} فيه شريك انضاف بعد نهاية الشهر",
+            $"الفرع: {branchName}\n{string.Join("\n", lines)}\n" +
+            "هالشريك أخد نصيب من شهر قبل ما ينضاف. لو مقصود (إعداد أولي للشركاء أو شريك قديم انسجّل متأخر) تمام؛ وإلا وقّفه وأعد إصدار الكشف.",
+            cancellationToken,
+            NotificationSeverity.Warning,
             link: "/partners?tab=statements");
     }
 }

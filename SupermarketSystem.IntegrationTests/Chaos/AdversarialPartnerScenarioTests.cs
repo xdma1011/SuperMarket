@@ -489,4 +489,170 @@ public sealed class AdversarialPartnerScenarioTests : IntegrationTestBase
         var db = CreateDbContext(scope);
         Assert.Equal(0, await db.Notifications.IgnoreQueryFilters().AsNoTracking().CountAsync(n => n.Title.Contains("صار قديم")));
     }
+
+    // ===================================================================== الدفعة الثانية (28/10/2026): #3، #5، #10، #11
+
+    private Task<HttpResponseMessage> WithdrawAsync(Setup s, Guid partnerId, decimal amount) =>
+        s.Admin.PostAsJsonAsync("/api/v1/partners/withdrawals", new
+        {
+            partnerId, amount, source = "Drawer", notes = (string?)null, occurredAtUtc = (DateTime?)null, clientRequestId = Guid.NewGuid()
+        }, StringEnums);
+
+    private async Task<Dictionary<Guid, JsonElement>> WithdrawalsAsync(Setup s) =>
+        (await JsonAsync(await s.Admin.GetAsync($"/api/v1/partners/withdrawals?branchId={Fixture.TestBranchId}"), "السحوبات"))
+            .EnumerateArray().ToDictionary(w => w.GetProperty("id").GetGuid());
+
+    /// <summary>
+    /// [#3] سحب أكبر من رصيد الشريك: ما بينمنع (§1.6)، بس بيتعلّم NeedsReview برصيده قبل السحب + تنبيه "خطير"، وصاحب المحل بيعلّمه مراجَع.
+    /// سحب ضمن الرصيد = عادي ("مهم") وما إله مراجعة.
+    /// </summary>
+    [Fact]
+    public async Task سحب_فوق_رصيد_الشريك_بيمر_بس_بيتعلّم_للمراجعة_وتنبيه_خطير_وبتنراجع()
+    {
+        var s = await SetUpAsync(new[] { 1000m, 1000m });
+        await SellInMonthAsync(s, 2, 100);                       // صافي 45 → 22.5 لكل شريك
+        await JsonAsync(await GenerateAsync(s, 2), "كشف");
+
+        var within = await JsonAsync(await WithdrawAsync(s, s.Capital[0], 10m), "سحب ضمن الرصيد");
+        var over = await JsonAsync(await WithdrawAsync(s, s.Capital[0], 20m), "سحب فوق الرصيد");
+        Assert.Equal(-7.5m, D(over, "newBalance"));
+
+        var list = await WithdrawalsAsync(s);
+        var withinRow = list[within.GetProperty("withdrawalId").GetGuid()];
+        var overRow = list[over.GetProperty("withdrawalId").GetGuid()];
+        Assert.False(withinRow.GetProperty("needsReview").GetBoolean());
+        Assert.Equal(22.5m, D(withinRow, "balanceBefore"));
+        Assert.True(overRow.GetProperty("needsReview").GetBoolean());
+        Assert.Equal(12.5m, D(overRow, "balanceBefore"));
+
+        using (var scope = CreateScope())
+        {
+            var alerts = await CreateDbContext(scope).Notifications.IgnoreQueryFilters().AsNoTracking()
+                .Where(n => n.Title.StartsWith("سحب شريك")).ToListAsync();
+            Assert.Contains(alerts, n => n.Title.StartsWith("سحب شريك فوق رصيده") && n.Severity == NotificationSeverity.Critical);
+            Assert.Contains(alerts, n => n.Title.StartsWith("سحب شريك — ") && n.Severity == NotificationSeverity.Warning);
+        }
+
+        var overId = over.GetProperty("withdrawalId").GetGuid();
+        var withinId = within.GetProperty("withdrawalId").GetGuid();
+        Assert.Equal(System.Net.HttpStatusCode.UnprocessableEntity,
+            (await s.Admin.PostAsync($"/api/v1/partners/withdrawals/{withinId}/mark-reviewed", null)).StatusCode);
+        Assert.Equal(System.Net.HttpStatusCode.NoContent,
+            (await s.Admin.PostAsync($"/api/v1/partners/withdrawals/{overId}/mark-reviewed", null)).StatusCode);
+        Assert.Equal(System.Net.HttpStatusCode.NoContent,
+            (await s.Admin.PostAsync($"/api/v1/partners/withdrawals/{overId}/mark-reviewed", null)).StatusCode);   // مرة تانية: بلا تغيير
+        var reviewed = (await WithdrawalsAsync(s))[overId];
+        Assert.NotEqual(JsonValueKind.Null, reviewed.GetProperty("reviewedAtUtc").ValueKind);
+        Assert.False(string.IsNullOrEmpty(reviewed.GetProperty("reviewedByName").GetString()));
+        Assert.Equal(System.Net.HttpStatusCode.NotFound,
+            (await s.Admin.PostAsync($"/api/v1/partners/withdrawals/{Guid.NewGuid()}/mark-reviewed", null)).StatusCode);
+    }
+
+    /// <summary>
+    /// [#3] 6 سحوبات متزامنة × 5 على رصيد 22.5: قفل الشريك بيخلّيهم يقرأوا الرصيد واحد ورا الثاني، فبالضبط اللي بعد ما نزل الرصيد تحت 5
+    /// بيتعلّموا (اثنين: الرصيد 2.5 و−2.5). بلا قفل كانوا كلهم ممكن يقرأوا 22.5 وما يتعلّم ولا واحد.
+    /// </summary>
+    [Fact]
+    public async Task سحوبات_متزامنة_ما_بتتهرّب_من_علامة_المراجعة()
+    {
+        var s = await SetUpAsync(new[] { 1000m, 1000m });
+        await SellInMonthAsync(s, 2, 100);
+        await JsonAsync(await GenerateAsync(s, 2), "كشف");
+
+        var gate = new TaskCompletionSource();
+        var tasks = Enumerable.Range(0, 6).Select(async _ =>
+        {
+            await gate.Task;
+            return await WithdrawAsync(s, s.Capital[0], 5m);
+        }).ToList();
+        gate.SetResult();
+        var responses = await Task.WhenAll(tasks);
+        Assert.All(responses, r => Assert.True(r.IsSuccessStatusCode, $"{(int)r.StatusCode}"));
+
+        var rows = (await WithdrawalsAsync(s)).Values.ToList();
+        Assert.Equal(6, rows.Count);
+        Assert.Equal(2, rows.Count(r => r.GetProperty("needsReview").GetBoolean()));
+        Assert.Equal(new[] { -2.5m, 2.5m, 7.5m, 12.5m, 17.5m, 22.5m }, rows.Select(r => D(r, "balanceBefore")).Order().ToArray());
+    }
+
+    /// <summary>[#5] شريك انعرّف بعد نهاية شهر الكشف وأخد نصيب فيه = تنبيه بالاسم؛ شركاء موجودين قبل نهاية الشهر = بلا تنبيه.</summary>
+    [Fact]
+    public async Task شريك_انضاف_بعد_نهاية_الشهر_وأخد_نصيب_بكشفه_بيطلّع_تنبيه()
+    {
+        var s = await SetUpAsync(new[] { 1000m, 1000m });
+        await SellInMonthAsync(s, 2, 100);
+        using var scope = CreateScope();
+        var db = CreateDbContext(scope);
+        // الشركاء "قدام" - انعرّفوا قبل الشهر.
+        await db.Partners.IgnoreQueryFilters().ExecuteUpdateAsync(x => x.SetProperty(p => p.CreatedAtUtc, MonthMiddle(8)));
+
+        await JsonAsync(await GenerateAsync(s, 2), "كشف بلا جدد");
+        Task<int> NewcomerAlertsAsync() => db.Notifications.IgnoreQueryFilters().AsNoTracking().CountAsync(n => n.Title.Contains("شريك انضاف بعد نهاية الشهر"));
+        Assert.Equal(0, await NewcomerAlertsAsync());
+
+        // مضارب جديد هلق + إعادة إصدار نفس الشهر القديم → بياخد 20% منه.
+        var mudarib = (await JsonAsync(await s.Admin.PostAsJsonAsync("/api/v1/partners", new
+        {
+            branchId = Fixture.TestBranchId, fullName = "مضارب جديد", type = "Speculative", userId = (Guid?)null, speculativeProfitPercent = 20m, notes = (string?)null
+        }, StringEnums), "مضارب")).GetProperty("partnerId").GetGuid();
+        var statement = await JsonAsync(await GenerateAsync(s, 2), "إعادة إصدار");
+        Assert.Equal(9.000m, D(Line(statement, mudarib), "shareAmount"));
+
+        Assert.True(await NewcomerAlertsAsync() > 0, "مضارب جديد أخد من شهر قديم بلا تنبيه");
+        var message = await db.Notifications.IgnoreQueryFilters().AsNoTracking()
+            .Where(n => n.Title.Contains("شريك انضاف بعد نهاية الشهر")).Select(n => n.Message).FirstAsync();
+        Assert.Contains("مضارب جديد", message);
+        Assert.Contains("9.000", message);
+    }
+
+    /// <summary>[#10] تعليم تنبيه مقروء (واحد أو الكل) بيحفظ مين علّمه، وبيرجع بالقائمة (القراءة مشتركة بين الإدارة).</summary>
+    [Fact]
+    public async Task تعليم_التنبيه_مقروء_بيحفظ_مين_علّمه()
+    {
+        var s = await SetUpAsync(new[] { 1000m, 1000m });
+        await WithdrawAsync(s, s.Capital[0], 1m);   // بيطلّع تنبيه
+        await WithdrawAsync(s, s.Capital[1], 1m);
+
+        var page = await JsonAsync(await s.Admin.GetAsync("/api/v1/notifications?pageSize=50&unreadOnly=true"), "تنبيهات");
+        var first = page.GetProperty("items").EnumerateArray().First();
+        Assert.Equal(JsonValueKind.Null, first.GetProperty("readByName").ValueKind);
+
+        Assert.True((await s.Admin.PostAsync($"/api/v1/notifications/{first.GetProperty("id").GetGuid()}/read", null)).IsSuccessStatusCode);
+        Assert.True((await s.Admin.PostAsJsonAsync("/api/v1/notifications/read-all", new { maxSeverity = (string?)null })).IsSuccessStatusCode);
+
+        using var scope = CreateScope();
+        var rows = await CreateDbContext(scope).Notifications.IgnoreQueryFilters().AsNoTracking()
+            .Where(n => n.Channel == NotificationChannel.InApp).ToListAsync();
+        Assert.NotEmpty(rows);
+        Assert.All(rows, n => Assert.Equal(Fixture.AdminUserId, n.ReadByUserId));
+
+        var all = await JsonAsync(await s.Admin.GetAsync("/api/v1/notifications?pageSize=50"), "بعد القراءة");
+        Assert.All(all.GetProperty("items").EnumerateArray(), n => Assert.False(string.IsNullOrEmpty(n.GetProperty("readByName").GetString())));
+    }
+
+    /// <summary>
+    /// [#11] تغيير توقيت المحل بيحرّك حدود الشهور، فالكشوف النازلة بتتعلّم "قديمة". نفس التوقيت (حفظ بلا تغيير) = ما بيعلّم شي.
+    /// </summary>
+    [Fact]
+    public async Task تغيير_توقيت_المحل_بيعلّم_الكشوف_قديمة_والحفظ_بنفس_القيمة_لا()
+    {
+        var s = await SetUpAsync(new[] { 1000m, 1000m });
+        await SellInMonthAsync(s, 2, 100);
+        await JsonAsync(await GenerateAsync(s, 2), "كشف");
+        var key = (MonthMiddle(2).Year, MonthMiddle(2).Month);
+        try
+        {
+            await JsonAsync(await s.Admin.PutAsJsonAsync("/api/v1/system/time-settings", new { timeZoneId = "Asia/Amman", fixedUtcOffsetMinutes = (int?)null }), "نفس التوقيت");
+            Assert.False(IsStale((await StatementListAsync(s))[key]), "حفظ بنفس التوقيت علّم الكشف");
+
+            await JsonAsync(await s.Admin.PutAsJsonAsync("/api/v1/system/time-settings", new { timeZoneId = "Asia/Amman", fixedUtcOffsetMinutes = (int?)0 }), "فرق يدوي صفر");
+            var item = (await StatementListAsync(s))[key];
+            Assert.True(IsStale(item), "تغيير التوقيت ما علّم الكشف قديم");
+            Assert.Contains("توقيت المحل", item.GetProperty("staleReason").GetString());
+        }
+        finally
+        {
+            await s.Admin.PutAsJsonAsync("/api/v1/system/time-settings", new { timeZoneId = "Asia/Amman", fixedUtcOffsetMinutes = (int?)null });
+        }
+    }
 }

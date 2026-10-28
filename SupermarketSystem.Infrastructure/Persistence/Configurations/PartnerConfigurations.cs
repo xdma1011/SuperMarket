@@ -63,6 +63,9 @@ public class PartnerWithdrawalConfiguration : IEntityTypeConfiguration<PartnerWi
         builder.Property(w => w.Source).HasConversion<int>().IsRequired();
         builder.Property(w => w.OccurredAtUtc).HasColumnType("datetime2").IsRequired();
         builder.Property(w => w.Notes).HasMaxLength(PartnerWithdrawal.MaxNotesLength);
+        builder.Property(w => w.BalanceBefore).HasColumnType("decimal(18,4)");
+        builder.Property(w => w.NeedsReview).IsRequired().HasDefaultValue(false);
+        builder.Property(w => w.ReviewedAtUtc).HasColumnType("datetime2");
 
         builder.HasIndex(w => w.ClientRequestId).IsUnique();
         builder.HasIndex(w => new { w.PartnerId, w.OccurredAtUtc });
@@ -72,6 +75,7 @@ public class PartnerWithdrawalConfiguration : IEntityTypeConfiguration<PartnerWi
         builder.HasOne<Branch>().WithMany().HasForeignKey(w => w.BranchId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(w => w.RecordedByUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(w => w.PaidByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(w => w.ReviewedByUserId).OnDelete(DeleteBehavior.Restrict);
         // سجل تاريخي بحت - تصحيح غلط = حركة معاكسة، مش تعديل.
     }
 }

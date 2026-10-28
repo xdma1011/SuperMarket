@@ -137,6 +137,11 @@ export interface PartnerWithdrawalDto {
   recordedByName: string;
   paidByName: string | null;
   recordedAtCashier: boolean;
+  /** سحب فوق رصيد الشريك (28/10/2026): رصيده قبل السحب، وعلامة مراجعة ومين راجعها. */
+  balanceBefore?: number | null;
+  needsReview?: boolean;
+  reviewedByName?: string | null;
+  reviewedAtUtc?: string | null;
 }
 
 export interface PartnerLedgerDto {
@@ -710,6 +715,21 @@ export class PartnersComponent implements OnInit {
       await this.reloadAll();
     } catch (err) {
       this.errorMessage.set(this.errorDetail(err) ?? 'تعذّر تسجيل السحب.');
+    } finally {
+      this.submitting.set(false);
+    }
+  }
+
+  /** سحب فوق رصيد الشريك بانتظار مراجعة صاحب المحل - "تمت المراجعة" (حفظ له أثر، فمش latestRequest). */
+  async markWithdrawalReviewed(withdrawal: PartnerWithdrawalDto): Promise<void> {
+    this.submitting.set(true);
+    this.clearMessages();
+    try {
+      await firstValueFrom(this.apiClient.post(ApiController.Partners, PartnersOperation.MarkWithdrawalReviewed, {}, { id: withdrawal.id }));
+      this.successMessage.set(`تمت مراجعة سحب ${withdrawal.partnerName}.`);
+      await this.reloadAll();
+    } catch (err) {
+      this.errorMessage.set(this.errorDetail(err) ?? 'تعذّر تعليم السحب كمراجَع.');
     } finally {
       this.submitting.set(false);
     }

@@ -8,6 +8,7 @@ namespace SupermarketSystem.Application.Notifications.MarkNotificationsRead;
 // =====================================================================================
 // لوحة التنبيهات الموحّدة (28/9/2026): تعليم كمقروء + أعداد غير المقروء لكل درجة. التنبيهات عامة (TargetUserId
 // null = لكل الإدارة)، فالقراءة مشتركة - أي واحد من الإدارة بيعلّم، بتنعلّم عند الكل (محل صغير، إدارة وحدة).
+// مين علّم بينحفظ (ReadByUserId، 28/10/2026) وبيبين بلوحة التنبيهات - تسكير تنبيه سرقة ما بيصير بصمت.
 // =====================================================================================
 
 public sealed record MarkNotificationReadCommand(Guid NotificationId);
@@ -24,11 +25,13 @@ public sealed class MarkNotificationReadHandler
 {
     private readonly IApplicationDbContext _context;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly ICurrentUserContext _currentUser;
 
-    public MarkNotificationReadHandler(IApplicationDbContext context, IDateTimeProvider dateTimeProvider)
+    public MarkNotificationReadHandler(IApplicationDbContext context, IDateTimeProvider dateTimeProvider, ICurrentUserContext currentUser)
     {
         _context = context;
         _dateTimeProvider = dateTimeProvider;
+        _currentUser = currentUser;
     }
 
     public async Task<Result> HandleAsync(MarkNotificationReadCommand command, CancellationToken cancellationToken)
@@ -42,7 +45,7 @@ public sealed class MarkNotificationReadHandler
 
         if (notification.Status != NotificationStatus.Read)
         {
-            notification.MarkRead(_dateTimeProvider.UtcNow);
+            notification.MarkRead(_dateTimeProvider.UtcNow, _currentUser.UserId);
             await _context.SaveChangesAsync(cancellationToken);
         }
 
@@ -54,11 +57,13 @@ public sealed class MarkAllNotificationsReadHandler
 {
     private readonly IApplicationDbContext _context;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly ICurrentUserContext _currentUser;
 
-    public MarkAllNotificationsReadHandler(IApplicationDbContext context, IDateTimeProvider dateTimeProvider)
+    public MarkAllNotificationsReadHandler(IApplicationDbContext context, IDateTimeProvider dateTimeProvider, ICurrentUserContext currentUser)
     {
         _context = context;
         _dateTimeProvider = dateTimeProvider;
+        _currentUser = currentUser;
     }
 
     public async Task<int> HandleAsync(MarkAllNotificationsReadCommand command, CancellationToken cancellationToken)
@@ -74,7 +79,7 @@ public sealed class MarkAllNotificationsReadHandler
         var now = _dateTimeProvider.UtcNow;
         foreach (var notification in rows)
         {
-            notification.MarkRead(now);
+            notification.MarkRead(now, _currentUser.UserId);
         }
 
         await _context.SaveChangesAsync(cancellationToken);

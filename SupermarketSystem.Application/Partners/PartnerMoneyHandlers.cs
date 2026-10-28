@@ -35,7 +35,9 @@ public sealed record PartnerWithdrawalResponse(
 
 public sealed record PartnerWithdrawalDto(
     Guid Id, Guid PartnerId, string PartnerName, decimal Amount, int SourceCode, string SourceTitle, DateTime OccurredAtUtc,
-    string? Notes, string RecordedByName, string? PaidByName, bool RecordedAtCashier);
+    string? Notes, string RecordedByName, string? PaidByName, bool RecordedAtCashier,
+    // سحب فوق رصيد الشريك (28/10/2026): الرصيد قبل السحب + علامة مراجعة ومين راجعها.
+    decimal? BalanceBefore = null, bool NeedsReview = false, string? ReviewedByName = null, DateTime? ReviewedAtUtc = null);
 
 public sealed record GetPartnerWithdrawalsQuery(Guid? BranchId, Guid? PartnerId);
 
@@ -44,12 +46,18 @@ internal sealed class PartnerWithdrawalRecorder
     private readonly IApplicationDbContext _context;
     private readonly INotificationDispatcher _notificationDispatcher;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly ITransactionalExecutor _transactionalExecutor;
+    private readonly IPartnerLock _partnerLock;
 
-    public PartnerWithdrawalRecorder(IApplicationDbContext context, INotificationDispatcher notificationDispatcher, IDateTimeProvider dateTimeProvider)
+    public PartnerWithdrawalRecorder(
+        IApplicationDbContext context, INotificationDispatcher notificationDispatcher, IDateTimeProvider dateTimeProvider,
+        ITransactionalExecutor transactionalExecutor, IPartnerLock partnerLock)
     {
         _context = context;
         _notificationDispatcher = notificationDispatcher;
         _dateTimeProvider = dateTimeProvider;
+        _transactionalExecutor = transactionalExecutor;
+        _partnerLock = partnerLock;
     }
 
     public async Task<Result<PartnerWithdrawalResponse>> RecordAsync(
@@ -89,34 +97,53 @@ internal sealed class PartnerWithdrawalRecorder
         var at = occurredAtUtc is { } requested && requested <= now ? DateTime.SpecifyKind(requested, DateTimeKind.Utc) : now;
         amount = Math.Round(amount, 3, MidpointRounding.AwayFromZero);
 
-        var withdrawal = new PartnerWithdrawal(
-            partner.BranchId, partner.Id, amount, source, at, notes, actorUserId,
-            source == PartnerWithdrawalSource.OwnerPocket ? actorUserId : null, atCashier, clientRequestId);
-        _context.PartnerWithdrawals.Add(withdrawal);
-
-        if (source == PartnerWithdrawalSource.Drawer)
+        // سقف السحب (28/10/2026، ثغرة #3): الرصيد قبل السحب بينحسب **تحت قفل الشريك جوّا معاملة** (الرصيد محسوب مش مخزَّن) - سحبين متزامنين
+        // ما بيقرأوا نفس الرصيد. السحب فوق الرصيد ما بينمنع (§1.6 - ممكن سلفة متفق عليها، والرصيد ممكن يصير سالب)، بس بيتعلّم NeedsReview
+        // وبيطلع تنبيه خطير بدل "مهم".
+        var saved = await _transactionalExecutor.ExecuteAsync<PartnerWithdrawal>(async ct =>
         {
-            _context.CashDrawerLogs.Add(new CashDrawerLog(
-                partner.BranchId, CashDrawerMovementType.PayOut, amount, CashDrawerReferenceType.PartnerWithdrawal, withdrawal.Id, actorUserId, at));
-        }
-        else
+            await _partnerLock.LockAsync(partner.Id, ct);
+            var balanceBefore = await BalanceAsync(partner, ct);
+
+            var withdrawal = new PartnerWithdrawal(
+                partner.BranchId, partner.Id, amount, source, at, notes, actorUserId,
+                source == PartnerWithdrawalSource.OwnerPocket ? actorUserId : null, atCashier, clientRequestId);
+            withdrawal.RecordBalanceBefore(balanceBefore);
+            _context.PartnerWithdrawals.Add(withdrawal);
+
+            if (source == PartnerWithdrawalSource.Drawer)
+            {
+                _context.CashDrawerLogs.Add(new CashDrawerLog(
+                    partner.BranchId, CashDrawerMovementType.PayOut, amount, CashDrawerReferenceType.PartnerWithdrawal, withdrawal.Id, actorUserId, at));
+            }
+            else
+            {
+                _context.OwnerReceivableEntries.Add(OwnerReceivableEntry.ForPocketWithdrawal(withdrawal));
+            }
+
+            await _context.SaveChangesAsync(ct);
+            return Result.Success(withdrawal);
+        }, cancellationToken);
+
+        if (saved.IsFailure)
         {
-            _context.OwnerReceivableEntries.Add(OwnerReceivableEntry.ForPocketWithdrawal(withdrawal));
+            return Result.Failure<PartnerWithdrawalResponse>(saved.Error!);
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
-
+        var withdrawal = saved.Value;
         var balance = await BalanceAsync(partner, cancellationToken);
         var who = await AlertText.UserNameAsync(_context, actorUserId, cancellationToken);
         var branch = await AlertText.BranchNameAsync(_context, partner.BranchId, cancellationToken);
+        var overBalance = withdrawal.NeedsReview;
         await _notificationDispatcher.NotifyAsync(
-            $"سحب شريك — {partner.FullName} ({amount:0.000} د.أ)",
+            (overBalance ? "سحب شريك فوق رصيده — " : "سحب شريك — ") + $"{partner.FullName} ({amount:0.000} د.أ)",
             $"{partner.FullName} سحب {amount:0.000} د.أ {PartnerTitles.Source(source)} بفرع {branch}" +
             (atCashier ? $" - من الكاشير (سجّله {who} وتحقق {cashierVerification ?? "بحساب الشريك"})" : $" - سجّله {who}") +
-            $".\nرصيده بعد السحب: {balance:0.000} د.أ" + (notes is null ? "" : $"\nملاحظة: {notes}") +
+            (overBalance ? $".\nرصيده قبل السحب كان {withdrawal.BalanceBefore:0.000} د.أ بس — السحب أكبر منه بـ{amount - withdrawal.BalanceBefore:0.000} د.أ (بانتظار مراجعتك من صفحة الشركاء)." : "") +
+            $"\nرصيده بعد السحب: {balance:0.000} د.أ" + (notes is null ? "" : $"\nملاحظة: {notes}") +
             (source == PartnerWithdrawalSource.OwnerPocket ? $"\nانسجّل {amount:0.000} د.أ مستحق لـ{who}." : ""),
             cancellationToken,
-            NotificationSeverity.Warning,
+            overBalance ? NotificationSeverity.Critical : NotificationSeverity.Warning,
             link: "/partners?tab=withdrawals");
 
         return Result.Success(new PartnerWithdrawalResponse(
@@ -137,11 +164,12 @@ public sealed class RecordPartnerWithdrawalHandler
     private readonly PartnerWithdrawalRecorder _recorder;
 
     public RecordPartnerWithdrawalHandler(
-        IApplicationDbContext context, ICurrentUserContext currentUser, INotificationDispatcher notificationDispatcher, IDateTimeProvider dateTimeProvider)
+        IApplicationDbContext context, ICurrentUserContext currentUser, INotificationDispatcher notificationDispatcher, IDateTimeProvider dateTimeProvider,
+        ITransactionalExecutor transactionalExecutor, IPartnerLock partnerLock)
     {
         _context = context;
         _currentUser = currentUser;
-        _recorder = new PartnerWithdrawalRecorder(context, notificationDispatcher, dateTimeProvider);
+        _recorder = new PartnerWithdrawalRecorder(context, notificationDispatcher, dateTimeProvider, transactionalExecutor, partnerLock);
     }
 
     public async Task<Result<PartnerWithdrawalResponse>> HandleAsync(RecordPartnerWithdrawalCommand command, CancellationToken cancellationToken)
@@ -178,14 +206,15 @@ public sealed class RecordVerifiedPartnerWithdrawalHandler
 
     public RecordVerifiedPartnerWithdrawalHandler(
         IApplicationDbContext context, ICurrentUserContext currentUser, IPasswordHasher passwordHasher,
-        ISettingsProvider settingsProvider, INotificationDispatcher notificationDispatcher, IDateTimeProvider dateTimeProvider)
+        ISettingsProvider settingsProvider, INotificationDispatcher notificationDispatcher, IDateTimeProvider dateTimeProvider,
+        ITransactionalExecutor transactionalExecutor, IPartnerLock partnerLock)
     {
         _context = context;
         _currentUser = currentUser;
         _passwordHasher = passwordHasher;
         _settingsProvider = settingsProvider;
         _dateTimeProvider = dateTimeProvider;
-        _recorder = new PartnerWithdrawalRecorder(context, notificationDispatcher, dateTimeProvider);
+        _recorder = new PartnerWithdrawalRecorder(context, notificationDispatcher, dateTimeProvider, transactionalExecutor, partnerLock);
     }
 
     public async Task<Result<PartnerWithdrawalResponse>> HandleAsync(RecordVerifiedPartnerWithdrawalCommand command, CancellationToken cancellationToken)
@@ -392,14 +421,58 @@ public sealed class GetPartnerWithdrawalsHandler
         var partnerIds = rows.Select(r => r.PartnerId).Distinct().ToList();
         var partnerNames = await _context.Partners.IgnoreQueryFilters().AsNoTracking()
             .Where(p => partnerIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.FullName, cancellationToken);
-        var userIds = rows.Select(r => r.RecordedByUserId).Concat(rows.Where(r => r.PaidByUserId != null).Select(r => r.PaidByUserId!.Value)).Distinct().ToList();
+        var userIds = rows.Select(r => r.RecordedByUserId)
+            .Concat(rows.Where(r => r.PaidByUserId != null).Select(r => r.PaidByUserId!.Value))
+            .Concat(rows.Where(r => r.ReviewedByUserId != null).Select(r => r.ReviewedByUserId!.Value))
+            .Distinct().ToList();
         var userNames = await _context.Users.IgnoreQueryFilters().AsNoTracking()
             .Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FullName, cancellationToken);
 
         return rows.Select(r => new PartnerWithdrawalDto(
             r.Id, r.PartnerId, partnerNames.GetValueOrDefault(r.PartnerId, ""), r.Amount, (int)r.Source, PartnerTitles.Source(r.Source),
             r.OccurredAtUtc, r.Notes, userNames.GetValueOrDefault(r.RecordedByUserId, ""),
-            r.PaidByUserId is { } paid ? userNames.GetValueOrDefault(paid) : null, r.RecordedAtCashier)).ToList();
+            r.PaidByUserId is { } paid ? userNames.GetValueOrDefault(paid) : null, r.RecordedAtCashier,
+            r.BalanceBefore, r.NeedsReview, r.ReviewedByUserId is { } reviewer ? userNames.GetValueOrDefault(reviewer) : null, r.ReviewedAtUtc)).ToList();
+    }
+}
+
+/// <summary>
+/// "تمت المراجعة" لسحب شريك فوق رصيده (28/10/2026). صاحب المحل (Partners.Manage) بس. سحب مش بحاجة مراجعة = 422، ومراجَع قبل = نجاح بلا
+/// تغيير (ما بنكتب فوق أول مراجع).
+/// </summary>
+public sealed class MarkPartnerWithdrawalReviewedHandler
+{
+    private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserContext _currentUser;
+    private readonly IDateTimeProvider _dateTimeProvider;
+
+    public MarkPartnerWithdrawalReviewedHandler(IApplicationDbContext context, ICurrentUserContext currentUser, IDateTimeProvider dateTimeProvider)
+    {
+        _context = context;
+        _currentUser = currentUser;
+        _dateTimeProvider = dateTimeProvider;
+    }
+
+    public async Task<Result> HandleAsync(Guid withdrawalId, CancellationToken cancellationToken)
+    {
+        var withdrawal = await _context.PartnerWithdrawals.FirstOrDefaultAsync(w => w.Id == withdrawalId, cancellationToken);
+        if (withdrawal is null)
+        {
+            return Result.Failure(Error.NotFound("PartnerWithdrawal.NotFound", "السحب مش موجود."));
+        }
+
+        if (!withdrawal.NeedsReview)
+        {
+            return Result.Failure(Error.BusinessRule("PartnerWithdrawal.NoReviewNeeded", "هالسحب ضمن رصيد الشريك - ما بحاجة مراجعة."));
+        }
+
+        var actor = _currentUser.UserId ?? throw new InvalidOperationException("لا يمكن المراجعة بلا هوية مستخدم.");
+        if (withdrawal.MarkReviewed(actor, _dateTimeProvider.UtcNow))
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        return Result.Success();
     }
 }
 

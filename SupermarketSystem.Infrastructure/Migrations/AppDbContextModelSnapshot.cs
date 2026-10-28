@@ -2633,6 +2633,9 @@ namespace SupermarketSystem.Infrastructure.Migrations
                     b.Property<DateTime?>("ReadAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("ReadByUserId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<int>("Severity")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
@@ -2656,6 +2659,8 @@ namespace SupermarketSystem.Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ReadByUserId");
 
                     b.HasIndex("Channel", "CreatedAtUtc");
 
@@ -3298,11 +3303,19 @@ namespace SupermarketSystem.Infrastructure.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,4)");
 
+                    b.Property<decimal?>("BalanceBefore")
+                        .HasColumnType("decimal(18,4)");
+
                     b.Property<Guid>("BranchId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("ClientRequestId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("NeedsReview")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("Notes")
                         .HasMaxLength(500)
@@ -3323,6 +3336,12 @@ namespace SupermarketSystem.Infrastructure.Migrations
                     b.Property<Guid>("RecordedByUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<int>("Source")
                         .HasColumnType("int");
 
@@ -3334,6 +3353,8 @@ namespace SupermarketSystem.Infrastructure.Migrations
                     b.HasIndex("PaidByUserId");
 
                     b.HasIndex("RecordedByUserId");
+
+                    b.HasIndex("ReviewedByUserId");
 
                     b.HasIndex("BranchId", "OccurredAtUtc");
 
@@ -5399,6 +5420,11 @@ namespace SupermarketSystem.Infrastructure.Migrations
                 {
                     b.HasOne("SupermarketSystem.Domain.Identity.User", null)
                         .WithMany()
+                        .HasForeignKey("ReadByUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("SupermarketSystem.Domain.Identity.User", null)
+                        .WithMany()
                         .HasForeignKey("TargetUserId")
                         .OnDelete(DeleteBehavior.Cascade);
                 });
@@ -5666,6 +5692,11 @@ namespace SupermarketSystem.Infrastructure.Migrations
                         .HasForeignKey("RecordedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("SupermarketSystem.Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("SupermarketSystem.Domain.Purchasing.PurchaseInvoice", b =>

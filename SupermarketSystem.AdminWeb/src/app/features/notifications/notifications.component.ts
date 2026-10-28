@@ -20,6 +20,8 @@ export interface NotificationItemDto {
   severity: NotificationSeverity;
   /** الصفحة المعنية مع فلترها (مثلًا "/sales?search=SI-12") - null = بلا صفحة. */
   linkRoute?: string | null;
+  /** مين علّمه مقروء (28/10/2026) - القراءة مشتركة بين الإدارة، فبنعرض مين سكّره. */
+  readByName?: string | null;
 }
 
 export type NotificationSeverity = 'Info' | 'Warning' | 'Critical';
@@ -161,7 +163,7 @@ export class NotificationsComponent implements OnInit {
     if (n.status === 'Read') return;
     try {
       await firstValueFrom(this.apiClient.post(ApiController.Notifications, NotificationsOperation.MarkRead, {}, { id: n.id }));
-      this.notifications.update(list => list.map(x => (x.id === n.id ? { ...x, status: 'Read' as const, readAtUtc: new Date().toISOString() } : x)));
+      this.notifications.update(list => list.map(x => (x.id === n.id ? { ...x, status: 'Read' as const, readAtUtc: new Date().toISOString(), readByName: 'أنت' } : x)));
       this.summary.update(s => ({
         unreadCritical: s.unreadCritical - (n.severity === 'Critical' ? 1 : 0),
         unreadWarning: s.unreadWarning - (n.severity === 'Warning' ? 1 : 0),

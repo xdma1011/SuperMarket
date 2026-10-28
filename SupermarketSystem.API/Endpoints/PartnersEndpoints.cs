@@ -127,13 +127,21 @@ public static class PartnersEndpoints
             .WithName("GetPartnerWithdrawals")
             .Produces<IReadOnlyList<PartnerWithdrawalDto>>(StatusCodes.Status200OK);
 
+        group.MapPost("/withdrawals/{withdrawalId:guid}/mark-reviewed", async (Guid withdrawalId, MarkPartnerWithdrawalReviewedHandler handler, CancellationToken cancellationToken) =>
+                (await handler.HandleAsync(withdrawalId, cancellationToken)).ToHttpResult())
+            .WithName("MarkPartnerWithdrawalReviewed")
+            .WithSummary("تمت مراجعة سحب شريك فوق رصيده (28/10/2026).")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+
         group.MapPost("/withdrawals", async (RecordPartnerWithdrawalCommand command, RecordPartnerWithdrawalHandler handler, CancellationToken cancellationToken) =>
             {
                 var result = await handler.HandleAsync(command, cancellationToken);
                 return result.ToHttpResult(r => r.WasReplay ? Results.Ok(r) : Results.Created($"/api/v1/partners/withdrawals/{r.WithdrawalId}", r));
             })
             .WithName("RecordPartnerWithdrawal")
-            .WithSummary("سحب شريك: من الصندوق (بينقص المتوقع بالتقفيل) أو من جيب صاحب المحل (بيزيد مستحقه). مسموح أكتر من الرصيد.")
+            .WithSummary("سحب شريك: من الصندوق (بينقص المتوقع بالتقفيل) أو من جيب صاحب المحل (بيزيد مستحقه). مسموح أكتر من الرصيد بس بيتعلّم للمراجعة + تنبيه خطير.")
             .Produces<PartnerWithdrawalResponse>(StatusCodes.Status201Created)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound);

@@ -71,6 +71,7 @@ public sealed class PartnerStatementBackgroundService : BackgroundService
                 if (result.IsSuccess)
                 {
                     await PartnerStatementAlerts.NotifyIfUncostedAsync(db, notificationDispatcher, result.Value, cancellationToken);
+                    await PartnerStatementNewcomerAlerts.NotifyIfNewcomersAsync(db, notificationDispatcher, result.Value, cancellationToken);
                     _logger.LogInformation("نزل كشف الشركاء التلقائي لفرع {BranchId} عن {Month}/{Year}.", branchId, previousMonth.Month, previousMonth.Year);
                     continue;
                 }

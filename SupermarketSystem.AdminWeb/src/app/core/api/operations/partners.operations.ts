@@ -14,6 +14,7 @@ export enum PartnersOperation {
   ReverseReinvestment = 'reinvestments/{id}/reverse',
   Withdrawals = 'withdrawals',
   RecordWithdrawal = 'withdrawals',
+  MarkWithdrawalReviewed = 'withdrawals/{id}/mark-reviewed',
   Statements = 'statements',
   StatementById = 'statements/{id}',
   GenerateStatement = 'statements',

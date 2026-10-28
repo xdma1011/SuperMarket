@@ -356,4 +356,58 @@ describe('PartnersComponent', () => {
       expect((api.post.calls.mostRecent().args[2] as Record<string, unknown>)['clientRequestId']).toBe(firstId);
     });
   });
+
+  describe('سحب فوق رصيد الشريك (مراجعة)', () => {
+    const OVER = {
+      id: 'w1', partnerId: 'p1', partnerName: 'أحمد', amount: 50, sourceCode: 1, sourceTitle: 'من الصندوق',
+      occurredAtUtc: '2026-10-01T10:00:00Z', notes: null, recordedByName: 'المدير', paidByName: null, recordedAtCashier: false,
+      balanceBefore: 10, needsReview: true, reviewedByName: null, reviewedAtUtc: null
+    };
+
+    it('بيعرض علامة "فوق رصيده" وزر المراجعة، والزر بيبعت للمسار الصح', async () => {
+      api.get.and.callFake(((controller: string, operation: string) => {
+        if (controller === 'partners' && operation === '') return of([AHMAD]);
+        if (controller === 'partners' && operation === 'withdrawals') return of([OVER]);
+        return of([]);
+      }) as unknown as typeof api.get);
+      api.post.and.returnValue(of({}));
+      await component.reloadAll();
+      component.setTab('withdrawals');
+      fixture.detectChanges();
+
+      const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+      expect(text).toContain('فوق رصيده');
+      expect(text).toContain('10.000');
+      expect(text).toContain('تمت المراجعة');
+
+      await component.markWithdrawalReviewed(OVER);
+      const [controller, operation, , route] = api.post.calls.mostRecent().args as unknown as [string, string, unknown, Record<string, string>];
+      expect(controller).toBe('partners');
+      expect(operation).toBe('withdrawals/{id}/mark-reviewed');
+      expect(route).toEqual({ id: 'w1' });
+      expect(component.successMessage()).toContain('أحمد');
+    });
+
+    it('سحب مراجَع بيعرض مين راجعه بدل الزر', async () => {
+      const reviewed = { ...OVER, reviewedByName: 'صاحب المحل', reviewedAtUtc: '2026-10-02T10:00:00Z' };
+      api.get.and.callFake(((controller: string, operation: string) => {
+        if (controller === 'partners' && operation === '') return of([AHMAD]);
+        if (controller === 'partners' && operation === 'withdrawals') return of([reviewed]);
+        return of([]);
+      }) as unknown as typeof api.get);
+      await component.reloadAll();
+      component.setTab('withdrawals');
+      fixture.detectChanges();
+
+      const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+      expect(text).toContain('راجعه صاحب المحل');
+      expect(text).not.toContain('تمت المراجعة');
+    });
+
+    it('فشل المراجعة = رسالة عربية', async () => {
+      api.post.and.returnValue(throwError(() => ({ error: { detail: 'هالسحب ضمن رصيد الشريك' } })));
+      await component.markWithdrawalReviewed(OVER);
+      expect(component.errorMessage()).toBe('هالسحب ضمن رصيد الشريك');
+    });
+  });
 });

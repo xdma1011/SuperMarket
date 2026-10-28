@@ -168,4 +168,13 @@ describe('NotificationsComponent', () => {
     expect(card?.classList.contains('critical')).toBeTrue();
     expect(card?.textContent).toContain('عالية');
   });
+
+  it('تنبيه مقروء بيعرض مين قرأه (القراءة مشتركة بين الإدارة)', async () => {
+    listItems = [item({ status: 'Read', readAtUtc: '2026-10-28T08:00:00Z', readByName: 'مساعد الأدمن' })];
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('قرأه مساعد الأدمن');
+  });
 });

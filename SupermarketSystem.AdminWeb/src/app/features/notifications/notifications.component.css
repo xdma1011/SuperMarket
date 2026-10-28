@@ -80,3 +80,8 @@
 .notif-actions { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 4px; }
 .notif-link { font-size: 12px; color: var(--accent); font-weight: 600; }
 .severity-chip.info { background: var(--surface-2); color: var(--ink-2); }
+
+.notif-read-by {
+  font-size: 0.8rem;
+  color: var(--text-muted, #6b7280);
+}

@@ -64,6 +64,12 @@ public class Notification : AuditableEntity
     public DateTime? ReadAtUtc { get; private set; }
 
     /// <summary>
+    /// مين علّم التنبيه مقروء (28/10/2026، ثغرة #10). القراءة مشتركة بين الإدارة (تنبيه عام بينعلّم عند الكل)، فبدون هالحقل مساعد أدمن
+    /// بيقدر يسكّر تنبيه سرقة وما حدا بيعرف مين. null = تنبيه انقرأ قبل هالميزة أو من خدمة نظام.
+    /// </summary>
+    public Guid? ReadByUserId { get; private set; }
+
+    /// <summary>
     /// الصفحة المعنية بلوحة الإدارة، مع فلترها جاهز (مثلًا "/sales?search=SI-000012") - الكبس على التنبيه بيودّي
     /// عليها (لوحة التنبيهات الموحّدة، 28/9/2026). null = تنبيه عام بلا صفحة محدَّدة.
     /// </summary>
@@ -97,10 +103,11 @@ public class Notification : AuditableEntity
         return log;
     }
 
-    public void MarkRead(DateTime readAtUtc)
+    public void MarkRead(DateTime readAtUtc, Guid? readByUserId = null)
     {
         Status = NotificationStatus.Read;
         ReadAtUtc = readAtUtc;
+        ReadByUserId = readByUserId;
     }
 }
 

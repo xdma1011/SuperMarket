@@ -234,6 +234,37 @@ public class PartnerWithdrawal : Entity, IBranchOwned
         RecordedAtCashier = recordedAtCashier;
         ClientRequestId = clientRequestId;
     }
+
+    /// <summary>
+    /// رصيد الشريك لحظة السحب (قبله، تحت قفل الشريك) - 28/10/2026، ثغرة #3. null = سحب قبل هالميزة. السحب ما بينمنع أبدًا لو تجاوز الرصيد
+    /// (§1.6: ممكن سلفة متفق عليها، والرصيد التراكمي ممكن يصير سالب)، بس بيتعلّم NeedsReview + تنبيه خطير.
+    /// </summary>
+    public decimal? BalanceBefore { get; private set; }
+
+    /// <summary>true = المبلغ أكبر من رصيد الشريك قبل السحب (الرصيد صار سالب أو أكثر سلبًا) - بانتظار مراجعة صاحب المحل.</summary>
+    public bool NeedsReview { get; private set; }
+
+    public Guid? ReviewedByUserId { get; private set; }
+    public DateTime? ReviewedAtUtc { get; private set; }
+
+    public void RecordBalanceBefore(decimal balanceBefore)
+    {
+        BalanceBefore = balanceBefore;
+        NeedsReview = Amount > balanceBefore;
+    }
+
+    /// <summary>تعليم "تمت المراجعة". false = مش بحاجة مراجعة أو اتراجع قبل (ما بنكتب فوق أول مراجع).</summary>
+    public bool MarkReviewed(Guid reviewedByUserId, DateTime reviewedAtUtc)
+    {
+        if (!NeedsReview || ReviewedAtUtc is not null)
+        {
+            return false;
+        }
+
+        ReviewedByUserId = reviewedByUserId;
+        ReviewedAtUtc = reviewedAtUtc;
+        return true;
+    }
 }
 
 /// <summary>

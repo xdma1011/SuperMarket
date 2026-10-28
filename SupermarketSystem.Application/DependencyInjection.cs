@@ -353,6 +353,7 @@ public static class DependencyInjection
         services.AddScoped<GetPartnerStatementsHandler>();
         services.AddScoped<GetPartnerStatementByIdHandler>();
         services.AddScoped<RecordPartnerWithdrawalHandler>();
+        services.AddScoped<MarkPartnerWithdrawalReviewedHandler>();
         services.AddScoped<PartnerActionPasswordVerifier>();
         services.AddScoped<ReinvestPartnerProfitHandler>();
         services.AddScoped<GetReinvestPreviewHandler>();

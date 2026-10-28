@@ -66,6 +66,9 @@
           @if (n.status !== 'Read' && canMarkRead()) {
             <button type="button" class="btn-link" (click)="markRead(n, $event)">تم ✓</button>
           }
+          @if (n.status === 'Read' && n.readByName) {
+            <span class="notif-read-by">قرأه {{ n.readByName }}@if (n.readAtUtc) { · {{ n.readAtUtc | date: 'yyyy-MM-dd HH:mm' }} }</span>
+          }
         </div>
       </div>
     </div>

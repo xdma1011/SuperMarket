@@ -260,7 +260,7 @@
       } @else {
         <div class="table-scroll">
           <table class="data-table">
-            <thead><tr><th>التاريخ</th><th>الشريك</th><th>المبلغ</th><th>من وين</th><th>سجّله</th><th>ملاحظة</th></tr></thead>
+            <thead><tr><th>التاريخ</th><th>الشريك</th><th>المبلغ</th><th>من وين</th><th>سجّله</th><th>ملاحظة</th><th>المراجعة</th></tr></thead>
             <tbody>
               @for (w of withdrawals(); track w.id) {
                 <tr>
@@ -270,6 +270,18 @@
                   <td>{{ w.sourceTitle }} @if (w.recordedAtCashier) { <span class="chip">من الكاشير</span> }</td>
                   <td>{{ w.recordedByName }}</td>
                   <td>{{ w.notes || '—' }}</td>
+                  <td>
+                    @if (w.needsReview) {
+                      <span class="chip" title="المبلغ أكبر من رصيد الشريك لحظة السحب">⚠ فوق رصيده (كان {{ (w.balanceBefore ?? 0) | number: '1.3-3' }})</span>
+                      @if (w.reviewedAtUtc) {
+                        <small class="sub">راجعه {{ w.reviewedByName }} · {{ w.reviewedAtUtc | date: 'yyyy-MM-dd HH:mm' }}</small>
+                      } @else {
+                        <button type="button" class="btn-link" [disabled]="submitting()" (click)="markWithdrawalReviewed(w)">تمت المراجعة</button>
+                      }
+                    } @else {
+                      —
+                    }
+                  </td>
                 </tr>
               }
             </tbody>

@@ -22,7 +22,9 @@ public sealed record NotificationItemDto(
     DateTime? ReadAtUtc,
     NotificationSeverity Severity,
     // الصفحة المعنية مع فلترها (لوحة التنبيهات الموحّدة) - null = بلا صفحة محدَّدة.
-    string? LinkRoute = null);
+    string? LinkRoute = null,
+    // مين علّمه مقروء (28/10/2026) - null = مش مقروء، أو انقرأ قبل هالميزة.
+    string? ReadByName = null);
 
 /// <summary>
 /// آلية Polling — الواجهة بتستدعي هذا كل كم ثانية بدل اتصال فوري
@@ -76,7 +78,9 @@ public sealed class GetNotificationsHandler
         var items = await notifications
             .Skip(paging.Skip)
             .Take(paging.PageSize)
-            .Select(n => new NotificationItemDto(n.Id, n.Title, n.Message, n.Channel, n.Status, n.CreatedAtUtc, n.ReadAtUtc, n.Severity, n.LinkRoute))
+            .Select(n => new NotificationItemDto(
+                n.Id, n.Title, n.Message, n.Channel, n.Status, n.CreatedAtUtc, n.ReadAtUtc, n.Severity, n.LinkRoute,
+                n.ReadByUserId == null ? null : _context.Users.IgnoreQueryFilters().Where(u => u.Id == n.ReadByUserId).Select(u => u.FullName).FirstOrDefault()))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<NotificationItemDto>(items, totalCount, paging.PageNumber, paging.PageSize);

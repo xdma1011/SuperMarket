@@ -37,6 +37,8 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
         builder.HasIndex(n => new { n.Channel, n.CreatedAtUtc });
 
         builder.HasOne<User>().WithMany().HasForeignKey(n => n.TargetUserId).OnDelete(DeleteBehavior.Cascade);
+        // مين علّمه مقروء (سجل تدقيق) - NoAction (= منع الحذف بـSQL Server، وبيتفادى تعدد مسارات Cascade): المستخدمين ما بينحذفوا فعليًا (تعطيل).
+        builder.HasOne<User>().WithMany().HasForeignKey(n => n.ReadByUserId).OnDelete(DeleteBehavior.NoAction);
 
         builder.HasMany(n => n.DeliveryAttempts).WithOne().HasForeignKey(l => l.NotificationId).OnDelete(DeleteBehavior.Cascade);
         builder.Navigation(n => n.DeliveryAttempts).HasField("_deliveryAttempts").UsePropertyAccessMode(PropertyAccessMode.Field);
