@@ -331,6 +331,10 @@ public sealed class RecordEmployeePaymentHandler
                 _context, _notificationDispatcher, now, employee.BranchId,
                 new[] { (payment.PeriodYear!.Value, payment.PeriodMonth!.Value) },
                 $"انصرف راتب ({payment.GrossAmount:0.000} د.أ) بفترة {payment.PeriodMonth}/{payment.PeriodYear} بعد نزول الكشف.", cancellationToken);
+            // نفس تنبيه المصروف بفترة بعيدة (ثغرة #7) - الراتب مصروف بفترته، فراتب على شهر بعيد بيحرّك الربح بين الشهور زيه.
+            await Finance.ExpensePeriodAlerts.NotifyIfFarFromEntryAsync(
+                _context, _notificationDispatcher, now, employee.BranchId,
+                payment.GrossAmount, payment.PeriodYear!.Value, payment.PeriodMonth!.Value, $"راتب {employee.FullName}", "/employees", cancellationToken);
         }
 
         var outstanding = payment.Type == EmployeePaymentType.Advance

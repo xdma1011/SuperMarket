@@ -467,27 +467,52 @@ public sealed class AdversarialPartnerScenarioTests : IntegrationTestBase
         Assert.True(await FarPeriodAlertsAsync() > afterFuture, "مصروف قبل 5 شهور بلا تنبيه");
     }
 
-    /// <summary>بيعة عادية (بوقت الوصول) أو بوقت قريب ما بتعلّم ولا بتنبّه؛ وإعادة إرسال نفس البيعة المتأخرة ما بتكرر التنبيه.</summary>
+    /// <summary>
+    /// بيعة متأخرة بلا كشف لشهرها ما بتعمل ولا تنبيه؛ ومع كشف: أول وصول بيعلّمه قديم بتنبيه، وإعادة إرسال نفس البيعة (نفس
+    /// ClientRequestId - الكاشير بيعيد من الطابور) ما بتكرر التنبيه ولا بتسجّل بيعة تانية.
+    /// </summary>
     [Fact]
-    public async Task البيعة_المتأخرة_ما_بتكرر_التعليم_وبيعة_بلا_كشف_ما_بتعلّم_شي()
+    public async Task البيعة_المتأخرة_بلا_كشف_ما_بتنبّه_وإعادة_إرسالها_ما_بتكرر_التنبيه()
     {
         var s = await SetUpAsync(new[] { 1000m, 1000m });
         var now = DateTime.UtcNow;
-        var requestId = Guid.NewGuid();
 
-        object Sale(DateTime? at) => new
+        object Sale(Guid requestId, Guid paymentRequestId, DateTime? at) => new
         {
             branchId = Fixture.TestBranchId, clientRequestId = requestId, customerId = (Guid?)null, invoiceLevelDiscountAmount = 0m,
             items = new[] { new { productId = s.MilkId, productUnitId = s.MilkUnit, quantity = 1m, manualDiscountAmount = 0m, productBatchId = (Guid?)null } },
-            payments = new[] { new { paymentMethodId = TestDataBuilder.CashPaymentMethodId, amount = 1.25m, externalReference = (string?)null, clientRequestId = Guid.NewGuid() } },
+            payments = new[] { new { paymentMethodId = TestDataBuilder.CashPaymentMethodId, amount = 1.25m, externalReference = (string?)null, clientRequestId = paymentRequestId } },
             occurredAtUtc = at
         };
 
-        // بلا كشف أصلًا: بيعة متأخرة ما بتعمل ولا تنبيه.
-        await JsonAsync(await s.Admin.PostAsJsonAsync("/api/v1/sales", Sale(now.AddHours(-3))), "بيعة متأخرة بلا كشف");
         using var scope = CreateScope();
         var db = CreateDbContext(scope);
-        Assert.Equal(0, await db.Notifications.IgnoreQueryFilters().AsNoTracking().CountAsync(n => n.Title.Contains("صار قديم")));
+        Task<int> StaleAlertsAsync() => db.Notifications.IgnoreQueryFilters().AsNoTracking().CountAsync(n => n.Title.Contains("صار قديم"));
+
+        // (1) بلا كشف أصلًا: بيعة متأخرة ما بتعمل ولا تنبيه.
+        await JsonAsync(await s.Admin.PostAsJsonAsync("/api/v1/sales", Sale(Guid.NewGuid(), Guid.NewGuid(), now.AddHours(-3))), "بيعة متأخرة بلا كشف");
+        Assert.Equal(0, await StaleAlertsAsync());
+
+        // (2) كشف نازل لشهر وقت البيعة (سجله مباشرة - الشهر الحالي ما بيصدر بالـAPI).
+        var businessTime = await BusinessTime.LoadAsync(db, CancellationToken.None);
+        var (year, month) = businessTime.LocalMonth(now.AddMinutes(-30));
+        var statement = new PartnerMonthlyStatement(Fixture.TestBranchId, year, month);
+        statement.SetContent(0m, 0m, now.AddMinutes(-10), isAutomatic: false, Array.Empty<StatementLineInput>());
+        db.PartnerMonthlyStatements.Add(statement);
+        await db.SaveChangesAsync();
+
+        var requestId = Guid.NewGuid();
+        var paymentRequestId = Guid.NewGuid();
+        var first = await JsonAsync(await s.Admin.PostAsJsonAsync("/api/v1/sales", Sale(requestId, paymentRequestId, now.AddMinutes(-30))), "بيعة متأخرة");
+        Assert.False(first.GetProperty("wasReplay").GetBoolean());
+        var afterFirst = await StaleAlertsAsync();
+        Assert.True(afterFirst > 0, "بيعة متأخرة بشهر كشف نازل بلا تنبيه");
+
+        // (3) نفس البيعة مرة تانية: Replay، بلا تنبيه جديد ولا فاتورة تانية.
+        var replay = await JsonAsync(await s.Admin.PostAsJsonAsync("/api/v1/sales", Sale(requestId, paymentRequestId, now.AddMinutes(-30))), "إعادة إرسال");
+        Assert.True(replay.GetProperty("wasReplay").GetBoolean());
+        Assert.Equal(first.GetProperty("saleInvoiceId").GetGuid(), replay.GetProperty("saleInvoiceId").GetGuid());
+        Assert.Equal(afterFirst, await StaleAlertsAsync());
     }
 
     // ===================================================================== الدفعة الثانية (28/10/2026): #3، #5، #10، #11
@@ -654,5 +679,63 @@ public sealed class AdversarialPartnerScenarioTests : IntegrationTestBase
         {
             await s.Admin.PutAsJsonAsync("/api/v1/system/time-settings", new { timeZoneId = "Asia/Amman", fixedUtcOffsetMinutes = (int?)null });
         }
+    }
+
+    // ===================================================================== مراجعة الكود (13/11/2026)
+
+    /// <summary>
+    /// سحب شريك من الصندوق بتاريخ قديم (قبل آخر تقفيل): حركة الصندوق لازم تنكتب بوقت التسجيل (مش التاريخ المكتوب)، وإلا التقفيل
+    /// الجاي ما بيحسبها وبيطلع عجز وهمي. تاريخ السحب نفسه بيضل التاريخ المكتوب.
+    /// </summary>
+    [Fact]
+    public async Task سحب_شريك_بتاريخ_قديم_حركة_صندوقه_بوقت_التسجيل()
+    {
+        var s = await SetUpAsync(new[] { 1000m, 1000m });
+        var before = DateTime.UtcNow.AddSeconds(-5);
+        var backdated = DateTime.UtcNow.AddDays(-20);
+
+        var response = await JsonAsync(await s.Admin.PostAsJsonAsync("/api/v1/partners/withdrawals", new
+        {
+            partnerId = s.Capital[0], amount = 3m, source = "Drawer", notes = (string?)null, occurredAtUtc = backdated, clientRequestId = Guid.NewGuid()
+        }, StringEnums), "سحب بتاريخ قديم");
+        var withdrawalId = response.GetProperty("withdrawalId").GetGuid();
+
+        using var scope = CreateScope();
+        var db = CreateDbContext(scope);
+        var withdrawal = await db.PartnerWithdrawals.IgnoreQueryFilters().AsNoTracking().SingleAsync(w => w.Id == withdrawalId);
+        var drawerLog = await db.CashDrawerLogs.IgnoreQueryFilters().AsNoTracking().SingleAsync(l => l.ReferenceId == withdrawalId);
+        Assert.True(Math.Abs((withdrawal.OccurredAtUtc - backdated).TotalSeconds) < 1, "تاريخ السحب المكتوب تغيّر");
+        Assert.True(drawerLog.OccurredAtUtc >= before, $"حركة الصندوق انكتبت بتاريخ قديم ({drawerLog.OccurredAtUtc:u}) - التقفيل الجاي ما رح يحسبها");
+        Assert.Equal(3m, drawerLog.Amount);
+    }
+
+    /// <summary>راتب على شهر بعيد بيطلّع نفس تنبيه "فترة بعيدة" تبع المصاريف (الراتب مصروف بفترته)؛ راتب الشهر الحالي بلا تنبيه.</summary>
+    [Fact]
+    public async Task راتب_بفترة_بعيدة_بيطلّع_تنبيه_زي_المصروف()
+    {
+        var s = await SetUpAsync(new[] { 1000m, 1000m });
+        var employeeId = (await JsonAsync(await s.Admin.PostAsJsonAsync("/api/v1/employees", new
+        {
+            branchId = Fixture.TestBranchId, fullName = "موظف الفترة", phone = "0791112223", monthlySalary = 300m, notes = (string?)null
+        }), "موظف")).GetProperty("employeeId").GetGuid();
+
+        using var scope = CreateScope();
+        var db = CreateDbContext(scope);
+        Task<int> FarAlertsAsync() => db.Notifications.IgnoreQueryFilters().AsNoTracking().CountAsync(n => n.Title.Contains("بفترة بعيدة عن تاريخ تسجيله"));
+
+        async Task PaySalaryAsync(DateTime period) => await JsonAsync(await s.Admin.PostAsJsonAsync($"/api/v1/employees/{employeeId}/payments", new
+        {
+            type = "Salary", amount = 100m, advanceDeducted = 0m, periodYear = period.Year, periodMonth = period.Month, paidFromDrawer = false, clientRequestId = Guid.NewGuid()
+        }), "راتب");
+
+        await PaySalaryAsync(MonthMiddle(0));
+        await PaySalaryAsync(MonthMiddle(1));
+        Assert.Equal(0, await FarAlertsAsync());
+
+        await PaySalaryAsync(MonthMiddle(7));
+        Assert.True(await FarAlertsAsync() > 0, "راتب قبل 7 شهور بلا تنبيه");
+        var title = await db.Notifications.IgnoreQueryFilters().AsNoTracking()
+            .Where(n => n.Title.Contains("بفترة بعيدة عن تاريخ تسجيله")).Select(n => n.Title).FirstAsync();
+        Assert.StartsWith("راتب موظف الفترة", title);
     }
 }

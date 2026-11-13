@@ -113,8 +113,10 @@ internal sealed class PartnerWithdrawalRecorder
 
             if (source == PartnerWithdrawalSource.Drawer)
             {
+                // وقت التسجيل (مش تاريخ السحب المكتوب): التقفيل بيجمع حركات الصندوق بعد آخر تقفيل، فسحب مؤرَّخ قبله كان بيضيع من
+                // "المتوقع" ويطلع عجز وهمي بالتقفيل الجاي (انمسك بمراجعة الكود 13/11/2026). تاريخ السحب بيضل على السحب نفسه.
                 _context.CashDrawerLogs.Add(new CashDrawerLog(
-                    partner.BranchId, CashDrawerMovementType.PayOut, amount, CashDrawerReferenceType.PartnerWithdrawal, withdrawal.Id, actorUserId, at));
+                    partner.BranchId, CashDrawerMovementType.PayOut, amount, CashDrawerReferenceType.PartnerWithdrawal, withdrawal.Id, actorUserId, now));
             }
             else
             {
